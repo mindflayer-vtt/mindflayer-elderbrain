@@ -1,8 +1,10 @@
 """First-boot HTTPS and auth checks; no passwords or cookies enter test output."""
 import http.client
 import json
+import os
 from pathlib import Path
 import ssl
+import stat
 
 state = Path("/var/lib/mindflayer-elderbrain")
 settings = dict(line.split("=", 1) for line in Path("/opt/mindflayer-elderbrain/appliance.env").read_text().splitlines()
@@ -38,17 +40,29 @@ for path in ("/health", "/elderbrain/health", "/elderbrain/"):
 for prefix in ("/api/", "/elderbrain/api/"):
     for route in ("config", "jobs", "keypads", "logs/foundry", "borg/settings"):
         assert request(prefix + route)[0] == 401, "Unauthorized API access"
-password = (state / "elderbrain/secrets/initial-password").read_text().strip()
+credential = os.environ.get("ELDERBRAIN_TEST_ADMIN_PASSWORD")
+password_file = Path(credential) if credential else state / "elderbrain/secrets/initial-password"
+if credential:
+    assert password_file.parent.parent == Path("/root")
+    assert password_file.parent.name.startswith("elderbrain-live-admin-")
+    info = password_file.stat()
+    assert info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600
+password = password_file.read_text().strip()
 assert len(password) >= 24, "Initial password is not unique-length random material"
 code, headers, body = request("/elderbrain/api/auth/login", method="POST", data={"username": "admin", "password": password})
 assert code == 200, "Bootstrap login failed"
 session = json.loads(body)
-assert session["authenticated"] and session["mustChange"] and not session["ready"], "First-login gate is missing"
+assert session["authenticated"], "Authenticated session is missing"
+if credential:
+    assert not session["mustChange"] and session["ready"], "Ready administrator state is missing"
+else:
+    assert session["mustChange"] and not session["ready"], "First-login gate is missing"
 cookie_header = headers.get("set-cookie", "")
 assert all(flag in cookie_header.lower() for flag in ("secure", "httponly", "samesite=strict")), "Unsafe session cookie"
 cookie = cookie_header.split(";", 1)[0]
-assert request("/elderbrain/api/config", cookie=cookie)[0] == 403, "Onboarding did not gate administration"
+expected = 200 if credential else 403
+assert request("/elderbrain/api/config", cookie=cookie)[0] == expected, "Administration readiness gate is incorrect"
 assert request("/elderbrain/api/auth/logout", method="POST", data={}, cookie=cookie)[0] == 403, "Missing CSRF accepted"
 assert request("/elderbrain/api/auth/logout", method="POST", data={}, cookie=cookie, csrf=session["csrf"])[0] == 200
 assert request("/elderbrain/api/config", cookie=cookie)[0] == 401, "Logout did not revoke session"
-print("Verified administration CA, HTTPS routes, initial-login gate, secure cookie, CSRF and logout")
+print("Verified administration CA, HTTPS routes, authentication gate, secure cookie, CSRF and logout")

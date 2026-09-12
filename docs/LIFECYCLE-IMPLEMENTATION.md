@@ -2022,3 +2022,38 @@ baseline, stack, management, graphics and bounded wait-online services were all
 active with no failed unit, password-only SSH was rejected, and the recovered VM
 powered off cleanly. This qualifies recovery by safely rerunning a preserve
 reinstall interrupted after destructive OS replacement had begun.
+
+The corrected production-input BIOS ISO built from `90a961c` then qualified the
+complete online update path on a fresh 96 GiB disposable disk. The ISO carried
+semantic version 1.0.0, sequence 1, the deliberately supplied SSH key and a
+disposable independently provisioned release key/source. Its unmodified install
+passed the runtime, persistent-storage, HTTPS/authentication and physical admin-UI
+suites with password SSH rejected. A signed 1.0.2/sequence-2 release was served
+from the configured source over CA-verified HTTPS. A ready test administrator
+used the real public System API to discover it, bind both confirmations to exact
+manifest digest
+`3c5876a2b9e356859b10c93330fb84a839ffb5cdfbbb8c71c1aa1d8d9d998974`, and
+receive persistent job `2d0ce5f36f0d4b6bb95ca76c3ebbcdfc` with HTTP 202. The
+submitting client exited immediately. The detached job downloaded and verified
+the bounded artifacts, prepared runtime dependencies/images, created its required
+pre-update checkpoint and backup result, activated, passed health, committed the
+recovery candidate and reached a durable completed result. A fresh authenticated
+client observed that terminal job before and after reboot. After reboot the host
+reported version 1.0.2 and protected highest sequence 2 bound to that digest; all
+lifecycle services were active, no unit had failed, and the runtime, storage,
+ready-admin HTTPS/CSRF/logout and physical UI suites passed. Re-serving the same
+signed sequence produced `compatible: false` through the authenticated System API
+and created no staging data, qualifying live replay rejection after persistence.
+
+Two qualification-only assumptions were corrected during this run. The signed
+fixture now validates and reuses an already provisioned matching source instead
+of attempting to overwrite it. Installed runtime checks compare immutable Docker
+image IDs because the preserved install environment's tag-plus-digest spelling
+and an activated Compose file's canonical digest-only spelling identify the same
+image. First-boot HTTPS/UI scripts retain their original bootstrap assertions and
+can additionally validate the intentionally established ready-administrator state
+without exposing its credential. An initial disposable release was rejected before
+activation because its locally built Setup image intentionally lacked the declared
+OCI version label; rebuilding that test image with matching signed metadata was
+required before the successful job, demonstrating that image metadata validation
+fails closed.

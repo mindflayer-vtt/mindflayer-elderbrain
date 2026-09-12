@@ -43,6 +43,7 @@ failures.add_argument('--serve-download', type=Path,
                       help='Expose a signed HTTPS release using the identified disposable signing fixture without submitting it')
 args = parser.parse_args()
 download_fixture = args.download_job or args.serve_download
+test_source = {'baseUrl': 'https://127.0.0.1:18443/'}
 assert os.geteuid() == 0
 assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
 assert command('lsblk', '-dn', '-o', 'SERIAL', '/dev/vda') == 'elderbrain-vm-test'
@@ -70,7 +71,9 @@ if download_fixture:
     assert (previous / 'job.json').is_file()
     private, public = previous / 'test-private.pem', previous / 'test-public.pem'
     assert public.read_bytes() == Path('/etc/elderbrain/release-public.pem').read_bytes(), 'Only reuse the prior disposable test pin'
-    assert not Path('/etc/elderbrain/release-source.json').exists(), 'Do not replace a configured source'
+    source_file = Path('/etc/elderbrain/release-source.json')
+    if source_file.exists():
+        assert json.loads(source_file.read_text()) == test_source, 'Do not replace a configured source'
 else:
     subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048',
                 '-out', str(private)], check=True, capture_output=True)
@@ -120,8 +123,10 @@ else:
     inventory_file = Path('/etc/elderbrain/release-inventory.json')
     (evidence / 'previous-inventory.json').write_bytes(inventory_file.read_bytes())
     inventory_file.write_text(json.dumps(paths))
-    with Path('/etc/elderbrain/release-source.json').open('x') as stream:
-        json.dump({'baseUrl': 'https://127.0.0.1:18443/'}, stream)
+    source_file = Path('/etc/elderbrain/release-source.json')
+    if not source_file.exists():
+        with source_file.open('x') as stream:
+            json.dump(test_source, stream)
     command('systemd-run', '--unit=elderbrain-release-test', '--collect', '--property=Type=exec',
             '/usr/bin/python3', str(ROOT / 'test/qemu/https-release-server.py'), str(evidence))
     from release_catalog import check

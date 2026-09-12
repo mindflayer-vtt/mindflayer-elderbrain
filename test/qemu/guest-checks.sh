@@ -36,7 +36,7 @@ pgrep -u elderbrain-kiosk -x chrome >/dev/null || { echo 'Kiosk browser is not r
 "${compose[@]}" images
 configured=$(sed -n 's/^MINDFLAYER_SERVER_IMAGE=//p' "$runtime/appliance.env")
 container=$("${compose[@]}" ps -q mindflayer-server)
-[[ $(docker inspect "$container" --format '{{.Config.Image}}') == "$configured" ]]
+[[ $(docker inspect "$container" --format '{{.Image}}') == $(docker image inspect "$configured" --format '{{.Id}}') ]]
 docker image inspect "$configured" --format 'configured={{index .RepoDigests 0}} id={{.Id}}'
 "${compose[@]}" exec -T mindflayer-server node scripts/installation-capabilities.js < /dev/null | python3 -c '
 import json, sys

@@ -25,11 +25,20 @@ masked = subprocess.run(['systemctl', 'is-enabled', 'getty@tty2.service'], text=
 assert masked.stdout.strip() == 'masked'
 assert json.loads(Path('/etc/opt/chrome/policies/managed/elderbrain.json').read_text())['PasswordManagerEnabled'] is False
 secret = Path('/var/lib/mindflayer-elderbrain/elderbrain/secrets/initial-password')
-assert stat.S_IMODE(secret.stat().st_mode) == 0o600
-words = secret.read_text().strip().split('-')
-vocabulary = json.loads(Path('/opt/mindflayer-elderbrain/bootstrap-words.json').read_text())
-assert len(words) == 8 and all(word in vocabulary for word in words)
-print('PASS: bootstrap format/permissions, tty2 service and managed password-saving policy.')
+if secret.exists():
+    assert stat.S_IMODE(secret.stat().st_mode) == 0o600
+    words = secret.read_text().strip().split('-')
+    vocabulary = json.loads(Path('/opt/mindflayer-elderbrain/bootstrap-words.json').read_text())
+    assert len(words) == 8 and all(word in vocabulary for word in words)
+    credential_state = 'bootstrap format/permissions'
+else:
+    account = Path('/var/lib/mindflayer-elderbrain/elderbrain/secrets/admin.json')
+    info = account.stat()
+    record = json.loads(account.read_text())
+    assert info.st_uid == 1000 and info.st_gid == 31338 and stat.S_IMODE(info.st_mode) == 0o600
+    assert record['mustChange'] is False and record['verified'] is True
+    credential_state = 'ready administrator state/permissions'
+print(f'PASS: {credential_state}, tty2 service and managed password-saving policy.')
 
 kiosk = pwd.getpwnam('elderbrain-kiosk')
 assert subprocess.check_output(['loginctl', 'show-user', 'elderbrain-kiosk',

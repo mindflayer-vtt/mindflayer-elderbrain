@@ -15,6 +15,7 @@ parser.add_argument('password', type=Path)
 parser.add_argument('version')
 parser.add_argument('sequence', type=int)
 parser.add_argument('--status', metavar='JOB_ID')
+parser.add_argument('--expect-incompatible', action='store_true')
 args = parser.parse_args()
 if args.base_url != 'https://127.0.0.1:24443/elderbrain':
     raise ValueError('This qualification helper accepts only the local disposable QEMU forward')
@@ -54,7 +55,14 @@ status, _, checked = request('/api/system/check', body={}, csrf=session['csrf'])
 assert status == 200 and checked['state'] == 'checked'
 release = checked['release']
 assert release['version'] == args.version and release['releaseSequence'] == args.sequence
-assert release['compatible'] is True and len(release['manifestSha256']) == 64
+assert len(release['manifestSha256']) == 64
+if args.expect_incompatible:
+    assert release['compatible'] is False
+    print(json.dumps({'state': 'live-system-update-incompatible', 'version': args.version,
+                      'releaseSequence': args.sequence,
+                      'manifestSha256': release['manifestSha256']}, sort_keys=True))
+    raise SystemExit(0)
+assert release['compatible'] is True
 selection = {'version': release['version'], 'manifestSha256': release['manifestSha256'],
              'confirmUpdate': True, 'confirmDowntime': True}
 status, headers, job = request('/api/system/update', body=selection, csrf=session['csrf'])
