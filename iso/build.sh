@@ -8,6 +8,10 @@ CACHE="$ROOT/cache"; OUT=${ISO_OUT_DIR:-"$ROOT/out"}; WORK=$(mktemp -d)
 trap 'chmod -R u+w "$WORK" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 for command in curl gpg xorriso rsync unsquashfs sha256sum; do command -v "$command" >/dev/null || { echo "missing build dependency: $command" >&2; exit 2; }; done
 key=${SSH_PUBLIC_KEY:-}
+if [[ -n ${UPDATE_SOURCE_CONFIG:-} || -n ${UPDATE_PUBLIC_KEY:-} ]]; then
+  [[ -n ${UPDATE_SOURCE_CONFIG:-} && -n ${UPDATE_PUBLIC_KEY:-} ]] || { echo 'UPDATE_SOURCE_CONFIG and UPDATE_PUBLIC_KEY must be supplied together' >&2; exit 2; }
+  python3 "$ROOT/iso/validate-release.py" "$UPDATE_SOURCE_CONFIG" "$UPDATE_PUBLIC_KEY"
+fi
 if [[ -n ${SMTP_CONFIG:-} ]]; then
   python3 "$ROOT/iso/validate-smtp.py" "$SMTP_CONFIG"
 fi
@@ -27,6 +31,11 @@ xorriso -osirrox on -indev "$CACHE/$ISO_NAME" -extract / "$WORK/tree" >/dev/null
 chmod -R u+w "$WORK/tree"
 mkdir -p "$WORK/tree/elderbrain"
 rsync -a --exclude-from="$ROOT/iso/payload.exclude" "$ROOT/" "$WORK/tree/elderbrain/"
+if [[ -n ${UPDATE_SOURCE_CONFIG:-} ]]; then
+  install -d -m 0700 "$WORK/tree/elderbrain/config/private"
+  install -m 0644 "$UPDATE_SOURCE_CONFIG" "$WORK/tree/elderbrain/config/private/release-source.json"
+  install -m 0644 "$UPDATE_PUBLIC_KEY" "$WORK/tree/elderbrain/config/private/release-public.pem"
+fi
 if [[ -n ${SMTP_CONFIG:-} ]]; then
   install -d -m 0700 "$WORK/tree/elderbrain/config/private"
   install -m 0600 "$SMTP_CONFIG" "$WORK/tree/elderbrain/config/private/smtp.json"

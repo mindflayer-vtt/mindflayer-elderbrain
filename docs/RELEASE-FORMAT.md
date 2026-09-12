@@ -713,3 +713,22 @@ Early `files` recovery never reconciles jobs. Older journals without a retained
 digest remain unreconciled rather than inferring an exact release identity.
 Unit coverage verifies these transitions; reboot qualification of the new job
 reconciliation path remains pending.
+
+### ISO trust inputs
+
+Supply `UPDATE_SOURCE_CONFIG=/absolute/path/release-source.json` and
+`UPDATE_PUBLIC_KEY=/absolute/path/release-public.pem` together when running
+`iso/build.sh`. The source file uses the `baseUrl` format above. Validation checks
+the HTTPS directory and parses a PEM public key with OpenSSL; private keys are
+rejected. Neither input is fetched from a release announcement. Omitting both
+leaves online updates unconfigured. Existing SSH and optional SMTP inputs are
+unchanged; only the explicitly supplied files are copied past payload exclusions.
+
+After verified persistent storage and recovery bootstrap provisioning, the
+installer copies source/key plus the reviewed payload inventory into
+`/etc/elderbrain` and creates private prepared/staging/dependency directories.
+Re-running with identical inputs is allowed; replacing an existing key, source
+or inventory requires an explicit migration and is refused here. Source-built
+ISO Git version labels are supported by release discovery. This provisions trust,
+not a production signed release or the offline baseline needed for first-update
+rollback; complete fresh-ISO update qualification remains pending.

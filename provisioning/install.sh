@@ -174,6 +174,7 @@ if [[ -f /etc/elderbrain/storage.json ]]; then
   # The ISO payload is trusted installer code. Publish independent recovery
   # before enabling writers; online releases require separate signature checks.
   python3 -I -B "$PAYLOAD_DIR/provisioning/recovery_bootstrap.py"
+  python3 -I -B "$PAYLOAD_DIR/provisioning/update_trust.py"
 fi
 systemctl daemon-reload
 systemctl mask getty@tty2.service autovt@tty2.service

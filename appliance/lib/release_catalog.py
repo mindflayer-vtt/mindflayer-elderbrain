@@ -66,7 +66,7 @@ def fetch(base, filename, limit):
 def check(*, host_root=Path('/'), download=fetch):
     root = Path(host_root).absolute()
     installed = trusted(root / 'opt/mindflayer-elderbrain/VERSION', 129).decode().strip()
-    if not re.fullmatch(VERSION, installed):
+    if not re.fullmatch('(?:' + VERSION + r'|[a-f0-9]{40}(?:-dirty)?)', installed):
         raise ValueError('Invalid installed host version')
     result = {'installedHostVersion': installed, 'state': 'not-configured', 'release': None}
     config = root / 'etc/elderbrain/release-source.json'

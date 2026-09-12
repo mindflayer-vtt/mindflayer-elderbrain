@@ -37,6 +37,11 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(check(host_root=self.root, download=download)['state'], 'not-configured')
         download.assert_not_called()
 
+    def test_source_built_iso_version_is_reported_without_semver_assumption(self):
+        version = 'a' * 40 + '-dirty'
+        (self.root / 'opt/mindflayer-elderbrain/VERSION').write_text(version + '\n')
+        self.assertEqual(check(host_root=self.root)['installedHostVersion'], version)
+
     def test_signature_verified_before_public_notes_and_incomplete_release_not_eligible(self):
         self.configure()
         manifest = json.dumps(self.fixture.value).encode()

@@ -1609,3 +1609,15 @@ Tests cover terminal outcomes/idempotence, stale errors, redaction, live lock
 protection, phase ordering, maintenance replacement and digest persistence.
 Real reboot qualification of this new correlation path remains pending; this
 turn made no VM or physical-appliance changes.
+
+Added explicit paired ISO UPDATE_SOURCE_CONFIG/UPDATE_PUBLIC_KEY inputs with
+bounded source validation and OpenSSL public-key parsing/private-key rejection.
+The normal private-payload exclusion is preserved; only explicitly selected public
+update inputs are copied into the build. Provisioning requires verified persistent
+storage, installs the reviewed payload inventory/source/key and creates private
+release/dependency directories. Identical re-provisioning is allowed; changed
+existing trust is refused rather than silently rotated. Release discovery now
+accepts the Git/dirty version labels produced by source-built ISOs as well as
+semantic host release versions. Eleven focused tests, shell syntax and whitespace
+checks pass. No ISO rebuild or live appliance mutation occurred; complete initial
+offline-baseline/release integration and fresh-ISO update testing remain pending.
