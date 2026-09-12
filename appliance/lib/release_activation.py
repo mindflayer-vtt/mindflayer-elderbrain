@@ -6,6 +6,7 @@ permissions. Recovery must run from a stable worker outside the replaced runtime
 """
 import time
 import uuid
+import hashlib
 
 from appliance_release import verify
 from backup_service import save_record
@@ -60,6 +61,7 @@ class Activation:
                                  'dataMayHaveChanged': False, 'dataRolledBack': False}
                     if self.job_owner is not None:
                         candidate['jobId'] = self.job_owner
+                        candidate['manifestSha256'] = hashlib.sha256(manifest).hexdigest()
                     transaction = self.transaction(candidate)
                     self.write(candidate, 'stopping')
                     record = candidate

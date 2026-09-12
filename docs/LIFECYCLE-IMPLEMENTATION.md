@@ -1596,3 +1596,16 @@ focused Python tests and whitespace checks pass. No production trust key, extern
 publication or physical Lenovo contact occurred; the development PC remains on.
 Remaining goal work includes ISO trust provisioning, boot job reconciliation,
 power/backup controls, remaining restore/storage qualification and branded boot.
+
+Implemented final-phase persistent update-job reconciliation. New activation
+journals retain the confirmed signed manifest digest. Recovery's final phase
+rechecks the current maintenance operation under lock, then reconciles only an
+unlocked update job matching job ID, version and exact digest. Terminal rollback
+is represented as rolled-back, not update success; completed recovery can repair
+a job interrupted before its final save. Early files-only recovery, live workers,
+unrelated/mismatched records and already terminal results are not changed.
+Legacy journals without digest correlation are deliberately left untouched.
+Tests cover terminal outcomes/idempotence, stale errors, redaction, live lock
+protection, phase ordering, maintenance replacement and digest persistence.
+Real reboot qualification of this new correlation path remains pending; this
+turn made no VM or physical-appliance changes.

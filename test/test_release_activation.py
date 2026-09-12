@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import os
+import hashlib
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -102,6 +103,14 @@ class ActivationTests(unittest.TestCase):
         self.assertEqual(previous.read_text(), 'old')
         self.assertEqual(self.restored, [])
         self.assertEqual(self.released, [result['id']])
+
+    def test_owned_update_retains_exact_signed_digest_for_job_reconciliation(self):
+        self.activation.job_owner = 'd' * 32
+        result = self.activate()
+        self.assertEqual(result['jobId'], 'd' * 32)
+        expected = hashlib.sha256((self.fixture.bundle / 'manifest.json').read_bytes()).hexdigest()
+        self.assertEqual(result['manifestSha256'], expected)
+        self.assertEqual(self.maintenance.previous()['manifestSha256'], expected)
 
     def test_failed_health_restores_code_and_changed_data(self):
         self.services.fail_new = True

@@ -14,6 +14,40 @@ from backup_service import save_record
 
 
 class JobTests(unittest.TestCase):
+    def test_update_recovery_reconciles_only_exact_terminal_outcome(self):
+        path = self.store.path(self.identity)
+        original = {'id': self.identity, 'kind': 'update', 'state': 'interrupted', 'createdAt': 1,
+                    'error': 'worker stopped', 'request': {'version': '1.2.3', 'manifestSha256': 'c' * 64}}
+        outcome = {'operation': 'update', 'jobId': self.identity, 'id': 'b' * 32,
+                   'version': '1.2.3', 'manifestSha256': 'c' * 64, 'state': 'rolled-back', 'private': 'omit'}
+        for state in ('completed', 'rolled-back'):
+            save_record(path, original)
+            self.assertTrue(self.store.reconcile_update({**outcome, 'state': state}))
+            result = self.store.read(self.identity)
+            self.assertEqual(result['state'], state)
+            self.assertNotIn('error', result)
+            self.assertNotIn('private', result['result'])
+            self.assertEqual(result['stage'], 'recovery-finished')
+            self.assertFalse(self.store.reconcile_update({**outcome, 'state': state}))
+        for changes in ({'state': 'files-recovered'}, {'version': '1.2.4'}, {'manifestSha256': 'd' * 64},
+                        {'manifestSha256': None}, {'jobId': 'd' * 32}, {'operation': 'restore'}):
+            save_record(path, original)
+            self.assertFalse(self.store.reconcile_update({**outcome, **changes}))
+            self.assertEqual(json.loads(path.read_text()), original)
+
+    def test_update_recovery_does_not_overwrite_live_worker(self):
+        descriptor = self.queued()
+        try:
+            path = self.store.path(self.identity)
+            original = {'id': self.identity, 'kind': 'update', 'state': 'running', 'createdAt': 1,
+                        'request': {'version': '1.2.3', 'manifestSha256': 'c' * 64}}
+            save_record(path, original)
+            self.assertFalse(self.store.reconcile_update({'operation': 'update', 'jobId': self.identity,
+                'id': 'b' * 32, 'version': '1.2.3', 'manifestSha256': 'c' * 64, 'state': 'completed'}))
+            self.assertEqual(json.loads(path.read_text()), original)
+        finally:
+            os.close(descriptor)
+
     def test_update_request_requires_exact_digest_and_confirmation(self):
         valid = {'version': '1.2.3', 'manifestSha256': 'b' * 64, 'confirmUpdate': True, 'confirmDowntime': True}
         for change in ({'version': '../other'}, {'manifestSha256': 'latest'}, {'confirmUpdate': False},

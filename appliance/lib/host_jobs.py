@@ -66,6 +66,46 @@ class JobStore:
                        if re.fullmatch(r"[0-9a-f]{32}", path.stem)),
                       key=lambda record: record["createdAt"], reverse=True)
 
+    def reconcile_update(self, outcome):
+        """Called with maintenance locked after final recovery, never early boot.
+
+        An unlocked worker descriptor plus exact job/version/digest correlation
+        is required. Do not overwrite a live worker or infer success from a PID.
+        """
+        if outcome.get('operation') != 'update' or outcome.get('state') not in ('completed', 'rolled-back'):
+            return False
+        identity = outcome.get('jobId')
+        if not isinstance(identity, str) or not re.fullmatch('[a-f0-9]{32}', identity):
+            return False
+        if not isinstance(outcome.get('id'), str) or not re.fullmatch('[a-f0-9]{32}', outcome['id']):
+            return False
+        path = self.path(identity)
+        if not path.exists():
+            return False
+        descriptor = os.open(path.with_suffix('.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return False
+            record = json.loads(path.read_text())
+            selected = record.get('request', {})
+            if (record.get('id') != identity or record.get('kind') != 'update'
+                    or record.get('state') not in ('queued', 'running', 'interrupted', 'failed')
+                    or not isinstance(selected, dict)
+                    or selected.get('version') != outcome.get('version')
+                    or not isinstance(outcome.get('manifestSha256'), str)
+                    or not re.fullmatch('[a-f0-9]{64}', outcome['manifestSha256'])
+                    or selected.get('manifestSha256') != outcome['manifestSha256']):
+                return False
+            record.update(state=outcome['state'], stage='recovery-finished', finishedAt=time.time(),
+                          result={key: outcome[key] for key in ('id', 'state', 'version')})
+            record.pop('error', None)
+            save_record(path, record)
+            return True
+        finally:
+            os.close(descriptor)
+
     def open_backup(self, identity, *, recovery=False):
         record = self.read(identity)
         allowed = ("borg-recovery-kit",) if recovery else ("backup", "backup-encrypted")

@@ -699,3 +699,17 @@ Images were already cached, so this test does not qualify a remote registry pull
 source/certificate matches before stopping the server and removing temporary TLS
 trust/source configuration. Signed release artifacts and evidence remain intact.
 Production ISO trust provisioning and physical-hardware qualification remain open.
+
+### Recovery job outcomes
+
+New update maintenance journals retain the exact signed manifest digest alongside
+the job ID and release version. After the final recovery phase returns a terminal
+`completed` or `rolled-back` outcome, recovery reacquires the maintenance lock and
+checks that the same operation is still current. It updates only the matching
+queued/running/interrupted/failed update job whose worker lock can be acquired.
+Live workers and unrelated/terminal jobs are never overwritten. Public results
+contain only operation ID, outcome and version; old interruption errors are cleared.
+Early `files` recovery never reconciles jobs. Older journals without a retained
+digest remain unreconciled rather than inferring an exact release identity.
+Unit coverage verifies these transitions; reboot qualification of the new job
+reconciliation path remains pending.

@@ -76,6 +76,14 @@ def recover(action, *, host_root=Path('/')):
     activation = Activation(maintenance, targets(host_root), checkpoint=checkpoints.checkpoint,
         restore_checkpoint=checkpoints.restore, release_checkpoint=checkpoints.release, refresh=checkpoints.guard)
     record = activation.recover_files() if action == 'files' else activation.recover()
+    if action == 'finish' and record.get('jobId'):
+        from host_jobs import JobStore
+        with maintenance.locked():
+            # A new maintenance operation may have begun after recovery released
+            # its lock. Never reconcile its outcome against the previous job.
+            current = maintenance.previous()
+            if current.get('id') == record.get('id'):
+                JobStore(state / 'jobs').reconcile_update(current)
     return {key: record[key] for key in ('id', 'state', 'version') if key in record}
 
 
