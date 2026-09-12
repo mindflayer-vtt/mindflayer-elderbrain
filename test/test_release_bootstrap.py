@@ -173,6 +173,35 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(self.previous.read_text(), 'old storage unit\n')
         self.assertEqual(self.install()['state'], 'installed')
 
+    def test_online_candidate_is_retained_without_selection_until_commit(self):
+        baseline = self.install()
+        selector = self.root / 'usr/lib/elderbrain-recovery/active.json'
+        before = selector.read_bytes()
+        recovery_source = self.tree / 'runtime/release_recovery.py'
+        recovery_source.write_bytes(recovery_source.read_bytes() + b'\n# candidate generation\n')
+        prepared = bootstrap.prepare_candidate(self.tree, self.fixture.paths,
+            state=self.state, host_root=self.root)
+        self.assertEqual(prepared['active'], baseline['bundle'])
+        self.assertNotEqual(prepared['candidate'], baseline['bundle'])
+        self.assertEqual(selector.read_bytes(), before)
+        self.assertEqual(bootstrap.verify_active(baseline['bundle'], host_root=self.root),
+                         {'bundle': baseline['bundle']})
+        bootstrap.commit_candidate(prepared['candidate'], state=self.state, host_root=self.root)
+        self.assertEqual(bootstrap.verify_active(prepared['candidate'], host_root=self.root),
+                         {'bundle': prepared['candidate']})
+
+    def test_online_candidate_cannot_replace_fixed_bootstrap_generation(self):
+        baseline = self.install()
+        selector = self.root / 'usr/lib/elderbrain-recovery/active.json'
+        before = selector.read_bytes()
+        launcher = self.tree / 'bootstrap/recovery-launcher.py'
+        launcher.write_bytes(launcher.read_bytes() + b'\n# changed generation\n')
+        with self.assertRaisesRegex(ValueError, 'changes fixed recovery bootstrap'):
+            bootstrap.prepare_candidate(self.tree, self.fixture.paths, state=self.state, host_root=self.root)
+        self.assertEqual(selector.read_bytes(), before)
+        self.assertEqual(bootstrap.verify_active(baseline['bundle'], host_root=self.root),
+                         {'bundle': baseline['bundle']})
+
 
 if __name__ == '__main__':
     unittest.main()

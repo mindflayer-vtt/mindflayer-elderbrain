@@ -11,7 +11,7 @@ import subprocess
 from backup_service import Maintenance
 from release_activation import Activation
 from release_interlocks import update_admission
-from release_bootstrap import verify_installed
+from release_bootstrap import verify_active
 from release_checkpoints import UpdateCheckpoints
 from release_recovery import health
 from release_runtime import candidate, private_directory, read_regular
@@ -22,7 +22,7 @@ from restore_service import persistent_identity
 
 def activate(prepared, public_key, allowed_paths, *, dependency_directory, bootstrap_tree,
              platform, configuration_schema, parent, host_root=Path('/'), run=subprocess.run, job_owner=None,
-             expected_manifest_sha256=None):
+             expected_manifest_sha256=None, active_recovery=None):
     root = Path(host_root).absolute()
     state, runtime = root / 'var/lib/mindflayer-elderbrain', root / 'opt/mindflayer-elderbrain'
     if Path(__file__).resolve().is_relative_to(runtime.resolve()):
@@ -30,6 +30,8 @@ def activate(prepared, public_key, allowed_paths, *, dependency_directory, boots
     identity = persistent_identity(state, root)
     if identity is None:
         raise ValueError('Release activation requires verified persistent storage')
+    if not isinstance(active_recovery, str):
+        raise ValueError('Activation requires the admitted recovery authority')
     prepared = private_directory(prepared)
     manifest = read_regular(prepared / 'manifest.json', 65536)
     if expected_manifest_sha256 is not None and hashlib.sha256(manifest).hexdigest() != expected_manifest_sha256:
@@ -45,7 +47,10 @@ def activate(prepared, public_key, allowed_paths, *, dependency_directory, boots
             # before journaling or interrupting any service.
             if persistent_identity(state, root) != identity:
                 raise ValueError('Persistent storage changed before activation')
-            verify_installed(bootstrap_tree, allowed_paths, host_root=root)
+            # Candidate code has been authenticated and retained, but the
+            # recovery authority must remain the bundle that admitted this
+            # transaction until activation has committed successfully.
+            verify_active(active_recovery, host_root=root)
             services.validate()  # Previous runtime must already be offline-safe.
             authenticated, tree = contexts.enter_context(candidate(prepared, public_key, allowed_paths,
                 dependency_directory=dependency_directory, state=state, platform=platform,

@@ -732,3 +732,20 @@ or inventory requires an explicit migration and is refused here. Source-built
 ISO Git version labels are supported by release discovery. This provisions trust,
 not a production signed release or the offline baseline needed for first-update
 rollback; complete fresh-ISO update qualification remains pending.
+
+## Two-phase recovery authority
+
+Online update preparation now installs and verifies the candidate recovery module
+bundle without changing `active.json`. The current active bundle identity is
+captured at that point and revalidated inside activation admission, so the same
+known-good recovery implementation remains responsible through code replacement,
+data writes, health validation, rollback and activation commit. Only after
+activation returns `completed` does the persistent worker atomically select the
+candidate bundle. A failed guarded selector context does not publish its selection.
+
+Fixed launcher, recovery-unit and writer-gate files remain part of the install ISO
+bootstrap generation. Online candidates must contain byte-identical versions;
+otherwise preparation fails before maintenance begins. This deliberately prevents
+mixed-generation online publication while transactional bootstrap replacement is
+unfinished. A signed recovery transaction/API field and deterministic repair of an
+interruption after activation commit but before selector commit are still required.

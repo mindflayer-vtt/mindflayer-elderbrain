@@ -18,7 +18,7 @@ class ApplyTests(unittest.TestCase):
         (self.prepared / 'manifest.json').write_bytes(b'signed manifest')
         (self.prepared / 'manifest.sig').write_bytes(b'signature')
         self.guard = self.enterContext(patch('release_apply.persistent_identity', return_value='fixture'))
-        self.proof = self.enterContext(patch('release_apply.verify_installed'))
+        self.proof = self.enterContext(patch('release_apply.verify_active'))
         self.services = self.enterContext(patch('release_apply.UpdateServices')).return_value
         self.maintenance = self.enterContext(patch('release_apply.Maintenance'))
         self.checkpoints = self.enterContext(patch('release_apply.UpdateCheckpoints')).return_value
@@ -45,12 +45,14 @@ class ApplyTests(unittest.TestCase):
     def activate(self):
         return activate(self.prepared, b'pinned key', {'trusted': 0o644},
             dependency_directory=self.root / 'dependencies', bootstrap_tree=self.root / 'bootstrap',
-            platform={'architecture': 'amd64'}, configuration_schema=1, parent=self.root, host_root=self.root)
+            platform={'architecture': 'amd64'}, configuration_schema=1, parent=self.root, host_root=self.root,
+            active_recovery='b' * 64)
 
     def test_wires_fixed_coordinator_and_retains_candidate_until_activation_finishes(self):
         self.assertEqual(self.activate(), {'id': 'a' * 32, 'version': '1.0.1', 'state': 'completed'})
         self.assertFalse(self.open)
         self.proof.assert_called_once()
+        self.proof.assert_called_once_with('b' * 64, host_root=self.root)
         self.services.validate.assert_called_once()
         options = self.coordinator.call_args.kwargs
         self.assertIs(options['checkpoint'], self.checkpoints.checkpoint)

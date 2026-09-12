@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 import test.test_release_prepare as preparation_fixture
-from release_recovery_bundle import install, select
+from release_recovery_bundle import active, install, select
 from release_staging import stage
 from backup_service import Maintenance, save_record
 
@@ -106,6 +106,9 @@ class RecoveryBundleTests(unittest.TestCase):
         result = self.install()
         maintenance = Maintenance(self.root / 'maintenance', None)
         select(result['id'], directory=self.directory, maintenance=maintenance)
+        self.assertEqual(active(directory=self.directory, expected=result['id']), {'bundle': result['id']})
+        with self.assertRaisesRegex(ValueError, 'no longer active'):
+            active(directory=self.directory, expected='a' * 64)
         expected = Path(result['directory']) / 'release_recovery.py'
         self.assertEqual(launcher.selected(self.directory), expected)
         with patch.object(launcher.os, 'execve') as execute:
@@ -121,6 +124,24 @@ class RecoveryBundleTests(unittest.TestCase):
         save_record(maintenance.journal, {'operation': 'update', 'state': 'files-recovered'})
         with self.assertRaisesRegex(RuntimeError, 'unfinished maintenance'):
             select('a' * 64, directory=self.directory, maintenance=maintenance)
+        self.assertEqual((self.directory / 'active.json').read_bytes(), before)
+
+    def test_failed_selection_window_never_publishes_candidate(self):
+        from release_recovery_bundle import selection_window
+        first = self.install()
+        select(first['id'], directory=self.directory, maintenance=Maintenance(self.root / 'maintenance', None))
+        before = (self.directory / 'active.json').read_bytes()
+        bundle = self.fixture.bundle
+        with stage(bundle / 'elderbrain-host.tar.zst', (bundle / 'manifest.json').read_bytes(),
+                   (bundle / 'manifest.sig').read_bytes(), self.fixture.public,
+                   self.fixture.paths, parent=self.root) as (_, tree):
+            module = tree / 'runtime/release_recovery.py'
+            module.write_bytes(module.read_bytes() + b'\n# second candidate\n')
+            second = install(tree, self.fixture.paths, directory=self.directory)
+        with self.assertRaisesRegex(RuntimeError, 'injected failure'):
+            with selection_window(second['id'], directory=self.directory,
+                                  maintenance=Maintenance(self.root / 'maintenance', None)):
+                raise RuntimeError('injected failure')
         self.assertEqual((self.directory / 'active.json').read_bytes(), before)
 
     def test_launcher_rejects_tampering_before_execution(self):

@@ -15,7 +15,7 @@ import uuid
 from backup_service import Maintenance, save_record
 from release_interlocks import update_admission
 from release_prepare import sync_directory
-from release_recovery_bundle import install as install_bundle, selection_window, verify_tree
+from release_recovery_bundle import active as active_bundle, install as install_bundle, selection_window, verify_tree
 from release_runtime import private_directory, read_regular
 from release_staging import inventory
 from restore_service import persistent_identity
@@ -134,6 +134,59 @@ def verify_installed(tree, allowed_paths, *, host_root=Path('/')):
         if not target.is_symlink() or os.readlink(target) != '../' + name:
             raise ValueError('Recovery boot unit is not enabled')
     return {'bundle': identity}
+
+
+def prepare_candidate(tree, allowed_paths, *, state, host_root=Path('/'), job_owner=None):
+    """Install authenticated candidate recovery bytes without selecting them."""
+    root, tree, state = Path(host_root).absolute(), Path(tree).absolute(), Path(state)
+    identity = persistent_identity(state, root)
+    if identity is None:
+        raise ValueError('Recovery preparation requires verified persistent storage')
+    if tree.resolve() != tree or not tree.is_dir():
+        raise ValueError('Bootstrap source must be canonical')
+    paths = inventory(allowed_paths)
+    # Fixed launcher/unit generation is part of the clean-install baseline for
+    # now. Online releases must carry byte-identical reviewed inputs, preventing
+    # a mixed bootstrap generation before transactional publication is added.
+    for target, source in files().items():
+        source_path = tree / source
+        if paths.get(source) != 0o644 or source_path.resolve() != source_path:
+            raise ValueError('Bootstrap source is outside reviewed inventory')
+        destination = root / target
+        directory(destination.parent, root)
+        if existing(destination) != read_regular(source_path, 4 * 1024 ** 2):
+            raise ValueError('Online release changes fixed recovery bootstrap files')
+    bundle_root = root / 'usr/lib/elderbrain-recovery'
+    with update_admission(state, owner=job_owner):
+        maintenance = Maintenance(state / 'maintenance', None)
+        with maintenance.locked():
+            if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
+                raise RuntimeError('Recover maintenance before preparing recovery code')
+            selected = active_bundle(directory=bundle_root)
+            bundle = install_bundle(tree, paths, directory=bundle_root)
+            if persistent_identity(state, root) != identity:
+                raise ValueError('Persistent storage changed during recovery preparation')
+            return {'active': selected['bundle'], 'candidate': bundle['id']}
+
+
+def commit_candidate(identity, *, state, host_root=Path('/'), job_owner=None):
+    """Select a verified candidate only after its release transaction committed."""
+    root, state = Path(host_root).absolute(), Path(state)
+    storage = persistent_identity(state, root)
+    if storage is None:
+        raise ValueError('Recovery selection requires verified persistent storage')
+    with update_admission(state, owner=job_owner):
+        maintenance = Maintenance(state / 'maintenance', None)
+        with selection_window(identity, directory=root / 'usr/lib/elderbrain-recovery', maintenance=maintenance):
+            if persistent_identity(state, root) != storage:
+                raise ValueError('Persistent storage changed during recovery selection')
+            return {'bundle': identity}
+
+
+def verify_active(identity, *, host_root=Path('/')):
+    """Prove the executing known-good bundle remains the active authority."""
+    root = Path(host_root).absolute()
+    return active_bundle(directory=root / 'usr/lib/elderbrain-recovery', expected=identity)
 
 
 def install(tree, allowed_paths, *, state, host_root=Path('/'), job_owner=None):

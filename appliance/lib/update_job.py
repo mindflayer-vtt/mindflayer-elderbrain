@@ -4,11 +4,10 @@ import json
 import os
 from pathlib import Path
 import platform
-import subprocess
 
 from appliance_release import unique, verify, require_compatible
 from release_apply import activate
-from release_bootstrap import install
+from release_bootstrap import commit_candidate, prepare_candidate
 from release_runtime import private_directory, read_regular
 from release_staging import inventory, stage
 from restore_service import persistent_identity
@@ -60,10 +59,13 @@ def run_update(state, identity, selected, *, progress, host_root=Path('/')):
         raise ValueError('Update requires the confirmed complete release')
     with stage(prepared / 'elderbrain-host.tar.zst', manifest, signature, key, paths, parent=staging) as (_, tree):
         progress('preparing-recovery')
-        install(tree, paths, state=state, host_root=root, job_owner=identity)
-        subprocess.run(['systemctl', 'daemon-reload'], check=True, stdin=subprocess.DEVNULL,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+        recovery = prepare_candidate(tree, paths, state=state, host_root=root, job_owner=identity)
         progress('activating')
-        return activate(prepared, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
-                        platform=current, configuration_schema=1, parent=staging, host_root=root, job_owner=identity,
-                        expected_manifest_sha256=selected['manifestSha256'])
+        result = activate(prepared, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
+                          platform=current, configuration_schema=1, parent=staging, host_root=root, job_owner=identity,
+                          expected_manifest_sha256=selected['manifestSha256'], active_recovery=recovery['active'])
+        if result.get('state') != 'completed':
+            raise RuntimeError('Activation did not commit the release')
+        progress('committing-recovery')
+        commit_candidate(recovery['candidate'], state=state, host_root=root, job_owner=identity)
+        return result

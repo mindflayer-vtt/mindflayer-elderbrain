@@ -1663,6 +1663,24 @@ submission and pending state after reload. Host-side tests continue to mock the
 systemd power command; 33 focused Python tests, Nuxt typecheck/build, all 39 Setup
 unit tests and all 40 production-server browser/API tests pass. The UI explicitly
 identifies the bounded pre-shutdown checkpoint/backup handling as not implemented
-yet. Boot outcome
-reporting and that data-protection workflow remain pending. No machine was rebooted
-or shut down, and no live appliance was changed.
+yet. Boot outcome reporting and that data-protection workflow remain pending. No
+machine was rebooted or shut down, and no live appliance was changed.
+
+Split online recovery preparation from recovery authority publication. An
+authenticated candidate's recovery modules are now imported, verified and retained
+in the content-addressed store while `active.json` continues to name the known-good
+bundle that admitted the update. Activation rechecks that exact active identity
+under its maintenance lock. Only a `completed` activation result reaches the
+separate selector commit; health failure, rollback, interruption or any other
+result leaves the prior authority selected. Selector publication itself now occurs
+only after the guarded selection block exits successfully. Online releases must
+currently carry byte-identical fixed launcher, unit and writer-gate inputs; changing
+that bootstrap generation is rejected until a transactional publication mechanism
+is implemented. The clean-install provisioning path still establishes the initial
+bundle and fixed boot files. Unit tests cover retained-but-unselected candidates,
+post-commit selection, fixed-bootstrap rejection, active-identity drift, failed
+selection blocks and failed/noncommitted activation. All 155 release tests pass;
+the systemd unit-graph verifier required its normal host socket permissions and
+passed separately outside the sandbox. No VM or physical appliance was changed.
+Signed recovery API compatibility and post-activation/pre-selector interruption
+reconciliation remain pending before this priority is complete.

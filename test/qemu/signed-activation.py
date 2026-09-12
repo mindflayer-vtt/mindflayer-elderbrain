@@ -18,7 +18,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'appliance/lib'))
-from provisioning.recovery_bootstrap import provision, staged_payload
+from provisioning.recovery_bootstrap import staged_payload
+from release_bootstrap import commit_candidate, prepare_candidate
 from release_apply import activate
 from release_prepare import prepare
 from release_recovery import health
@@ -131,8 +132,6 @@ else:
     assert checked['release']['manifestSha256'] == hashlib.sha256(manifest).hexdigest()
     assert checked['release']['compatible'] is True
     print('CA-verified HTTPS announcement checked; runtime not prepared', flush=True)
-provision()
-command('systemctl', 'daemon-reload')
 if args.job or args.download_job:
     # Disposable VM only: independent pin and reviewed inventory. No production
     # key is generated or overwritten by this fixture.
@@ -173,9 +172,13 @@ def fail_health(saved, state, **options):
         raise RuntimeError('Injected post-start update health failure')
 with staged_payload() as (tree, _), \
         (patch('release_apply.health', side_effect=fail_health) if args.fail_health or args.interrupt else nullcontext()):
+    recovery = prepare_candidate(tree, paths, state=Path('/var/lib/mindflayer-elderbrain'))
     try:
         result = activate(prepared / args.version, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
-                          platform=metadata['platform'], configuration_schema=1, parent=evidence)
+                          platform=metadata['platform'], configuration_schema=1, parent=evidence,
+                          active_recovery=recovery['active'])
+        assert result['state'] == 'completed'
+        commit_candidate(recovery['candidate'], state=Path('/var/lib/mindflayer-elderbrain'))
     except SystemExit as error:
         assert args.interrupt and str(error) == 'Injected post-start process loss'
         assert injected and marker.read_bytes() == b'changed-by-new-release\n'

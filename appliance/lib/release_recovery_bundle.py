@@ -38,36 +38,57 @@ def select(identity, *, directory, maintenance):
         return result
 
 
+def verify_bundle(identity, *, directory):
+    if not isinstance(identity, str) or not re.fullmatch(r'[a-f0-9]{64}', identity):
+        raise ValueError('Invalid recovery bundle identity')
+    directory = private_directory(directory)
+    bundle = private_directory(directory / identity)
+    manifest = read_regular(bundle / 'bundle.json', 65536)
+    if hashlib.sha256(manifest).hexdigest() != identity:
+        raise ValueError('Recovery manifest identity differs')
+    value = json.loads(manifest, object_pairs_hook=unique)
+    if (not isinstance(value, dict) or set(value) != {'format', 'entrypoint', 'files'}
+            or type(value['format']) is not int or value['format'] != 1
+            or value['entrypoint'] != 'release_recovery.py' or not isinstance(value['files'], dict)
+            or not 1 <= len(value['files']) <= 256 or 'release_recovery.py' not in value['files']):
+        raise ValueError('Invalid recovery bundle manifest')
+    for name, item in value['files'].items():
+        if (not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*\.py', name) or not isinstance(item, dict)
+                or set(item) != {'size', 'sha256'} or type(item['size']) is not int
+                or not 0 < item['size'] <= 4 * 1024 ** 2 or not isinstance(item['sha256'], str)
+                or not re.fullmatch(r'[a-f0-9]{64}', item['sha256'])):
+            raise ValueError('Invalid recovery module descriptor')
+    if sum(item['size'] for item in value['files'].values()) > 64 * 1024 ** 2:
+        raise ValueError('Recovery bundle exceeds limit')
+    verify_tree(bundle, value['files'], manifest)
+    return value
+
+
+def active(*, directory, expected=None):
+    directory = private_directory(directory)
+    selection = json.loads(read_regular(directory / 'active.json', 1024), object_pairs_hook=unique)
+    if (not isinstance(selection, dict) or set(selection) != {'format', 'bundle'}
+            or type(selection['format']) is not int or selection['format'] != 1
+            or not isinstance(selection['bundle'], str)):
+        raise ValueError('Invalid active recovery selection')
+    if expected is not None and selection['bundle'] != expected:
+        raise ValueError('Running recovery bundle is no longer active')
+    verify_bundle(selection['bundle'], directory=directory)
+    return {'bundle': selection['bundle']}
+
+
 @contextmanager
 def selection_window(identity, *, directory, maintenance):
     """Caller verified storage; serialized selection cannot change mid-update."""
-    if not isinstance(identity, str) or not re.fullmatch(r'[a-f0-9]{64}', identity):
-        raise ValueError('Invalid recovery bundle identity')
     directory = private_directory(directory)
     with maintenance.locked():
         if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
             raise RuntimeError('Cannot change recovery code during unfinished maintenance')
-        bundle = private_directory(directory / identity)
-        manifest = read_regular(bundle / 'bundle.json', 65536)
-        if hashlib.sha256(manifest).hexdigest() != identity:
-            raise ValueError('Recovery manifest identity differs')
-        value = json.loads(manifest, object_pairs_hook=unique)
-        if (not isinstance(value, dict) or set(value) != {'format', 'entrypoint', 'files'}
-                or type(value['format']) is not int or value['format'] != 1
-                or value['entrypoint'] != 'release_recovery.py' or not isinstance(value['files'], dict)
-                or not 1 <= len(value['files']) <= 256 or 'release_recovery.py' not in value['files']):
-            raise ValueError('Invalid recovery bundle manifest')
-        for name, item in value['files'].items():
-            if (not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*\.py', name) or not isinstance(item, dict)
-                    or set(item) != {'size', 'sha256'} or type(item['size']) is not int
-                    or not 0 < item['size'] <= 4 * 1024 ** 2 or not isinstance(item['sha256'], str)
-                    or not re.fullmatch(r'[a-f0-9]{64}', item['sha256'])):
-                raise ValueError('Invalid recovery module descriptor')
-        if sum(item['size'] for item in value['files'].values()) > 64 * 1024 ** 2:
-            raise ValueError('Recovery bundle exceeds limit')
-        verify_tree(bundle, value['files'], manifest)
-        save_record(directory / 'active.json', {'format': 1, 'bundle': identity})
+        verify_bundle(identity, directory=directory)
         yield {'bundle': identity}
+        # Publication is the commit point. A caller failure while installing
+        # bootstrap files or rechecking storage leaves the old authority active.
+        save_record(directory / 'active.json', {'format': 1, 'bundle': identity})
 
 
 def install(tree, allowed_paths, *, directory, run=subprocess.run):
