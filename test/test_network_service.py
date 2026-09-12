@@ -13,6 +13,33 @@ class NetworkServiceTests(unittest.TestCase):
     @patch.object(service, 'available')
     @patch.object(service, 'discover')
     @patch.object(service.Path, 'read_text', return_value='52:54:00:12:34:56')
+    @patch.object(service, 'prepare_restore')
+    @patch.object(service, 'transaction')
+    def test_restore_uses_archived_address_and_keeps_configuration_private(self, transaction, prepare, _read, discover, available):
+        discover.return_value = {'interfaces': [{'name': 'ens3', 'internal': False, 'state': 'UP'}]}
+        changes = {'50-test.yaml': {'before': b'private-current', 'after': b'private-archived'}}
+        prepare.return_value = {'changes': changes, 'fingerprint': 'a' * 64,
+            'configuration': {'network': {'ethernets': {'ens3': {'addresses': ['10.0.2.20/24']}}}}}
+        transaction.return_value.stage.return_value = {'id': 'b' * 32, 'phase': 'staged'}
+        archived = {'50-test.yaml': b'private-archived'}
+        result = service.restore_files(archived, 'ens3')
+        prepare.assert_called_once_with(archived)
+        call = transaction.return_value.stage.call_args
+        self.assertEqual(call.args, (changes, 'ens3'))
+        self.assertEqual(call.kwargs['confirmation']['address'], '10.0.2.20')
+        self.assertEqual(call.kwargs['confirmation']['mode'], 'static')
+        self.assertNotIn(result['token'], str(call.kwargs))
+        self.assertNotIn('private-', str(result))
+        self.assertEqual(available.call_count, 2)
+        prepare.return_value['configuration']['network']['ethernets']['ens3']['dhcp4'] = True
+        transaction.reset_mock()
+        with self.assertRaises(ValueError):
+            service.restore_files(archived, 'ens3')
+        transaction.assert_not_called()
+
+    @patch.object(service, 'available')
+    @patch.object(service, 'discover')
+    @patch.object(service.Path, 'read_text', return_value='52:54:00:12:34:56')
     @patch.object(service, 'prepare')
     @patch.object(service, 'transaction')
     def test_authenticated_start_prepares_and_binds_token_once(self, transaction, prepare, _read, discover, available):

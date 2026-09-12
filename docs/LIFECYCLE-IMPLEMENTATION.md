@@ -754,3 +754,15 @@ writes live network files. Returned merged configuration/bytes stay private.
 All 24 staging/transaction tests pass, including file-set restoration and source
 conflicts. This does not yet connect checkpoints to the network coordinator or
 expose a network-restore UI. The fixed-ISO preserve install reached OS extraction.
+
+Private network_service.restore_files now passes the complete validated archive
+candidate to the existing timed transaction worker, deriving its confirmation
+binding from the selected archived interface instead of current/requested IPs.
+It checks recovery services before and after validation, requires an active
+noninternal interface, rejects mixed DHCP/static or ambiguous IPv4 destinations,
+and returns only the one-time token/public transaction status and generic warnings.
+The archived configuration itself is not projected or exposed. All 60 network
+tests pass. The checkpoint coordinator must still supply verified/pinned files,
+compatibility checks, recovery checkpoint and maintenance exclusion before this
+private entry point can be exposed; no new network-restore API/UI exists yet.
+The same fixed-ISO preserve install has reached kernel installation.

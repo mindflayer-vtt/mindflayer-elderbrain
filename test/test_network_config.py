@@ -10,6 +10,25 @@ spec.loader.exec_module(module)
 
 
 class NetworkConfigTests(unittest.TestCase):
+    def test_archived_confirmation_does_not_project_or_mutate_configuration(self):
+        document = {'network': {'ethernets': {'ens3': {'dhcp4': False,
+            'addresses': ['10.0.2.20/24', '2001:db8::1/64'],
+            'routes': [{'to': '10.9.0.0/16', 'via': '10.0.2.1'}]}}}}
+        before = copy.deepcopy(document)
+        settings = module.confirmation_settings(document, 'ens3')
+        self.assertEqual(settings['address'], '10.0.2.20')
+        self.assertEqual(settings['mode'], 'static')
+        self.assertEqual(document, before)
+        document['network']['ethernets']['ens3'] = {'dhcp4': True, 'addresses': ['2001:db8::1/64']}
+        self.assertEqual(module.confirmation_settings(document, 'ens3')['mode'], 'dhcp')
+
+    def test_archived_confirmation_rejects_ambiguous_or_unreachable_ipv4(self):
+        for config in ({'dhcp4': True, 'addresses': ['10.0.2.20/24']},
+                       {'addresses': ['10.0.2.20/24', '10.0.2.21/24']},
+                       {'addresses': ['127.0.0.1/8']}, {'dhcp4': 'true'}, {}):
+            with self.assertRaises(ValueError):
+                module.confirmation_settings({'network': {'ethernets': {'ens3': config}}}, 'ens3')
+
     def setUp(self):
         self.document = {'network': {'version': 2, 'renderer': 'networkd', 'ethernets': {
             'primary': {'match': {'macaddress': '52:54:00:12:34:56'}, 'set-name': 'ens3', 'dhcp4': True, 'dhcp6': True,

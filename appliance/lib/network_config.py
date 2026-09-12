@@ -64,6 +64,32 @@ def resolve(document, interface, mac=None):
     return candidates[0]
 
 
+def confirmation_settings(document, interface, mac=None):
+    """Derive the reconnect destination from validated archived configuration.
+
+    This only describes a confirmation endpoint, not an edit projection: retain
+    all archived routes, IPv6, DNS and other adapters in the staged candidate.
+    """
+    kind, name = resolve(document, interface, mac)
+    config = document['network'][kind][name]
+    addresses = []
+    for entry in config.get('addresses', []):
+        value = next(iter(entry)) if isinstance(entry, dict) and len(entry) == 1 else entry
+        address = ipaddress.ip_interface(value)
+        if address.version == 4:
+            addresses.append(address)
+    dhcp = config.get('dhcp4', False)
+    if type(dhcp) is not bool:
+        raise ValueError('Invalid archived DHCP setting')
+    if dhcp and not addresses:
+        return request({'interface': interface, 'mode': 'dhcp'})
+    if dhcp or len(addresses) != 1:
+        raise ValueError('Choose an interface with unambiguous DHCP or one static IPv4 address for confirmation')
+    address = addresses[0]
+    return request({'interface': interface, 'mode': 'static', 'address': str(address.ip),
+                    'prefix': address.network.prefixlen})
+
+
 def ipv6_address(value):
     address = next(iter(value)) if isinstance(value, dict) and len(value) == 1 else value
     return ipaddress.ip_interface(address).version == 6
