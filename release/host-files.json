@@ -340,6 +340,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_baseline.py",
+    "path": "runtime/release_baseline.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_bootstrap.py",
     "path": "runtime/release_bootstrap.py",
     "mode": 420

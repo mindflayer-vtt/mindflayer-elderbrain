@@ -518,3 +518,18 @@ archives. Legacy installations without persistent-storage metadata skip this hoo
 the bootstrap API itself rejects a missing storage identity. The staging directory
 is temporary and the independent recovery bundle survives its removal. This does
 not migrate the legacy stack startup to prebuilt/offline release operation.
+
+`release_baseline.prepare` stages the legacy installation's offline rollback
+Compose configuration without modifying live runtime files. Under host job,
+maintenance and settings locks it resolves all four configured services, requires
+each image to be cached for Linux amd64, and pins their immutable local image IDs.
+Build directives are removed and pull policy becomes never. A second real Compose
+resolution must match every original resolved setting except those image-policy
+fields; expanded secrets are never written to the preparation directory.
+
+The private durable baseline includes original/generated Compose, their hashes,
+image IDs and a baseline-prepared receipt with activationReady false. This is a
+locally trusted installation baseline, not a signed release or an alternative
+trust path for downloaded updates. Missing cached images fail rather than pulling.
+Installing the baseline and offline stack unit, proving their rollback behavior
+and enabling update admission remain separate steps.

@@ -1317,3 +1317,23 @@ remained, and CA-verified HTTPS Setup health returned exactly {"ok":true}.
 This qualifies normal reboot with the installed gates and no pending update;
 it does not qualify offline stack migration, Foundry workload, interrupted-update
 rollback or a newly built ISO installation. Physical Lenovo remained off.
+
+Added release_baseline.prepare to stage the legacy installation's offline
+rollback Compose. Job/maintenance/settings locks protect inspection; all four
+configured images must already exist for Linux amd64 and are pinned by immutable
+local image ID. Only image/build/pull fields change, verified by comparing actual
+Compose-resolved documents before/after. Expanded settings remain in memory;
+private durable output contains original/generated Compose, hashes and image IDs,
+with activationReady false. Six tests cover preservation, private publication,
+missing cache, resolved-setting drift, maintenance/storage rejection and unsafe
+service/pin structures. Full suite: 508 tests, five skipped, passing.
+
+Actual VM preparation first correctly rejected the missing configured Foundry
+image without changing live files. Explicitly cached ghcr.io/felddy/foundryvtt:14.367
+(registry digest sha256:5004a67fbbef8e3f5f82afb01c8dbe06626c57519cad541a59b1bdce3c2a97ac)
+as a separate test preparation operation; no Foundry container was started.
+test/qemu/offline-baseline.py then passed against real Docker/Compose, retaining
+evidence at /root/elderbrain-offline-baseline-ibx0g_er/0dc4cd35af924053a34d10f594b76812.
+Live Compose remained byte-identical. Baseline installation, offline stack-unit
+switching and rollback/boot qualification remain; signed release verification
+requirements are unchanged. Nothing was pushed or changed on the physical Lenovo.
