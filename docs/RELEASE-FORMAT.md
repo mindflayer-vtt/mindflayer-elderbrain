@@ -341,3 +341,17 @@ for subsequent boot, and prepare an offline-compatible previous runtime before
 admitting a legacy installation to this update path. Concrete API checks, firmware
 and network-operation interlocks, stable-worker/boot recovery and checkpoint
 integration are still required before this adapter is enabled on an appliance.
+
+Activation now defaults to the existing state directory's job-admission gate,
+maintenance lock and display/network transaction locks, in that order. Queued or
+running jobs are checked through their worker-held locks; stale job records are
+marked interrupted rather than treated as running forever. A future admitted
+update worker must explicitly supply its own live update job ID to the admission
+context. Other jobs remain excluded through activation/recovery and health checks.
+
+Pending settings reject activation before a maintenance record is created or any
+services stop. The management bridge also holds the maintenance lock while
+starting a display preview or network transaction, so these cannot begin during
+update health checks after settings locks are released for service startup.
+Status and existing confirmation/cancellation paths remain available. These gates
+do not enable an update API or replace the still-required stable recovery worker.

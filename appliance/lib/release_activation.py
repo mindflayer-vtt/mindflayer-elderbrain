@@ -4,18 +4,19 @@ Not a public update API. The source callback must reverify the complete prepared
 runtime, images and dependencies, attach persistent aliases and check deployment
 permissions. Recovery must run from a stable worker outside the replaced runtime.
 """
-from contextlib import nullcontext
 import time
 import uuid
 
 from appliance_release import verify
 from backup_service import save_record
 from restore_transaction import RestoreTransaction
+from release_interlocks import update_admission
+from snapshot_service import stable_settings
 
 
 class Activation:
     def __init__(self, maintenance, targets, *, checkpoint, restore_checkpoint,
-                 release_checkpoint, refresh, exclusive=nullcontext):
+                 release_checkpoint, refresh, exclusive=None, admission=None):
         self.maintenance = maintenance
         self.services = maintenance.services
         self.targets = targets
@@ -23,7 +24,9 @@ class Activation:
         self.restore_checkpoint = restore_checkpoint
         self.release_checkpoint = release_checkpoint
         self.refresh = refresh
-        self.exclusive = exclusive
+        state = maintenance.directory.parent
+        self.exclusive = exclusive or (lambda: stable_settings(state))
+        self.admission = admission or (lambda: update_admission(state))
 
     def write(self, record, state):
         record['state'] = state
@@ -40,21 +43,23 @@ class Activation:
         release = verify(manifest, signature, public_key)
         if release['format'] != 2:
             raise ValueError('Activation requires a complete signed release')
-        with self.maintenance.locked():
+        with self.admission(), self.maintenance.locked():
             if self.maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
                 raise RuntimeError('Interrupted maintenance requires recovery first')
             # Trusted host adapter revalidates all inputs before interrupting any
             # service. Archive metadata never supplies the live target mapping.
-            sources = prepare_sources(release)
-            if set(sources) != set(self.targets):
-                raise ValueError('Update sources do not match fixed host targets')
-            record = {'operation': 'update', 'id': uuid.uuid4().hex, 'version': release['version'],
-                      'startedAt': time.time(), 'services': self.services.snapshot(),
-                      'dataMayHaveChanged': False, 'dataRolledBack': False}
-            transaction = self.transaction(record)
-            self.write(record, 'stopping')
+            record = None
             try:
                 with self.exclusive():
+                    sources = prepare_sources(release)
+                    if set(sources) != set(self.targets):
+                        raise ValueError('Update sources do not match fixed host targets')
+                    candidate = {'operation': 'update', 'id': uuid.uuid4().hex, 'version': release['version'],
+                                 'startedAt': time.time(), 'services': self.services.snapshot(),
+                                 'dataMayHaveChanged': False, 'dataRolledBack': False}
+                    transaction = self.transaction(candidate)
+                    self.write(candidate, 'stopping')
+                    record = candidate
                     self.services.stop(record['services'])
                     self.write(record, 'checkpointing')
                     self.checkpoint(record)  # Must be durable and pinned by operation ID.
@@ -76,12 +81,14 @@ class Activation:
                 self.release_checkpoint(record)
                 return record
             except Exception:
+                if record is None:
+                    raise  # Admission/preflight failure never stopped services.
                 self.write(record, 'recovery-required')
                 self.recover_locked(record)
                 raise
 
     def recover(self):
-        with self.maintenance.locked():
+        with self.admission(), self.maintenance.locked():
             return self.recover_locked(self.maintenance.previous())
 
     def recover_locked(self, record):

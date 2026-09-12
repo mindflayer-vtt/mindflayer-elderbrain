@@ -7,6 +7,7 @@ from unittest.mock import patch
 import test.test_release_prepare as preparation_fixture
 from backup_service import Maintenance
 from release_activation import Activation
+from snapshot_service import stable_settings
 
 
 class Services:
@@ -197,6 +198,18 @@ class ActivationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'unhealthy'):
                 self.activate()
         self.assertFalse(self.lock_held)
+
+    def test_pending_settings_reject_before_update_journal_or_service_stop(self):
+        from backup_service import save_record
+        pending = self.root / 'network-transaction'
+        pending.mkdir()
+        save_record(pending / 'state.json', {'phase': 'pending'})
+        self.activation.exclusive = lambda: stable_settings(self.root)
+        with self.assertRaisesRegex(RuntimeError, 'pending settings'):
+            self.activate()
+        self.assertFalse(self.maintenance.journal.exists())
+        self.assertEqual(self.services.events, [])
+        self.assertEqual((self.root / 'runtime/VERSION').read_text(), 'old')
 
 
 if __name__ == '__main__':

@@ -77,6 +77,7 @@ install -m 0644 "$PAYLOAD_DIR/provisioning/generate-admin-password.py" "$RUNTIME
 install -m 0644 "$PAYLOAD_DIR/setup/shared/bootstrap-words.json" "$RUNTIME/bootstrap-words.json"
 python3 "$PAYLOAD_DIR/provisioning/initialize-default.py" "$STATE/traefik/admin-tls.yaml" "$PAYLOAD_DIR/config/defaults/admin-tls.yaml"
 cp "$PAYLOAD_DIR/appliance/lib/management-server" "$RUNTIME/management-server"
+install -m 0644 "$PAYLOAD_DIR/appliance/lib/release_interlocks.py" "$RUNTIME/release_interlocks.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_metrics.py" "$RUNTIME/host_metrics.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/beamer_runtime.py" "$RUNTIME/beamer_runtime.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_network.py" "$RUNTIME/host_network.py"

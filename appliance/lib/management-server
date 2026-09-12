@@ -40,7 +40,9 @@ class Handler(socketserver.StreamRequestHandler):
                     payload = self.rfile.read(size)
                     if len(payload) != size:
                         raise ValueError('Incomplete preview')
-                    value = store.begin(json.loads(payload))
+                    from release_interlocks import settings_admission
+                    with settings_admission(JOBS.directory.parent):
+                        value = store.begin(json.loads(payload))
                 else:
                     operation, identifier = action.split(' ', 1)
                     value = store.confirm(identifier) if operation == 'display-preview-confirm' else store.cancel(identifier)
@@ -56,7 +58,9 @@ class Handler(socketserver.StreamRequestHandler):
                     payload = self.rfile.read(size)
                     if len(payload) != size:
                         raise ValueError('Incomplete network request')
-                    value = network_service.start(json.loads(payload))
+                    from release_interlocks import settings_admission
+                    with settings_admission(JOBS.directory.parent):
+                        value = network_service.start(json.loads(payload))
                 else:
                     value = network_service.cancel(action.split(' ', 1)[1])
                 result = {'ok': True, 'output': json.dumps(value)}

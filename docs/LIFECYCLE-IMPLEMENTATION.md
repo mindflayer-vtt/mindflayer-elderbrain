@@ -1131,3 +1131,16 @@ passes 21 tests. Read-only QEMU systemctl checks confirm the actual stack is
 active/exited and all five allowlisted host workers are active. No service was
 stopped or changed. Concrete health/interlock/checkpoint adapters, offline legacy
 rollback preparation and stable boot recovery remain pending before live use.
+
+Activation now defaults to job admission -> maintenance -> stable-settings locks.
+The admission gate checks actual worker locks, excludes live/queued host jobs
+(including flashing), and permits only an explicitly identified live update owner
+to exempt itself. Settings preflight moved ahead of the first update journal write,
+so an unconfirmed network/display change does not create a spurious interrupted
+update. Network/display start entry points in management now acquire maintenance
+before transaction locks, preventing starts during update health checks. The new
+shared module is included in both fresh provisioning and the reviewed host package.
+Five new tests cover live flashing, stale worker records, owner/gate validation,
+live/interrupted maintenance exclusion and pending settings with no service stop
+or update journal. No VM or physical appliance changed this turn; stable-worker
+admission and actual update API/recovery wiring remain pending.
