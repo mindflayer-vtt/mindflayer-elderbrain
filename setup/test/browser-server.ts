@@ -40,8 +40,8 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify([{ version: 1, id: 'e'.repeat(32), createdAt: 1700000000, reason: 'manual' }]) }) + '\n');
       return;
     }
-    if (action === 'snapshot-create-start' || action === 'snapshot-recover-start') {
-      const job = { id: 'f'.repeat(32), kind: action.replace(/-start$/, ''), state: 'completed', createdAt: Date.now() / 1000 };
+    if (action === 'snapshot-create-start' || action === 'snapshot-recover-start' || action.startsWith('snapshot-restore-start ')) {
+      const job = { id: 'f'.repeat(32), kind: action.split(' ')[0]!.replace(/-start$/, ''), state: 'completed', createdAt: Date.now() / 1000 };
       jobs.unshift(job);
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify(job) }) + '\n');
       return;

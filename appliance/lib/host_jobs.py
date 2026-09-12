@@ -23,6 +23,7 @@ COMMANDS["restore-preview-encrypted"] = []
 COMMANDS["keypad-install"] = []
 COMMANDS["snapshot-create"] = ["snapshot-create"]
 COMMANDS["snapshot-recover"] = ["snapshot-recover"]
+COMMANDS["snapshot-restore"] = ["snapshot-restore"]
 
 
 class JobStore:
@@ -96,6 +97,9 @@ class JobStore:
             from installation_job import admission
             request, installation_settings = admission(source, self.directory.parent)
             details = {"request": request, "revision": installation_settings["revision"]}
+        elif kind == 'snapshot-restore':
+            from checkpoint_restore import request
+            details['request'] = request(source)
         elif kind in ("restore-preview", "restore-preview-encrypted"):
             UploadStore(self.directory.parent / "uploads").path(source)
             details["uploadId"] = source
@@ -172,7 +176,7 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             settings = json.loads(path.with_suffix(".settings").read_text())
             maintenance = Maintenance(state / "maintenance", HostServices(runtime))
             with maintenance.locked() as maintenance_fd:
-                if maintenance.previous().get("state") in ("stopping", "working", "starting", "recovery-required"):
+                if maintenance.previous().get("state") not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
                     raise RuntimeError("Recover appliance maintenance before installation")
                 backend = InstallationBackend(runtime, lock_fd, (maintenance_fd,))
                 def progress(update):
@@ -203,6 +207,12 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             record["state"] = "completed"
             return
         arguments = list(COMMANDS[record["kind"]])
+        if record['kind'] == 'snapshot-restore':
+            from checkpoint_restore import request
+            selected = request(record['request'])
+            arguments += ['--checkpoint', selected['checkpoint'], '--confirm-restore']
+            for component in selected['components']:
+                arguments += ['--component', component]
         checksum = None
         inherited = (lock_fd,)
         if record["kind"] == "backup-encrypted":

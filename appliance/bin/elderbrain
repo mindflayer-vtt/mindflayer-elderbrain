@@ -7,13 +7,17 @@ usage() {
   echo 'Usage: elderbrain {status|initial-password|reset-admin-password|restart-foundry|restart-mindflayer|restart-browser-session|logs [service]|backup [destination]|backup-preview ARCHIVE|backup-recover|restore ARCHIVE --confirm-restore|restore-recover|update|reboot|shutdown}'
   echo 'Encrypted backups: backup-encrypted [destination], backup-preview-encrypted ARCHIVE, restore-encrypted ARCHIVE --confirm-restore (optional --passphrase-fd N)'
   echo 'Remote backups: borg-settings, borg-configure (JSON stdin), borg-schedule, borg-init, borg-test, borg-list, borg-backup, borg-fetch ARCHIVE, borg-recovery-kit'
-  echo 'Local checkpoints: snapshot-create, snapshot-list, snapshot-recover (persistent Btrfs installation required)'
+  echo 'Local checkpoints: snapshot-create, snapshot-list, snapshot-recover, snapshot-restore --checkpoint ID --component NAME --confirm-restore (persistent Btrfs required)'
 }
 require_root() { [[ $EUID -eq 0 ]] || { echo 'must run as root' >&2; exit 1; }; }
 case ${1:-} in
   snapshot-create|snapshot-list|snapshot-recover)
     require_root
     exec python3 "$COMPOSE_DIR/snapshot_service.py" "${1#snapshot-}" ;;
+  snapshot-restore)
+    require_root
+    shift
+    exec python3 "$COMPOSE_DIR/snapshot_service.py" restore "$@" ;;
   backup-encrypted)
     require_root
     shift

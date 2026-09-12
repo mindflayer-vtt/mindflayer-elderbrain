@@ -622,3 +622,19 @@ Btrfs/Foundry activation tests remain pending. The current VM ISO predates this.
 Full host suite passed 315 tests with 5 optional skips before the route-refresh
 addition; all 29 checkpoint/restore tests passed afterward, including route
 activation/rollback. VM2232 remains in kernel installation, not yet verified.
+
+Setup now exposes preferences/keypad-settings/whole-Foundry checkpoint restore
+through the authenticated, CSRF-protected API and allowlisted host-job bridge.
+The Nuxt UI requires checkpoint/component selection plus separate replacement
+and downtime consent, resets replacement consent on selection changes, reports
+jobs, and warns that physical keypad state must be reapplied separately. Root
+admission and worker validation reject unsupported selections and extra fields;
+public job results omit internal restore journals. Keypad flashing now rejects
+every unfinished maintenance state, including selective-restore staging.
+Fifteen host-job tests, four checkpoint browser tests, Setup typecheck/production
+build, Python syntax, shell syntax and whitespace checks passed. Browser tests
+use the production Setup build and a fake management bridge: real Btrfs/Foundry
+activation remains unqualified. Worker cgroup durability and dedicated
+network/security/device-identity restore paths remain outstanding.
+The same VM reinstall has progressed through GRUB/security updates to running
+the Elderbrain provisioning script. Preserve-data verification is still pending.

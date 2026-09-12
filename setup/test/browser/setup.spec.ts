@@ -12,6 +12,32 @@ test.beforeAll(async ({ playwright, baseURL }) => {
 });
 test.use({ storageState: async ({}, use) => { await use({ cookies, origins: [] }); } });
 
+test('checkpoint restore requires consent and supported components in API and UI', async ({ page, request, playwright, baseURL }) => {
+  const data = { checkpoint: 'e'.repeat(32), components: ['preferences'], confirmRestore: true, confirmDowntime: true };
+  const anonymous = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  try { expect((await anonymous.post('/elderbrain/api/snapshots/restore', { headers: { 'x-elderbrain-request': '1' }, data })).status()).toBe(401); }
+  finally { await anonymous.dispose(); }
+  expect((await request.post('/elderbrain/api/snapshots/restore', { data })).status()).toBe(403);
+  const session = await (await request.get('/elderbrain/api/auth/session')).json();
+  const headers = { 'x-elderbrain-request': '1', 'x-csrf-token': session.csrf };
+  for (const changes of [{ confirmRestore: false }, { confirmDowntime: false }, { components: ['security'] }, { checkpoint: '../data' }]) {
+    expect((await request.post('/elderbrain/api/snapshots/restore', { headers, data: { ...data, ...changes } })).ok()).toBe(false);
+  }
+  await page.goto('/elderbrain/backups');
+  const button = page.getByRole('button', { name: 'Restore selected configuration', exact: true });
+  await expect(button).toBeDisabled();
+  await page.getByRole('combobox', { name: 'Checkpoint to restore' }).click();
+  await page.getByRole('option', { name: /eeeeeeee/ }).click();
+  await page.getByRole('checkbox', { name: /^Elderbrain preferences:/ }).check();
+  await page.getByRole('checkbox', { name: /^I agree to briefly pause/ }).check();
+  await expect(button).toBeDisabled();
+  await page.getByRole('checkbox', { name: /^Replace the selected configuration/ }).check();
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(page.getByText('Restore checkpoint: completed', { exact: false })).toBeVisible();
+  await expect(button).toBeDisabled();
+});
+
 test('checkpoint retention requires deletion consent and persists the selected limit', async ({ page, request }) => {
   expect((await request.put('/elderbrain/api/snapshots/retention', { data: { enabled: true, keep: 3 } })).status()).toBe(403);
   const session = await (await request.get('/elderbrain/api/auth/session')).json();

@@ -13,6 +13,18 @@ const retentionKeep = ref(10);
 const retentionLoaded = ref(false);
 const retentionSaving = ref(false);
 const retentionNotice = ref('');
+const restoreCheckpoint = ref('');
+const restorePreferences = ref(false);
+const restoreKeypads = ref(false);
+const restoreFoundry = ref(false);
+const restoreConfirmed = ref(false);
+const restoreComponents = computed(() => [
+  ...(restorePreferences.value ? ['preferences'] : []),
+  ...(restoreKeypads.value ? ['keypad-settings'] : []),
+  ...(restoreFoundry.value ? ['foundry'] : [])]);
+const checkpointOptions = computed(() => checkpoints.value.map(value => ({ value: value.id,
+  label: `${new Date(value.createdAt * 1000).toLocaleString()} — ${value.reason} — ${value.id.slice(0, 8)}` })));
+watch([restoreCheckpoint, restoreComponents], () => { restoreConfirmed.value = false; });
 const active = computed(() => jobs.value.some(job => ['queued', 'running'].includes(job.state)));
 const checkpointJobs = computed(() => jobs.value.filter(job => job.kind.startsWith('snapshot-')).slice(0, 5));
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -61,6 +73,20 @@ async function submit(recover = false) {
     available.value = false;
   } finally { submitting.value = false; confirmed.value = false; }
 }
+async function restore() {
+  if (!confirmed.value || !restoreConfirmed.value || !restoreCheckpoint.value || !restoreComponents.value.length || submitting.value || active.value) return;
+  submitting.value = true;
+  try {
+    const job = await api<Job>('snapshots/restore', { method: 'POST', body: {
+      checkpoint: restoreCheckpoint.value, components: restoreComponents.value,
+      confirmRestore: true, confirmDowntime: true } });
+    jobs.value = [job, ...jobs.value];
+    notice.value = 'Restore submitted. Setup will disconnect while selected configuration is restored. Wait for the job result before retrying.';
+  } catch {
+    notice.value = 'Restore request status uncertain or rejected. Wait for the job list to reconnect before retrying; do not submit a duplicate.';
+    available.value = false;
+  } finally { submitting.value = false; confirmed.value = false; restoreConfirmed.value = false; }
+}
 onMounted(() => { void refresh(); timer = setInterval(() => void refresh(), 5000); });
 onBeforeUnmount(() => { disposed = true; clearInterval(timer); });
 </script>
@@ -75,7 +101,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer); });
         <UButton :disabled="!confirmed || !available || active" :loading="submitting" @click="submit()">Create checkpoint</UButton>
         <UButton variant="outline" :disabled="!confirmed || active || submitting" @click="submit(true)">Recover interrupted checkpoint job</UButton>
       </div>
-      <p v-for="job in checkpointJobs" :key="job.id">{{ job.kind === 'snapshot-create' ? 'Create checkpoint' : 'Recover checkpoint job' }}: {{ job.state }}<span v-if="job.error"> — {{ job.error }}</span></p>
+      <p v-for="job in checkpointJobs" :key="job.id">{{ job.kind === 'snapshot-create' ? 'Create checkpoint' : job.kind === 'snapshot-restore' ? 'Restore checkpoint' : 'Recover checkpoint job' }}: {{ job.state }}<span v-if="job.error"> — {{ job.error }}</span></p>
       <p v-if="available && !checkpoints.length" class="text-muted">No local checkpoints yet.</p>
       <ul v-if="checkpoints.length" class="space-y-2">
         <li v-for="checkpoint in checkpoints" :key="checkpoint.id">{{ new Date(checkpoint.createdAt * 1000).toLocaleString() }} — {{ checkpoint.reason }} <span class="font-mono text-xs">{{ checkpoint.id }}</span></li>
@@ -90,7 +116,19 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer); });
         <UButton variant="outline" :disabled="!available || active || submitting" :loading="retentionSaving" @click="saveRetention">Save checkpoint retention</UButton>
         <p v-if="retentionNotice" role="status">{{ retentionNotice }}</p>
       </div>
-      <p class="text-sm text-muted">Selective restore is not available in this build yet.</p>
+      <div v-if="checkpoints.length" class="space-y-3 border-t border-default pt-4">
+        <h3 class="font-semibold">Restore selected configuration</h3>
+        <UFormField label="Checkpoint to restore" name="restore-checkpoint">
+          <USelect v-model="restoreCheckpoint" :items="checkpointOptions" placeholder="Choose a checkpoint" class="w-full" />
+        </UFormField>
+        <UCheckbox v-model="restorePreferences" label="Elderbrain preferences: domain, displays, browser tabs and checkpoint retention" />
+        <UCheckbox v-model="restoreKeypads" label="Keypad settings: Wi-Fi and preferences; keep current device identities" />
+        <UCheckbox v-model="restoreFoundry" label="Foundry: replace the whole instance's data" />
+        <p class="text-sm text-muted">The host checks runtime compatibility and creates rollback state before replacement. Network, security and device-identity restore are not available yet.</p>
+        <UAlert v-if="restoreKeypads" color="warning" title="Physical keypads are not changed by this restore. Their applied state becomes unknown; reapply or reprovision them separately after reviewing the restored settings." />
+        <UCheckbox v-model="restoreConfirmed" label="Replace the selected configuration with this checkpoint. Changes since the checkpoint will be rolled back." />
+        <UButton color="warning" :disabled="!available || active || !confirmed || !restoreConfirmed || !restoreCheckpoint || !restoreComponents.length" :loading="submitting" @click="restore">Restore selected configuration</UButton>
+      </div>
     </div>
   </UCard>
 </template>

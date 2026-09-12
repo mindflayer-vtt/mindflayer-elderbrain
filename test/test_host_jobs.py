@@ -14,6 +14,50 @@ from backup_service import save_record
 
 
 class JobTests(unittest.TestCase):
+    def test_checkpoint_restore_admission_rejects_unsafe_or_unconfirmed_selection(self):
+        valid = {'checkpoint': 'b' * 32, 'components': ['preferences'], 'confirmRestore': True}
+        for changes in ({'confirmRestore': False}, {'checkpoint': '../disk'},
+                        {'components': ['foundry/worlds']}, {'components': ['network']},
+                        {'components': ['preferences', 'preferences']}, {'secret': 'unexpected'}):
+            with self.assertRaises(ValueError):
+                self.store.submit('snapshot-restore', {**valid, **changes})
+        self.assertEqual(self.store.list(), [])
+
+    def test_checkpoint_restore_worker_passes_fixed_arguments_and_hides_journal(self):
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        record.update(kind='snapshot-restore', request={'checkpoint': 'b' * 32,
+                      'components': ['preferences'], 'confirmRestore': True})
+        save_record(path, record)
+        def execute(args, **kwargs):
+            self.assertEqual(args[1:], ['snapshot-restore', '--checkpoint', 'b' * 32,
+                                       '--confirm-restore', '--component', 'preferences'])
+            kwargs['stdout'].write(json.dumps({'state': 'completed', 'rollbackArchive': '/private/archive'}).encode())
+            return SimpleNamespace(returncode=0)
+        with patch('host_jobs.subprocess.run', side_effect=execute):
+            worker(self.store.directory, self.identity, fd)
+        result = self.store.read(self.identity)
+        self.assertEqual(result['result'], {'state': 'completed'})
+        self.assertNotIn('/private/archive', json.dumps(result))
+
+    def test_keypad_flash_refuses_interrupted_selective_restore(self):
+        from backup_service import Maintenance
+        root = Path(self.temp.name)
+        self.store = JobStore(root / 'jobs')
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        record.update(kind='keypad-install', request={}, revision=1)
+        save_record(path, record)
+        save_record(path.with_suffix('.settings'), {'revision': 1})
+        maintenance = Maintenance(root / 'maintenance', None)
+        save_record(maintenance.journal, {'operation': 'restore', 'state': 'staging-restore'})
+        with patch('installation_job.run_installation') as install:
+            worker(self.store.directory, self.identity, fd)
+        install.assert_not_called()
+        self.assertEqual(self.store.read(self.identity)['state'], 'failed')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -12,6 +12,17 @@ from restore_service import (RestoreCoordinator, checkpoint_hooks, checkpoint_ta
                              persistent_identity, alias_refresher)
 
 
+def request(value):
+    if (not isinstance(value, dict) or set(value) != {'checkpoint', 'components', 'confirmRestore'}
+            or value['confirmRestore'] is not True):
+        raise ValueError('Explicit checkpoint restore confirmation required')
+    validate_pin(value['checkpoint'], '0' * 32, 'restore')
+    selected = selection(value['components'])
+    if set(selected) - {'preferences', 'keypad-settings', 'foundry'}:
+        raise ValueError('Selected component requires a dedicated restore coordinator')
+    return {'checkpoint': value['checkpoint'], 'components': list(selected), 'confirmRestore': True}
+
+
 def restore(identifier, components, state, runtime, maintenance, *, host_root=Path('/')):
     selected = selection(components)
     if set(selected) - {'preferences', 'keypad-settings', 'foundry'}:

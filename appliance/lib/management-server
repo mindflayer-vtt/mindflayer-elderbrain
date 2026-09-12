@@ -153,6 +153,12 @@ class Handler(socketserver.StreamRequestHandler):
                 result = {'ok': True, 'output': json.dumps(retention_settings(value))}
             elif action in ("snapshot-create-start", "snapshot-recover-start"):
                 result = {"ok": True, "output": json.dumps(JOBS.submit(action.removesuffix("-start")))}
+            elif action.startswith('snapshot-restore-start '):
+                parts = action.split(' ')
+                if len(parts) != 3:
+                    raise ValueError('Invalid checkpoint restore request')
+                result = {'ok': True, 'output': json.dumps(JOBS.submit('snapshot-restore', {
+                    'checkpoint': parts[1], 'components': parts[2].split(','), 'confirmRestore': True}))}
             elif action in ("backup-start", "backup-recover-start", "restore-recover-start"):
                 result = {"ok": True, "output": json.dumps(JOBS.submit(action.removesuffix("-start")))}
             elif action not in ALLOWED:

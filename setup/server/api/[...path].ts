@@ -46,6 +46,18 @@ export default defineEventHandler(async (event) => {
       if (!result.ok) throw new Error("Local checkpoints require a healthy persistent Btrfs installation. Check maintenance status if unavailable.");
       return JSON.parse(result.output || "[]");
     }
+    if (route === 'snapshots/restore' && method === 'POST') {
+      const input = await body() as { checkpoint?: unknown; components?: unknown; confirmRestore?: unknown; confirmDowntime?: unknown };
+      if (input?.confirmRestore !== true || input.confirmDowntime !== true) throw new Error('Confirm replacement of selected configuration and service downtime');
+      if (typeof input.checkpoint !== 'string' || !/^[a-f0-9]{32}$/.test(input.checkpoint)
+          || !Array.isArray(input.components) || !input.components.length
+          || input.components.some(value => typeof value !== 'string' || !['preferences', 'keypad-settings', 'foundry'].includes(value))
+          || new Set(input.components).size !== input.components.length) throw new Error('Choose a checkpoint and supported restore components');
+      const result = await command(socket, `snapshot-restore-start ${input.checkpoint} ${input.components.join(',')}`);
+      if (!result.ok) throw new Error('Restore job was not accepted. Check active jobs before retrying.');
+      setResponseStatus(event, 202);
+      return JSON.parse(result.output || 'null');
+    }
     if (["snapshots", "snapshots/recover"].includes(route) && method === "POST") {
       const input = await body() as { confirmDowntime?: unknown };
       if (input?.confirmDowntime !== true) throw new Error("Confirm the temporary service interruption first");
