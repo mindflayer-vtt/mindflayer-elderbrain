@@ -1699,3 +1699,21 @@ must establish a semantic version, with no migration path for pre-updater instal
 All 157 release tests pass, including API mismatch/tampering and systemd unit-graph
 coverage. The monotonic release sequence and post-commit selector reconciliation
 remain separate pending work. No VM or physical appliance was changed.
+
+Implemented signed monotonic release ordering and the remaining selector recovery
+window. Manifests now require a positive 63-bit `releaseSequence`, independent of
+component versions. Discovery shows the installed/candidate sequences and marks
+replayed or lower releases incompatible. The persistent worker rejects them again,
+and activation repeats admission inside its maintenance lock. After health and file
+transaction commit, but before maintenance becomes terminal, a private atomic
+control-plane record advances the highest accepted sequence together with release
+version and exact manifest digest. Recovery can repeat only that exact identity;
+conflicting equal or lower values fail closed, and rolled-back activation never
+advances it. The file sits outside every update checkpoint/selective restore target.
+Update journals also retain the candidate recovery bundle, allowing final boot
+recovery to finish its atomic selection when the original worker disappears after
+activation commit. Rolled-back records never select the candidate. The reviewed
+host inventory includes the policy implementation. All 163 release tests, Nuxt
+typecheck/build and five production-server System/API browser tests pass. Initial
+signed-sequence seeding in a clean ISO baseline and destructive reboot/interruption
+qualification remain pending. No VM or physical appliance was changed.

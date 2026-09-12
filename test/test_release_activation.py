@@ -85,9 +85,12 @@ class ActivationTests(unittest.TestCase):
             (self.root / 'data').write_text((self.root / 'checkpoint').read_text())
             self.restored.append(record['id'])
 
+        self.accepted = []
         self.activation = Activation(self.maintenance, {'runtime': runtime}, checkpoint=checkpoint,
             restore_checkpoint=restore_checkpoint, release_checkpoint=lambda record: self.released.append(record['id']),
-            refresh=lambda: None, exclusive=exclusive)
+            refresh=lambda: None, exclusive=exclusive,
+            candidate_recovery='c' * 64,
+            commit_release=lambda record: self.accepted.append(dict(record)))
 
     def activate(self):
         bundle = self.fixture.bundle
@@ -103,6 +106,9 @@ class ActivationTests(unittest.TestCase):
         self.assertEqual(previous.read_text(), 'old')
         self.assertEqual(self.restored, [])
         self.assertEqual(self.released, [result['id']])
+        self.assertEqual(self.accepted[0]['releaseSequence'], 123)
+        self.assertEqual(self.accepted[0]['state'], 'verifying-update')
+        self.assertEqual(result['candidateRecovery'], 'c' * 64)
 
     def test_owned_update_retains_exact_signed_digest_for_job_reconciliation(self):
         self.activation.job_owner = 'd' * 32

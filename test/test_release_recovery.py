@@ -112,6 +112,22 @@ class RecoveryEntryTests(unittest.TestCase):
             recover('finish', host_root=root)
             jobs.reconcile_update.assert_not_called()
 
+    def test_completed_boot_recovery_finishes_candidate_selection(self):
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as patches:
+            root = Path(temporary)
+            patches.enter_context(patch('release_recovery.persistent_identity', return_value='fixture'))
+            maintenance = patches.enter_context(patch('release_recovery.Maintenance')).return_value
+            outcome = {'operation': 'update', 'id': 'a' * 32, 'state': 'completed',
+                       'recoveryApi': 1, 'candidateRecovery': 'c' * 64}
+            maintenance.previous.return_value = outcome
+            patches.enter_context(patch('release_recovery.UpdateCheckpoints'))
+            activation = patches.enter_context(patch('release_recovery.Activation')).return_value
+            activation.recover.return_value = outcome
+            selected = patches.enter_context(patch('release_recovery.commit_candidate'))
+            recover('finish', host_root=root)
+            selected.assert_called_once_with('c' * 64,
+                state=root / 'var/lib/mindflayer-elderbrain', host_root=root, job_owner=None)
+
     def test_baseline_recovery_routes_to_fixed_migration_before_update_adapter(self):
         with patch('release_recovery.persistent_identity', return_value='fixture'), \
                 patch('release_recovery.Maintenance') as maintenance, \

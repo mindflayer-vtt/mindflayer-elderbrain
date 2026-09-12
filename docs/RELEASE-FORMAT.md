@@ -17,6 +17,7 @@ The format-1 manifest has these exact fields:
 | --- | --- |
 | `format`, `kind` | `1`, `mindflayer-elderbrain-release` |
 | `version` | Stable coordinated release version (`major.minor.patch`) |
+| `releaseSequence` | Positive monotonically increasing signed release identity |
 | `recoveryApi` | Positive recovery transaction/API version implemented by the bundled recovery code |
 | `platform` | `{os: "ubuntu", release: "26.04", architecture: "amd64"}` |
 | `host` | Independent `version`, integer `apiVersion`, and `artifact` |
@@ -759,3 +760,28 @@ supported API before activation can start. Early and final boot recovery reject 
 journal with a different or missing API instead of interpreting arbitrary adjacent-
 release Python state. Recovery bundle manifests use format 2 for this contract; the
 selector stays a minimal atomic format-1 pointer.
+
+## Monotonic release acceptance
+
+Every signed release declares `releaseSequence`, a positive 63-bit integer that is
+independent of the coordinated, host and Setup semantic versions. Discovery and the
+persistent worker reject a sequence less than or equal to the protected accepted
+sequence. Activation repeats that check under its maintenance/admission locks.
+
+After the new runtime has passed health validation and its file transaction is
+committed, activation atomically stores the sequence, release version and exact
+signed-manifest digest in
+`/var/lib/mindflayer-elderbrain/release-policy.json`. This control-plane file is
+outside update checkpoint and selective restore targets. Recovery may repeat the
+same commit only when all three identity fields match; a conflicting equal sequence
+or any lower sequence fails closed. The policy advances before maintenance is
+marked completed, so a crash in between is repaired idempotently by boot recovery.
+It never advances for an activation that rolls back.
+
+The candidate recovery bundle identity is also retained in the update journal.
+Final boot recovery selects it only for a completed activation, closing the crash
+window after activation commit but before the original worker's selector write.
+Rolled-back updates retain the previous recovery authority. A clean install still
+needs to seed the first signed baseline sequence before normal update qualification;
+until that installer integration exists, the anti-replay implementation is not a
+complete releasable baseline.

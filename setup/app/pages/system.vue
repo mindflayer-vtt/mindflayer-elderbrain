@@ -16,8 +16,8 @@ const active = computed(() => powerPending.value || jobs.value.some(job => ['que
 let timer: ReturnType<typeof setInterval> | undefined;
 let refreshing = false;
 let disposed = false;
-const result = ref<{ installedHostVersion: string; state: string; release: null | {
-  version: string; hostVersion: string; setupVersion: string; notes: string; downtimeSeconds: number; compatible: boolean; manifestSha256: string;
+const result = ref<{ installedHostVersion: string; installedReleaseSequence: number; state: string; release: null | {
+  version: string; releaseSequence: number; recoveryApi: number; hostVersion: string; setupVersion: string; notes: string; downtimeSeconds: number; compatible: boolean; manifestSha256: string;
 } }>();
 async function refreshJobs() {
   if (refreshing) return;
@@ -101,13 +101,15 @@ async function check() {
         <UButton :loading="checking" :disabled="checking" @click="check">Check for updates</UButton>
         <UAlert v-if="error" color="error" :title="error" />
         <template v-if="result">
-          <p>Installed host: {{ result.installedHostVersion }}</p>
+          <p>Installed host: {{ result.installedHostVersion }} — accepted release sequence {{ result.installedReleaseSequence }}</p>
           <UAlert v-if="result.state === 'not-configured'" color="warning" title="Release source not configured" description="Configure the appliance release source and trusted public signing key before checking for updates." />
           <template v-if="result.release">
             <h3 class="text-lg font-semibold">Release {{ result.release.version }}</h3>
             <dl class="grid grid-cols-2 gap-2">
               <dt>Host version</dt><dd>{{ result.release.hostVersion }}</dd>
               <dt>Setup version</dt><dd>{{ result.release.setupVersion }}</dd>
+              <dt>Release sequence</dt><dd>{{ result.release.releaseSequence }}</dd>
+              <dt>Recovery API</dt><dd>{{ result.release.recoveryApi }}</dd>
               <dt>Expected service downtime</dt><dd>{{ result.release.downtimeSeconds }} seconds</dd>
             </dl>
             <p class="whitespace-pre-wrap break-words">{{ result.release.notes }}</p>

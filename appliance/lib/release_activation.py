@@ -19,7 +19,7 @@ from snapshot_service import stable_settings
 class Activation:
     def __init__(self, maintenance, targets, *, checkpoint, restore_checkpoint,
                  release_checkpoint, refresh, exclusive=None, admission=None, job_owner=None,
-                 recovery_api=RECOVERY_API):
+                 recovery_api=RECOVERY_API, candidate_recovery=None, commit_release=None):
         self.maintenance = maintenance
         self.services = maintenance.services
         self.targets = targets
@@ -31,6 +31,11 @@ class Activation:
         if type(recovery_api) is not int or recovery_api != RECOVERY_API:
             raise ValueError('Unsupported recovery transaction API')
         self.recovery_api = recovery_api
+        if candidate_recovery is not None and (not isinstance(candidate_recovery, str)
+                or len(candidate_recovery) != 64 or any(char not in '0123456789abcdef' for char in candidate_recovery)):
+            raise ValueError('Invalid candidate recovery identity')
+        self.candidate_recovery = candidate_recovery
+        self.commit_release = commit_release or (lambda record: None)
         state = maintenance.directory.parent
         self.exclusive = exclusive or (lambda: stable_settings(state))
         self.admission = admission or (lambda: update_admission(state))
@@ -64,10 +69,13 @@ class Activation:
                     candidate = {'operation': 'update', 'id': uuid.uuid4().hex, 'version': release['version'],
                                  'startedAt': time.time(), 'services': self.services.snapshot(),
                                  'dataMayHaveChanged': False, 'dataRolledBack': False,
-                                 'recoveryApi': self.recovery_api}
+                                 'recoveryApi': self.recovery_api,
+                                 'releaseSequence': release['releaseSequence'],
+                                 'manifestSha256': hashlib.sha256(manifest).hexdigest()}
+                    if self.candidate_recovery is not None:
+                        candidate['candidateRecovery'] = self.candidate_recovery
                     if self.job_owner is not None:
                         candidate['jobId'] = self.job_owner
-                        candidate['manifestSha256'] = hashlib.sha256(manifest).hexdigest()
                     transaction = self.transaction(candidate)
                     self.write(candidate, 'stopping')
                     record = candidate
@@ -88,6 +96,7 @@ class Activation:
                 self.write(record, 'verifying-update')
                 self.services.resume_restored(record['services'])
                 transaction.commit()
+                self.commit_release(record)
                 self.write(record, 'completed')
                 self.release_checkpoint(record)
                 return record
@@ -150,6 +159,8 @@ nonterminal maintenance record survive until normal recovery verifies health.
         self.refresh()
         self.services.validate()
         self.services.resume_restored(record['services'])
+        if committed:
+            self.commit_release(record)
         self.write(record, 'completed' if committed else 'rolled-back')
         self.release_checkpoint(record)
         return record

@@ -26,7 +26,8 @@ class ApplianceReleaseTests(unittest.TestCase):
 
     def setUp(self):
         image = 'example.test/appliance/image@sha256:' + 'a' * 64
-        self.value = {'format': 1, 'kind': 'mindflayer-elderbrain-release', 'version': '1.2.3', 'recoveryApi': 1,
+        self.value = {'format': 1, 'kind': 'mindflayer-elderbrain-release', 'version': '1.2.3',
+            'releaseSequence': 123, 'recoveryApi': 1,
             'platform': {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'},
             'host': {'version': '1.1.0', 'apiVersion': 2, 'artifact': {'file': 'elderbrain-host.tar.zst',
                 'size': 7, 'sha256': hashlib.sha256(b'fixture').hexdigest()}},
@@ -82,6 +83,13 @@ class ApplianceReleaseTests(unittest.TestCase):
         for value in (0, True, 65536):
             release = deepcopy(self.value)
             release['recoveryApi'] = value
+            with self.assertRaises(ValueError):
+                validate(release)
+
+    def test_release_sequence_is_signed_monotonic_integer(self):
+        for value in (0, True, 2 ** 63):
+            release = deepcopy(self.value)
+            release['releaseSequence'] = value
             with self.assertRaises(ValueError):
                 validate(release)
 

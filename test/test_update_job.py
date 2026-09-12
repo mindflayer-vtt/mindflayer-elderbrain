@@ -35,8 +35,9 @@ class UpdateWorkerTests(unittest.TestCase):
                         'confirmUpdate': True, 'confirmDowntime': True}
         self.enterContext(patch('update_job.persistent_identity', return_value='fixture'))
         self.verify = self.enterContext(patch('update_job.verify', return_value={
-            'format': 2, 'version': '1.2.3', 'recoveryApi': 1}))
+            'format': 2, 'version': '1.2.3', 'releaseSequence': 123, 'recoveryApi': 1}))
         self.enterContext(patch('update_job.require_compatible'))
+        self.policy = self.enterContext(patch('update_job.ReleasePolicy')).return_value
         self.prepare_recovery = self.enterContext(patch('update_job.prepare_candidate', return_value={
             'active': 'b' * 64, 'candidate': 'c' * 64}))
         self.commit_recovery = self.enterContext(patch('update_job.commit_candidate'))
@@ -64,6 +65,7 @@ class UpdateWorkerTests(unittest.TestCase):
             self.assertEqual(options['expected_manifest_sha256'], self.request['manifestSha256'])
             self.assertEqual(options['active_recovery'], 'b' * 64)
             self.assertEqual(options['recovery_api'], 1)
+            self.assertEqual(options['candidate_recovery'], 'c' * 64)
             self.prepare_recovery.assert_called_once()
             self.commit_recovery.assert_not_called()
             return {'state': 'completed'}
@@ -74,6 +76,7 @@ class UpdateWorkerTests(unittest.TestCase):
         self.assertEqual(self.prepare_recovery.call_args.kwargs['recovery_api'], 1)
         self.commit_recovery.assert_called_once_with('c' * 64, state=self.state,
             host_root=self.root, job_owner='a' * 32)
+        self.policy.require_new.assert_called()
         self.assertEqual(self.progress, ['verifying-release', 'preparing-recovery', 'activating', 'committing-recovery'])
 
     def test_changed_confirmed_manifest_fails_before_signature_or_boot_changes(self):
@@ -88,6 +91,13 @@ class UpdateWorkerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not installer-owned'):
             self.run_update()
         self.prepare_recovery.assert_not_called()
+
+    def test_replayed_release_is_rejected_before_recovery_preparation(self):
+        self.policy.require_new.side_effect = ValueError('Release sequence is not newer')
+        with self.assertRaisesRegex(ValueError, 'not newer'):
+            self.run_update()
+        self.prepare_recovery.assert_not_called()
+        self.apply.assert_not_called()
 
     def test_missing_prepared_release_downloads_under_owned_admission_then_reverifies(self):
         import shutil

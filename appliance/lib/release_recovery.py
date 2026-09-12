@@ -18,6 +18,8 @@ from release_services import UpdateServices
 from release_targets import targets
 from release_baseline_install import Migration
 from release_recovery_bundle import RECOVERY_API
+from release_bootstrap import commit_candidate
+from release_policy import ReleasePolicy
 from restore_service import persistent_identity
 
 
@@ -68,18 +70,24 @@ def recover(action, *, host_root=Path('/')):
     services = UpdateServices(runtime, health_check=lambda saved: health(
         saved, state, management_socket=host_root / 'run/elderbrain/management.sock'))
     maintenance = Maintenance(state / 'maintenance', services)
-    if maintenance.previous().get('operation') == 'baseline':
+    previous = maintenance.previous()
+    if previous.get('operation') == 'baseline':
         record = Migration(maintenance, host_root=host_root).recover(early=action == 'files')
         return {key: record[key] for key in ('id', 'state')}
-    if maintenance.previous().get('operation') != 'update':
+    if previous.get('operation') != 'update':
         return {'state': 'no-update-recovery-needed'}
-    if maintenance.previous().get('recoveryApi') != RECOVERY_API:
+    if previous.get('recoveryApi') != RECOVERY_API:
         raise ValueError('Update journal requires a different recovery transaction API')
     checkpoints = UpdateCheckpoints(state, runtime, maintenance, host_root=host_root)
     activation = Activation(maintenance, targets(host_root), checkpoint=checkpoints.checkpoint,
         restore_checkpoint=checkpoints.restore, release_checkpoint=checkpoints.release,
-        refresh=checkpoints.guard, recovery_api=RECOVERY_API)
+        refresh=checkpoints.guard, recovery_api=RECOVERY_API,
+        candidate_recovery=previous.get('candidateRecovery'),
+        commit_release=ReleasePolicy(state).commit)
     record = activation.recover_files() if action == 'files' else activation.recover()
+    if action == 'finish' and record.get('state') == 'completed' and record.get('candidateRecovery'):
+        commit_candidate(record['candidateRecovery'], state=state, host_root=host_root,
+                         job_owner=record.get('jobId'))
     if action == 'finish' and record.get('jobId'):
         from host_jobs import JobStore
         with maintenance.locked():

@@ -330,6 +330,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_policy.py",
+    "path": "runtime/release_policy.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_interlocks.py",
     "path": "runtime/release_interlocks.py",
     "mode": 420

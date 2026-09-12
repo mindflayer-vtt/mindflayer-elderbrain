@@ -73,7 +73,8 @@ else:
                 '-out', str(private)], check=True, capture_output=True)
     private.chmod(0o600)
     subprocess.run(['openssl', 'pkey', '-in', str(private), '-pubout', '-out', str(public)], check=True, capture_output=True)
-metadata = {'format': 2, 'kind': 'mindflayer-elderbrain-release', 'version': args.version, 'recoveryApi': 1,
+metadata = {'format': 2, 'kind': 'mindflayer-elderbrain-release', 'version': args.version,
+    'releaseSequence': int(args.version.rsplit('.', 1)[1]), 'recoveryApi': 1,
     'platform': {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'},
     'host': {'version': args.version, 'apiVersion': 1},
     'setup': {'version': '1.0.1', 'image': references.pop('elderbrain-setup'), 'hostApi': {'min': 1, 'max': 1}},
@@ -177,7 +178,8 @@ with staged_payload() as (tree, _), \
     try:
         result = activate(prepared / args.version, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
                           platform=metadata['platform'], configuration_schema=1, parent=evidence,
-                          active_recovery=recovery['active'], recovery_api=metadata['recoveryApi'])
+                          active_recovery=recovery['active'], candidate_recovery=recovery['candidate'],
+                          recovery_api=metadata['recoveryApi'])
         assert result['state'] == 'completed'
         commit_candidate(recovery['candidate'], state=Path('/var/lib/mindflayer-elderbrain'))
     except SystemExit as error:

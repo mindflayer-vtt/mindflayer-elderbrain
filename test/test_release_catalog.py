@@ -86,6 +86,24 @@ class CatalogTests(unittest.TestCase):
         with patch('release_catalog.platform.machine', return_value='aarch64'):
             self.assertFalse(check(host_root=self.root, download=Mock(side_effect=[manifest, signature]))['release']['compatible'])
 
+    def test_replayed_sequence_is_visible_but_not_eligible(self):
+        self.configure()
+        self.fixture.value.update(format=2, dependencies={
+            'artifact': {'file': 'elderbrain-dependencies.tar.zst', 'size': 3, 'sha256': 'b' * 64},
+            'pythonAbi': 'cp314', 'files': {name: {'size': 1, 'sha256': 'c' * 64} for name in (
+                'dependencies.json', 'wheels/example-1.0-py3-none-any.whl', 'node/playwright-core-1.63.0.tgz')},
+        })
+        policy = self.root / 'var/lib/mindflayer-elderbrain'
+        policy.mkdir(parents=True)
+        from release_policy import ReleasePolicy
+        ReleasePolicy(policy).commit({'releaseSequence': 123, 'version': '1.2.3',
+            'manifestSha256': 'd' * 64})
+        manifest = json.dumps(self.fixture.value).encode()
+        signature = self.fixture.sign(manifest)
+        result = check(host_root=self.root, download=Mock(side_effect=[manifest, signature]))
+        self.assertEqual(result['installedReleaseSequence'], 123)
+        self.assertFalse(result['release']['compatible'])
+
     def test_source_rejects_credentials_insecure_urls_queries_and_controls(self):
         for value in ('http://example.test/', 'https://user:secret@example.test/',
                       'https://example.test/?key=x', 'https://example.test/#x',

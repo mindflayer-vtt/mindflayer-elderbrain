@@ -14,6 +14,7 @@ from restore_service import persistent_identity
 from update_request import request
 from release_download import download_prepare
 from release_interlocks import update_admission
+from release_policy import ReleasePolicy
 from backup_service import Maintenance
 
 
@@ -55,6 +56,7 @@ def run_update(state, identity, selected, *, progress, host_root=Path('/')):
     signature = read_regular(prepared / 'manifest.sig', 1024)
     release = verify(manifest, signature, key)
     require_compatible(release, platform=current, configuration_schema=1)
+    ReleasePolicy(state).require_new(release)
     if release['format'] != 2 or release['version'] != selected['version']:
         raise ValueError('Update requires the confirmed complete release')
     with stage(prepared / 'elderbrain-host.tar.zst', manifest, signature, key, paths, parent=staging) as (_, tree):
@@ -65,7 +67,7 @@ def run_update(state, identity, selected, *, progress, host_root=Path('/')):
         result = activate(prepared, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
                           platform=current, configuration_schema=1, parent=staging, host_root=root, job_owner=identity,
                           expected_manifest_sha256=selected['manifestSha256'], active_recovery=recovery['active'],
-                          recovery_api=release['recoveryApi'])
+                          candidate_recovery=recovery['candidate'], recovery_api=release['recoveryApi'])
         if result.get('state') != 'completed':
             raise RuntimeError('Activation did not commit the release')
         progress('committing-recovery')

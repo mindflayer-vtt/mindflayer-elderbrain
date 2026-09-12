@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from appliance_release import VERSION, unique, verify, require_compatible
 from release_recovery_bundle import active as active_recovery
+from release_policy import ReleasePolicy
 
 
 def trusted(path, limit):
@@ -69,7 +70,10 @@ def check(*, host_root=Path('/'), download=fetch):
     installed = trusted(root / 'opt/mindflayer-elderbrain/VERSION', 129).decode().strip()
     if not re.fullmatch(VERSION, installed):
         raise ValueError('Invalid installed host version')
-    result = {'installedHostVersion': installed, 'state': 'not-configured', 'release': None}
+    policy = ReleasePolicy(root / 'var/lib/mindflayer-elderbrain')
+    result = {'installedHostVersion': installed,
+              'installedReleaseSequence': policy.current()['highestSequence'],
+              'state': 'not-configured', 'release': None}
     config = root / 'etc/elderbrain/release-source.json'
     if not config.exists() and not config.is_symlink():
         return result
@@ -89,10 +93,12 @@ def check(*, host_root=Path('/'), download=fetch):
         require_compatible(release, platform=current, configuration_schema=1)
         if active_recovery(directory=root / 'usr/lib/elderbrain-recovery')['recoveryApi'] != release['recoveryApi']:
             compatible = False
+        policy.require_new(release)
     except ValueError:
         compatible = False
     result.update(state='checked', release={
-        'version': release['version'], 'hostVersion': release['host']['version'],
+        'version': release['version'], 'releaseSequence': release['releaseSequence'],
+        'hostVersion': release['host']['version'],
         'setupVersion': release['setup']['version'], 'notes': release['notes'],
         'recoveryApi': release['recoveryApi'],
         'downtimeSeconds': release['downtimeSeconds'], 'compatible': compatible,
