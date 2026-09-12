@@ -3,11 +3,17 @@ on: [push, pull_request]
 permissions: {contents: read}
 jobs:
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with: {python-version: "3.14"}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: {node-version: 24, cache: npm, cache-dependency-path: setup/package-lock.json}
+      - name: Install static-check dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep
       - run: npm ci
         working-directory: setup
       - run: make lint test

@@ -5,8 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import test.test_release_assembly as assembly_fixture
-import test.test_appliance_release as release_fixture
+from . import test_release_assembly as assembly_fixture
+from . import test_appliance_release as release_fixture
 from appliance_release import validate, verify
 from release_staging import stage
 

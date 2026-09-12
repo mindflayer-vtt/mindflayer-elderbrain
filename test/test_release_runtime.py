@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-import test.test_release_prepare as preparation_fixture
+from . import test_release_prepare as preparation_fixture
 from release_runtime import candidate
 
 

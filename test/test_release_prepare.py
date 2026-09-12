@@ -9,8 +9,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-import test.test_release_assembly as assembly_fixture
-import test.test_appliance_release as release_fixture
+from . import test_release_assembly as assembly_fixture
+from . import test_appliance_release as release_fixture
 from release_prepare import prepare, DEPENDENCY_INPUTS
 
 ROOT = Path(__file__).resolve().parents[1]

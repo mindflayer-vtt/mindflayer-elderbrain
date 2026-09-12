@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import test.test_host_jobs
 from backup_service import save_record
 from host_jobs import JobStore
 from power_service import operate, pending

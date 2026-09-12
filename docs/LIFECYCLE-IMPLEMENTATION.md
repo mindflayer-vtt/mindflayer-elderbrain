@@ -1792,3 +1792,16 @@ unprivileged UID carrying the capability. A production Setup container build
 confirmed `uid=1000(node) gid=31338(elderbrain-management)`. Focused host tests,
 installer syntax and whitespace checks pass. Fresh-install and signed-image VM
 qualification remain pending; no VM or physical appliance was changed.
+
+Strengthened the ordinary CI path for the target runtime. It now selects the
+Ubuntu 26.04 hosted image and Python 3.14 explicitly, installs `ripgrep`, and pins
+checkout, Python and Node setup actions to full reviewed release commit IDs while
+retaining read-only repository permissions. Static checks preflight required
+commands before any work. The host tests are now an explicit package discovered
+from the repository root, and sibling fixtures use relative imports instead of
+the environment-dependent `test.test_*` namespace; the corrected discovery runs
+588 host tests rather than silently depending on import order. The local
+CI-equivalent run passed all 588 host tests (5 explicit platform skips), 39 Setup
+tests, typechecking, static checks, Compose validation, the production Nuxt build
+and all 40 browser tests on Python 3.14. A hosted run remains unverified because
+the Elderbrain branch is intentionally local and has not been pushed.

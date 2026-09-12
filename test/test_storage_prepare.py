@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import Mock
 
 from iso.storage_prepare import prepare
-import test_storage_plan as fixtures
+from . import test_storage_plan as fixtures
 
 
 class StoragePrepareTests(unittest.TestCase):

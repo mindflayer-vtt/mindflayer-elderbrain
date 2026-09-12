@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import test.test_appliance_release as fixture
+from . import test_appliance_release as fixture
 from provisioning.update_trust import provision
 
 

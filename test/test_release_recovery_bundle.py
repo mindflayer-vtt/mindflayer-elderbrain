@@ -6,7 +6,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-import test.test_release_prepare as preparation_fixture
+from . import test_release_prepare as preparation_fixture
 from release_recovery_bundle import active, install, select
 from release_staging import stage
 from backup_service import Maintenance, save_record

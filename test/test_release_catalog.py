@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import test.test_appliance_release as fixture
+from . import test_appliance_release as fixture
 from release_catalog import check, fetch, source_url
 
 

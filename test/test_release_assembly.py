@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 
-import test.test_appliance_release as release_fixture
+from . import test_appliance_release as release_fixture
 from appliance_release import verify, verify_host
 
 ROOT = Path(__file__).resolve().parents[1]

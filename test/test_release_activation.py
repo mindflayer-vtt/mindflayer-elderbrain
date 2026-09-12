@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-import test.test_release_prepare as preparation_fixture
+from . import test_release_prepare as preparation_fixture
 from backup_service import Maintenance
 from release_activation import Activation
 from snapshot_service import stable_settings

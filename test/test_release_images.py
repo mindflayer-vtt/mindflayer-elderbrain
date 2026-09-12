@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-import test.test_appliance_release as release_fixture
+from . import test_appliance_release as release_fixture
 from release_images import canonical, prepare
 
 

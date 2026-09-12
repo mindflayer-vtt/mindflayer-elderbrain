@@ -22,7 +22,7 @@ iso:
 
 test:
 	@cd setup && npm test
-	@python3 -m unittest discover -s test -p 'test_*.py' -q
+	@python3 -m unittest discover -s test -t . -p 'test_*.py' -q
 	@./test/static.sh
 
 lint:

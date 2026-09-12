@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import test.test_appliance_release
 from update_job import run_update
 
 

@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import test.test_appliance_release as release_fixture
+from . import test_appliance_release as release_fixture
 from release_staging import stage, inventory
 
 

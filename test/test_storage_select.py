@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import Mock
 
 from iso.storage_select import choose, configure, atomic_write
-import test_storage_plan as fixtures
+from . import test_storage_plan as fixtures
 
 
 class StorageSelectionTests(unittest.TestCase):

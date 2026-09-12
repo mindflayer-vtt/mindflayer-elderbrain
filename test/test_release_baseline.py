@@ -7,7 +7,6 @@ import unittest
 from unittest.mock import patch
 
 import yaml
-import test.test_appliance_release
 from backup_service import save_record
 from release_baseline import prepare, render, SERVICES
 

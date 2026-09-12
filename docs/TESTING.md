@@ -85,3 +85,10 @@ credentials, and direct hostname access. See [setup development](../setup/README
 - Real keypads authenticate, appear in setup, report the correct button, visibly identify via LEDs, and retain seat names after reboot.
 
 Headless CI cannot prove GPU, two-display placement, Foundry licensing, or physical keypad behavior. Never record those as passed without real hardware.
+
+The ordinary hosted job targets the appliance's Ubuntu 26.04/Python 3.14
+environment, pins every GitHub Action to a reviewed commit, installs `ripgrep`
+explicitly, and runs Setup unit/type/build/browser checks plus the complete
+non-destructive host/static and Compose suites. `test/static.sh` also preflights
+its command dependencies before performing any check, so a missing tool cannot
+produce a misleading success message.

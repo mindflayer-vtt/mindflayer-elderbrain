@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import test.test_release_baseline
+from . import test_release_baseline as baseline_fixture
 from backup_service import Maintenance
 from release_baseline_install import Migration
 from restore_transaction import RestoreTransaction
@@ -121,7 +121,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(self.compose.read_text(), 'offline compose')
 
     def test_prepared_sources_revalidate_bytes_live_origin_and_cached_images(self):
-        fixture = test.test_release_baseline.BaselineTests()
+        fixture = baseline_fixture.BaselineTests()
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         prepared = Path(fixture.prepare()['directory'])

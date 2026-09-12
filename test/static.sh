@@ -1,5 +1,11 @@
 #!/bin/bash
 set -euo pipefail
+for required_tool in awk find git grep python3 rg sed wc; do
+  command -v "$required_tool" >/dev/null || {
+    echo "Required static-check tool is missing: $required_tool" >&2
+    exit 127
+  }
+done
 root=$(cd "$(dirname "$0")/.." && pwd)
 bash -n "$root/iso/select-storage.sh"
 bash -n "$root/test/qemu/preserve-baseline.sh"

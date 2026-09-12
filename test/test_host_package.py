@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import test.test_appliance_release as release_fixture
+from . import test_appliance_release as release_fixture
 from release_staging import stage
 
 ROOT = Path(__file__).resolve().parents[1]
