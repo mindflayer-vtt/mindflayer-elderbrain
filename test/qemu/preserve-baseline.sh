@@ -15,10 +15,14 @@ key=${QEMU_SSH_PRIVATE_KEY:-$root/test/.qemu/id_ed25519}
 [[ -f $key ]] || { echo 'Set QEMU_SSH_PRIVATE_KEY to the VM key.' >&2; exit 2; }
 if [[ $operation == seed ]]; then
   mkdir -m 0700 "$run" # exclusive: never replace an earlier baseline
+  host_key_policy=accept-new
 else
   [[ -d $run && ! -L $run && -f $run/baseline.json ]] || { echo 'Saved baseline not found.' >&2; exit 2; }
+  [[ -s $run/known_hosts && ! -L $run/known_hosts ]] || { echo 'Saved SSH identity not found.' >&2; exit 2; }
+  (cd "$run" && sha256sum --check baseline.sha256)
+  host_key_policy=yes
 fi
-ssh_args=(-i "$key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$run/known_hosts")
+ssh_args=(-i "$key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 -o "StrictHostKeyChecking=$host_key_policy" -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=$run/known_hosts")
 remote=(ssh "${ssh_args[@]}" -p "$port" root@127.0.0.1)
 guest=$("${remote[@]}" 'mktemp -d /root/elderbrain-preserve-test-XXXXXXXX')
 [[ $guest =~ ^/root/elderbrain-preserve-test-[A-Za-z0-9]{8}$ ]] || { echo 'Invalid guest test directory.' >&2; exit 2; }
@@ -31,7 +35,6 @@ if [[ $operation == seed ]]; then
   sync -f "$run"
   echo "Baseline retained at $run. Reinstall must be started separately."
 else
-  (cd "$run" && sha256sum --check baseline.sha256)
   scp "${ssh_args[@]}" -p -P "$port" "$run/baseline.json" "root@127.0.0.1:$guest/baseline.json"
   "${remote[@]}" "python3 - verify $guest/baseline.json" < "$root/test/qemu/storage-preserve.py"
 fi

@@ -785,3 +785,19 @@ release and owner validation. The production checkpoint-owner cleanup callback
 and full network checkpoint coordinator are still not wired; ordinary networking
 has no owner/callback and keeps its existing behavior. The VM reached GRUB and
 OpenSSH installation in the same preserve run.
+
+The same SSH-fix preserve run is now executing Elderbrain provisioning in the
+live installer, not yet booted into the installed appliance. Console-verified
+live SSH fingerprint is SHA256:0P8t8AYsmNoYB6/+tZDo/xH/INMIhuVyVbMltm3Lf/U,
+saved separately as `live-installer-known-hosts` in the SSH-fix evidence directory.
+The appliance `known_hosts` and baseline remain unchanged. Live processes 21289
+(provisioning), 24511 (apt) and 24736 (dpkg) were confirmed running; dpkg reached
+node-corepack unpacking at 09:48:23. Returned the live console to tty1. Do not
+restart this installer or interpret its temporary key as an appliance regression.
+
+The preservation verifier now requires a nonempty, non-symlink saved trust file,
+checks the baseline checksum before remote activity, and uses strict SSH checking
+with no global trust fallback. Only initial seeding permits accept-new. Five
+regression tests pass for missing/empty/linked trust, corrupt/missing checksum,
+and strict verification arguments; shell syntax and diff checks pass. End-to-end
+preserve qualification still awaits this installation's completion.
