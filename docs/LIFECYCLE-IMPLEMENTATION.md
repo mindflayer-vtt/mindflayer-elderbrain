@@ -649,3 +649,24 @@ The test cleans up only its unique fixture units. Root system-manager/appliance
 restart testing remains pending; local root access requires a password. Jobs
 still require recovery after power loss and can be interrupted before scope
 handoff; no automatic replay of destructive operations is introduced.
+
+Live-installer diagnostics now confirmed active package installation, not a hung
+provisioner: bash PID21305, apt PID24531 and dpkg PID24762 were running, with
+advancing package logs and disk I/O while unpacking Node tooling. The OS UUID is
+now 589bfe02-676f-427d-857c-6f5608a7b29e; the Btrfs UUID remains
+84f7219a-b5db-4127-8ea8-2e6850746cf8. This is partial storage evidence, not the
+post-install preservation pass. The existing baseline remains untouched.
+Diagnostic SSH uses `test/.qemu/preserve-20260912/live-installer-known-hosts`,
+whose temporary key was verified on the confirmed live installer console:
+SHA256:pGtBpr6dJcEufxdDY3tM+UWXb/wu+LoY0lHKQT6PBkU.
+The saved appliance trust remains in the separate `known_hosts` file. The ISO's
+public authorized key was copied into the live installer only; tty1 was restored
+after diagnostics. Do not trust the temporary key as the installed appliance key.
+
+The scope-survival fixture now also supports root only on the disposable QEMU
+disk (DMI and exact disk serial checks). It passed against the live VM's system
+manager from `/root/elderbrain-scope-test-z9moOWxT/host-job-scope.py`: stopping its
+launcher service preserved the worker, inherited lock and memory-only input.
+Only uniquely named test units were stopped; provisioning and target data were
+untouched. This closes the root-vs-user scope mechanism check, not the remaining
+installed management-service restart test. No new ISO was built or deployed.

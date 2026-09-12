@@ -1,7 +1,7 @@
-"""Verify scope survival and inherited FDs using disposable user systemd units.
+"""Verify scope survival and inherited FDs using disposable systemd units.
 
-Run as the logged-in developer, outside the socket-restricted sandbox. This does
-not exercise root appliance services; that qualification belongs in the VM.
+Run as the logged-in developer or as root inside the disposable QEMU guest.
+Only fixture units are stopped; this does not restart appliance services.
 """
 import fcntl
 import os
@@ -11,6 +11,16 @@ import sys
 import tempfile
 import time
 import uuid
+
+
+def manager():
+    if os.geteuid() != 0:
+        return ['--user']
+    product = Path('/sys/class/dmi/id/product_name').read_text().strip()
+    serial = subprocess.check_output(['lsblk', '-dn', '-o', 'SERIAL', '/dev/vda'], text=True).strip()
+    if not product.startswith('Standard PC') or serial != 'elderbrain-vm-test':
+        raise RuntimeError('Root scope testing is restricted to the disposable QEMU guest')
+    return []
 
 
 def wait_for(path):
@@ -37,7 +47,7 @@ def parent(root, unit):
     secret = os.memfd_create('scope-fixture', os.MFD_CLOEXEC)
     os.write(secret, b'non-secret-fixture')
     os.lseek(secret, 0, 0)
-    process = subprocess.Popen(['systemd-run', '--user', '--scope', '--quiet', '--collect',
+    process = subprocess.Popen(['systemd-run', *manager(), '--scope', '--quiet', '--collect',
                                 '--unit=' + unit, '--expand-environment=no', '--',
                                 sys.executable, str(Path(__file__).resolve()), 'child', str(root), str(lock), str(secret)],
                                pass_fds=(lock, secret), start_new_session=True,
@@ -46,16 +56,17 @@ def parent(root, unit):
 
 
 def verify():
+    flags = manager()
     unit = 'elderbrain-job-scope-fixture-' + uuid.uuid4().hex
     launcher = unit + '-launcher'
     with tempfile.TemporaryDirectory(prefix='elderbrain-job-scope-') as directory:
         root = Path(directory)
         try:
-            subprocess.run(['systemd-run', '--user', '--quiet', '--collect', '--unit=' + launcher,
+            subprocess.run(['systemd-run', *flags, '--quiet', '--collect', '--unit=' + launcher,
                             '--', sys.executable, str(Path(__file__).resolve()), 'parent', str(root), unit],
                            check=True, timeout=15)
             wait_for(root / 'ready')
-            subprocess.run(['systemctl', '--user', 'stop', launcher + '.service'], check=True, timeout=15)
+            subprocess.run(['systemctl', *flags, 'stop', launcher + '.service'], check=True, timeout=15)
             with open(root / 'lock', 'r') as lock:
                 try:
                     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -68,7 +79,7 @@ def verify():
             print('PASS: worker scope survives launcher stop and retains lock and memory-only input')
         finally:
             # Only these uniquely named disposable fixture units are in scope.
-            subprocess.run(['systemctl', '--user', 'stop', launcher + '.service', unit + '.scope'],
+            subprocess.run(['systemctl', *flags, 'stop', launcher + '.service', unit + '.scope'],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
 
 
