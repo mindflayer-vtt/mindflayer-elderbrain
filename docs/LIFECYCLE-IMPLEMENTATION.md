@@ -1157,3 +1157,17 @@ missing/changed storage and broken dependencies before image work. Tests use rea
 signature/archive reconstruction with mocked execution/storage, not live activation.
 Deployment permissions, fixed target/checkpoint adapters and the stable recovery
 worker remain pending. No appliance was changed this turn.
+
+Resolved the candidate's kiosk permissions boundary. The unprivileged graphics
+service cannot traverse private stable dependency prefixes, so candidate creation
+now copies only relocatable browser modules into its code tree, checks bounded
+installer-owned regular/relative-link entries, rejects unsafe permissions/escapes,
+and rechecks the copied module. Code directories and copied JS receive public
+read/execute permissions; Python prefixes and persistent settings are untouched.
+Two new regressions cover escaping links and writable browser code, and the
+candidate test checks private-prefix and secret-file modes remain unchanged.
+Real QEMU qualification ran Node as elderbrain-kiosk and imported the copied
+Playwright module successfully while the original dependency prefix stayed 0700.
+Evidence: /tmp/elderbrain-browser-deployment-t33btsb9 in the VM. The reusable
+test/qemu/browser-deployment.py leaves isolated evidence and changes no live runtime.
+Fixed deployment targets, checkpoint adapter and stable boot recovery remain next.

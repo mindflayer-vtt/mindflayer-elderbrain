@@ -1,9 +1,11 @@
 """Reconstruct an activation candidate from authenticated archives, not loose code."""
 from contextlib import contextmanager
+from itertools import chain
 import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 
@@ -35,6 +37,39 @@ def private_directory(path):
             or info.st_uid != os.geteuid() or info.st_mode & 0o077):
         raise ValueError('Runtime verification requires private canonical directories')
     return path
+
+
+def browser_modules(source, destination):
+    """Browser JS is relocatable; do not expose private Python prefixes to kiosk."""
+    source = Path(source)
+    if source.resolve() != source or not source.is_dir():
+        raise ValueError('Invalid installed browser module directory')
+    total = count = 0
+    for path in chain((source,), source.rglob('*')):
+        count += 1
+        info = path.lstat()
+        if info.st_uid != os.geteuid():
+            raise ValueError('Browser modules must be owned by the installer')
+        if stat.S_ISLNK(info.st_mode):
+            if os.path.isabs(os.readlink(path)) or not path.resolve().is_relative_to(source) or not path.exists():
+                raise ValueError('Browser module link escapes its relocatable tree')
+        elif stat.S_ISREG(info.st_mode):
+            total += info.st_size
+            if info.st_mode & 0o7022:
+                raise ValueError('Unsafe browser module file permissions')
+        elif not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o7022:
+            raise ValueError('Unsafe browser module entry')
+        if count > 32768 or total > 256 * 1024 ** 2:
+            raise ValueError('Installed browser module tree exceeds limits')
+    shutil.copytree(source, destination, symlinks=True)
+    # Only code is made readable. Never chmod the source prefix, configuration
+    # links or anything reached through a symlink.
+    for parent, directories, files in os.walk(destination):
+        Path(parent).chmod(0o755)
+        for name in files:
+            path = Path(parent) / name
+            if not path.is_symlink():
+                path.chmod(0o755 if path.stat().st_mode & 0o111 else 0o644)
 
 
 @contextmanager
@@ -87,8 +122,13 @@ def candidate(prepared, public_key, allowed_paths, *, dependency_directory, stat
         check_images(manifest, signature, public_key, allow_download=False, run=run)
         runtime = tree / 'runtime'
         (runtime / 'compose.yaml').write_bytes(render((tree / 'templates/compose.yaml').read_bytes(), release))
-        links = {'serial-venv': prefix / 'serial-venv', 'borgmatic-venv': prefix / 'borgmatic-venv',
-                 'beamer/node_modules': prefix / 'beamer/node_modules'}
+        browser_modules(prefix / 'beamer/node_modules', runtime / 'beamer/node_modules')
+        offline(['/usr/bin/node', '-e', 'const p=require(process.argv[1]); '
+                 'if(!p.chromium||require(process.argv[1]+"/package.json").version!==process.argv[2])process.exit(1)',
+                 runtime / 'beamer/node_modules/playwright-core', lock['packages']['node_modules/playwright-core']['version']])
+        for directory, _directories, _files in os.walk(runtime):
+            Path(directory).chmod(0o755)
+        links = {'serial-venv': prefix / 'serial-venv', 'borgmatic-venv': prefix / 'borgmatic-venv'}
         for name in ('appliance.env', 'sway.conf'):
             setting = state / 'host/runtime' / name
             if setting.resolve() != setting or not stat.S_ISREG(setting.lstat().st_mode):

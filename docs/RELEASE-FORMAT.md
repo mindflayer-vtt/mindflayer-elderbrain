@@ -367,7 +367,7 @@ identity is verified before work and again before yielding the private candidate
 
 Compose is regenerated from the authenticated template and signed pins, then
 validated against the persistent environment. `appliance.env` and `sway.conf`
-become links to verified canonical persistent files; dependency links point to the
+become links to verified canonical persistent files; Python dependency links point to the
 non-relocatable installed prefix. No configuration is copied, initialized or
 overwritten. The context removes its private candidate when finished.
 
@@ -375,3 +375,12 @@ This verifies archive provenance and installed dependency behavior, not a bytewi
 attestation of every installed environment file. Deployment access permissions,
 fixed target selection, checkpoint integration and the stable recovery worker
 remain necessary before using this candidate in actual activation.
+
+The kiosk must not traverse the private dependency prefix. Candidate construction
+therefore copies the relocatable browser JavaScript modules into the code tree,
+checks their owner/type/permissions and bounds, rejects absolute or escaping links,
+and rechecks the copied module. Code directories are 0755; copied browser files
+are 0644 or 0755 according to their executable bit. Configuration links and their
+targets are never chmodded. Both Python environments remain fixed private-prefix
+links used by root services. This preserves private installation metadata and
+credentials while allowing kiosk code access after runtime deployment.

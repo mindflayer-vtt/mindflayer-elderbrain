@@ -29,6 +29,11 @@ class RuntimeCandidateTests(unittest.TestCase):
         self.dependencies.mkdir(mode=0o700)
         self.prefix = self.dependencies / '1.2.3'
         self.prefix.mkdir(mode=0o700)
+        modules = self.prefix / 'beamer/node_modules'
+        (modules / 'playwright-core').mkdir(parents=True)
+        (modules / 'playwright-core/cli.js').write_text('fixture code')
+        (modules / '.bin').mkdir()
+        (modules / '.bin/playwright-core').symlink_to('../playwright-core/cli.js')
         self.receipt = {'state': 'dependencies-installed', 'version': '1.2.3',
             'prefix': str(self.prefix), 'dependenciesPrepared': True,
             'manifestSha256': hashlib.sha256((self.prepared / 'manifest.json').read_bytes()).hexdigest()}
@@ -37,6 +42,7 @@ class RuntimeCandidateTests(unittest.TestCase):
         settings = self.state / 'host/runtime'
         settings.mkdir(parents=True)
         (settings / 'appliance.env').write_text('PRIVATE_SETTING=preserve\n')
+        (settings / 'appliance.env').chmod(0o600)
         (settings / 'sway.conf').write_text('preserved sway configuration\n')
         self.offline = []
         self.fail_offline = False
@@ -67,8 +73,13 @@ class RuntimeCandidateTests(unittest.TestCase):
             self.assertEqual((tree / 'runtime/appliance.env').readlink(), self.state / 'host/runtime/appliance.env')
             self.assertEqual((tree / 'runtime/serial-venv').readlink(), self.prefix / 'serial-venv')
             self.assertNotIn('PRIVATE_SETTING', (tree / 'runtime/compose.yaml').read_text())
+            self.assertFalse((tree / 'runtime/beamer/node_modules').is_symlink())
+            self.assertEqual((tree / 'runtime/beamer/node_modules/.bin/playwright-core').read_text(), 'fixture code')
+            self.assertEqual((tree / 'runtime').stat().st_mode & 0o777, 0o755)
+            self.assertEqual(self.prefix.stat().st_mode & 0o777, 0o700)
+            self.assertEqual((self.state / 'host/runtime/appliance.env').stat().st_mode & 0o777, 0o600)
         self.assertFalse(tree.exists())
-        self.assertEqual(len(self.offline), 7)
+        self.assertEqual(len(self.offline), 8)
         self.assertEqual(len(self.fixture.calls), 5)
         self.assertEqual((self.state / 'host/runtime/appliance.env').read_text(), 'PRIVATE_SETTING=preserve\n')
 
@@ -105,6 +116,18 @@ class RuntimeCandidateTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError), self.candidate():
                 pass
         self.assertEqual(self.fixture.calls, [])
+
+    def test_browser_module_escape_cannot_copy_private_configuration(self):
+        (self.prefix / 'beamer/node_modules/escape').symlink_to(self.state / 'host/runtime/appliance.env')
+        with patch('release_runtime.persistent_identity', return_value={'data_uuid': 'fixture'}):
+            with self.assertRaisesRegex(ValueError, 'link escapes'), self.candidate():
+                pass
+
+    def test_writable_browser_code_is_rejected(self):
+        (self.prefix / 'beamer/node_modules/playwright-core/cli.js').chmod(0o666)
+        with patch('release_runtime.persistent_identity', return_value={'data_uuid': 'fixture'}):
+            with self.assertRaisesRegex(ValueError, 'permissions'), self.candidate():
+                pass
 
 
 if __name__ == '__main__':
