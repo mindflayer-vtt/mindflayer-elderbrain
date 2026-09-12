@@ -889,3 +889,36 @@ ordinary static settings, lost responses and reload/token loss. Fifty-nine
 focused host tests pass; Setup typecheck/build and diff checks pass. Actual VM
 network checkpoint restore remains unqualified, and the physical Lenovo stays
 untouched. The Backups page now points to Network for this separate restore.
+
+Real installed-VM network checkpoint restore confirmation passed. Verified QEMU
+DMI/serial and healthy services first; backed up previous installed host modules
+at `/root/elderbrain-network-qualification-uVAuzb0L/previous-host-modules.tar.gz`,
+then deployed current host Python modules/management bridge (no Setup container
+rebuild or physical-host changes). The QEMU-only fixture captured an actual
+readonly checkpoint, appended only a comment to the live Netplan source, admitted
+the restore through the management socket, and restarted management while its
+independent worker was running. The job completed with its preallocated ID.
+Actual netplan activation and the dedicated TLS listener confirmed the token over
+a CA-verified direct host connection. Source bytes matched the archived version,
+the before-restore checkpoint retained the modified version, maintenance completed
+and owner pins were released. Required services were active afterward.
+
+Confirmation evidence: `/root/network-restore-evidence-tjb93wnj`, job
+`1a4db4591157420fbb38584f03b827c4`. The fixture retains private originals and
+checkpoint IDs, never logs the capability, and rejects non-QEMU/nonmatching disks.
+A second run of the same fixture with `--rollback` is running in exec session
+5064 (guest test PID 14123), network ID `963de7516bb9498dac6e91235c78ef79`, pending
+at its real deadline 1789207946.1120281. Do not restart it. Its final verification
+must prove exact pre-restore bytes, released pins and restored services before
+removing only the fixture comment. This stable-IP test does not qualify an actual
+address transition or reboot mid-restore. All 361 host tests pass (five skipped),
+including 80 network tests; fixture syntax/diff checks pass.
+
+The second run completed successfully without confirmation. The independent
+watchdog reached its actual deadline, rolled back the exact pre-restore Netplan
+bytes, completed maintenance cleanup and released owner pins. The recovery
+checkpoint contents and active services passed; the fixture then removed only
+its own verified comment. Evidence: `/root/network-restore-evidence-w5pr5yt4`.
+Session 5064 exited zero; it is no longer running. Both real stable-IP confirmation
+and deadline rollback now pass, including management restart while each worker
+was live. Address-changing and reboot-mid-restore qualification remain separate.
