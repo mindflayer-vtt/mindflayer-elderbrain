@@ -301,3 +301,27 @@ partial or completed prefix remains for recovery/inspection if a later preparati
 step fails; it is never silently reused. Activation still must attach persistent
 settings, set deployment access permissions, checkpoint, switch code/units and
 perform health/rollback handling. `activationReady` remains false.
+
+## Activation transaction (host integration pending)
+
+`release_activation.Activation` provides a maintenance-locked update transaction
+over a trusted fixed target map. It verifies the signed format-2 manifest, calls
+the host's complete-runtime preflight, records running services, stops writers,
+requires a durable checkpoint, and journals code/unit replacement with retained
+previous trees. Health checks precede the commit marker. Generic maintenance
+recovery refuses update records: the dedicated coordinator must resolve them.
+
+The transaction records possible data writes before starting the new runtime.
+An uncommitted failure/interruption stops writers, restores old code and (if new
+processes could have run) restores the data checkpoint before restarting the old
+runtime. Failed stopping or checkpoint restoration leaves recovery required and
+does not start services. A committed transaction survives interruption before
+its maintenance completion record without reverting the healthy release.
+
+This is an internal transaction engine, not a deployed update command. Its host
+adapter must reverify prepared code/images/dependencies, supply fixed targets and
+compatible checkpoint capture/restore, preserve configuration aliases, refresh
+units and enforce real health/interlock checks. The recovery worker must live
+outside the runtime being replaced and be wired into boot before update admission
+is enabled. These integration requirements remain pending; fixture tests do not
+qualify actual appliance activation or rollback.

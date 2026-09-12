@@ -1100,3 +1100,20 @@ overlapping directories and mismatched receipts. The combined preparation/instal
 suite passes 21 tests. This turn did not modify the VM or physical appliance.
 Live settings aliases, service/unit switching, deployment permissions and durable
 update recovery remain unimplemented.
+
+Added an internal update activation transaction with a distinct update maintenance
+record, fixed host target mapping, signed format-2 admission, required checkpoint,
+journaled replacement and health-before-commit. The existing replacement engine
+retains old code trees. Recovery records possible data mutation before new service
+startup, then restores both old code and the checkpoint if health/startup fails.
+Stop or checkpoint-restore failure leaves recovery-required without restarting
+writers; a committed switch survives a crash before maintenance completion.
+Generic backup recovery now refuses update records. Ten tests use real signed
+manifests and real temporary-directory switches with fake service/checkpoint
+adapters, covering healthy retention, health rollback, missing checkpoint, crashes
+mid-rename/during-health/after-commit, stop and checkpoint-restore failures,
+signature rejection and settings-lock release before restart. The full suite
+passed 438 tests (five skipped) before the final two focused recovery tests.
+No live deployment occurred. Trusted prepared-runtime verification, fixed actual
+host targets, checkpoint adapter, update-specific service health/interlocks and
+stable boot-recovery worker wiring remain before enabling activation.

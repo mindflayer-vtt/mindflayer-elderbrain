@@ -1,0 +1,113 @@
+"""Durable update switching; host adapters supply fixed targets and checkpoint IO.
+
+Not a public update API. The source callback must reverify the complete prepared
+runtime, images and dependencies, attach persistent aliases and check deployment
+permissions. Recovery must run from a stable worker outside the replaced runtime.
+"""
+from contextlib import nullcontext
+import time
+import uuid
+
+from appliance_release import verify
+from backup_service import save_record
+from restore_transaction import RestoreTransaction
+
+
+class Activation:
+    def __init__(self, maintenance, targets, *, checkpoint, restore_checkpoint,
+                 release_checkpoint, refresh, exclusive=nullcontext):
+        self.maintenance = maintenance
+        self.services = maintenance.services
+        self.targets = targets
+        self.checkpoint = checkpoint
+        self.restore_checkpoint = restore_checkpoint
+        self.release_checkpoint = release_checkpoint
+        self.refresh = refresh
+        self.exclusive = exclusive
+
+    def write(self, record, state):
+        record['state'] = state
+        save_record(self.maintenance.journal, record)
+
+    def transaction(self, record):
+        identity = record.get('id', '')
+        if (not isinstance(identity, str) or len(identity) != 32
+                or any(c not in '0123456789abcdef' for c in identity)):
+            raise ValueError('Invalid update transaction identity')
+        return RestoreTransaction(self.maintenance.directory / ('update-' + identity + '.json'), self.targets)
+
+    def activate(self, manifest, signature, public_key, prepare_sources):
+        release = verify(manifest, signature, public_key)
+        if release['format'] != 2:
+            raise ValueError('Activation requires a complete signed release')
+        with self.maintenance.locked():
+            if self.maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
+                raise RuntimeError('Interrupted maintenance requires recovery first')
+            # Trusted host adapter revalidates all inputs before interrupting any
+            # service. Archive metadata never supplies the live target mapping.
+            sources = prepare_sources(release)
+            if set(sources) != set(self.targets):
+                raise ValueError('Update sources do not match fixed host targets')
+            record = {'operation': 'update', 'id': uuid.uuid4().hex, 'version': release['version'],
+                      'startedAt': time.time(), 'services': self.services.snapshot(),
+                      'dataMayHaveChanged': False, 'dataRolledBack': False}
+            transaction = self.transaction(record)
+            self.write(record, 'stopping')
+            try:
+                with self.exclusive():
+                    self.services.stop(record['services'])
+                    self.write(record, 'checkpointing')
+                    self.checkpoint(record)  # Must be durable and pinned by operation ID.
+                    if not record.get('rollbackCheckpoint'):
+                        raise ValueError('Update requires a durable recovery checkpoint')
+                    self.write(record, 'preparing-update')
+                    transaction.prepare(sources)
+                    self.write(record, 'installing-update')
+                    transaction.apply()
+                self.refresh()
+                self.services.validate()
+                # New processes can migrate/write data during health checks.
+                # Record that fact BEFORE starting them, not after a failed check.
+                record['dataMayHaveChanged'] = True
+                self.write(record, 'verifying-update')
+                self.services.resume_restored(record['services'])
+                transaction.commit()
+                self.write(record, 'completed')
+                self.release_checkpoint(record)
+                return record
+            except Exception:
+                self.write(record, 'recovery-required')
+                self.recover_locked(record)
+                raise
+
+    def recover(self):
+        with self.maintenance.locked():
+            return self.recover_locked(self.maintenance.previous())
+
+    def recover_locked(self, record):
+        if record.get('operation') != 'update':
+            raise ValueError('This is not an interrupted update')
+        if record.get('state') in ('completed', 'rolled-back'):
+            self.release_checkpoint(record)
+            return record
+        transaction = self.transaction(record)
+        self.write(record, 'recovery-required')
+        committed = False
+        with self.exclusive():
+            # Even a failed health check may leave new writers running. Never
+            # replace code or restore data unless stopping them succeeds.
+            self.services.stop(record['services'])
+            if transaction.journal.exists():
+                committed = transaction.read()['state'] == 'committed'
+                if not committed:
+                    transaction.rollback()
+            if not committed and record['dataMayHaveChanged'] and not record['dataRolledBack']:
+                self.restore_checkpoint(record)  # Must be idempotent across interruption.
+                record['dataRolledBack'] = True
+                self.write(record, 'recovery-required')
+        self.refresh()
+        self.services.validate()
+        self.services.resume_restored(record['services'])
+        self.write(record, 'completed' if committed else 'rolled-back')
+        self.release_checkpoint(record)
+        return record
