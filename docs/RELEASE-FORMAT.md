@@ -631,3 +631,32 @@ persistent job; HTTP 202 returns its record, available thereafter through the
 authenticated jobs endpoint. Acceptance is not activation success: the worker
 must still authenticate the prepared artifacts and pass all activation gates.
 Discovery/download, the System page and power controls are still pending.
+
+### Signed release discovery
+
+The System page now offers an authenticated, CSRF-protected release metadata
+check. Configure `/etc/elderbrain/release-source.json` with exactly:
+
+```json
+{"baseUrl":"https://updates.example.org/elderbrain/stable/"}
+```
+
+This is an example, not a deployed Mindflayer release endpoint. The directory
+must serve `manifest.json` and `manifest.sig` directly with HTTP 200 over trusted
+HTTPS. Credentials, query strings, fragments, compression and redirects are not
+accepted. An independently provisioned `/etc/elderbrain/release-public.pem` pins
+the signing key. Both files must be canonical regular files owned by root, not
+group/world writable; do not obtain the key from the announcement itself.
+No production source or key is generated automatically by discovery.
+
+The host verifies the exact manifest signature before exposing release notes,
+component versions, downtime or the confirmation digest. Compatibility checks
+use the actual OS/architecture and supported configuration schema; incomplete
+format-1 releases are not update candidates. A missing source is reported as
+not configured, not as "up to date". The GUI renders notes as plain text.
+
+This check downloads metadata only and neither prepares nor activates a release.
+Artifact download/preparation controls, installed Setup-version reporting and
+power controls remain pending. Previously prepared releases still use the
+separate confirmed update API; a successful metadata check is not evidence that
+those artifacts or their dependencies are installed.

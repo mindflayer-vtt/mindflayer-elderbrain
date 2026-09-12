@@ -340,6 +340,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_catalog.py",
+    "path": "runtime/release_catalog.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/update_request.py",
     "path": "runtime/update_request.py",
     "mode": 420

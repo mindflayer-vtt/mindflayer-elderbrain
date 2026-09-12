@@ -13,6 +13,24 @@ test.beforeAll(async ({ playwright, baseURL }) => {
 });
 test.use({ storageState: async ({}, use) => { await use({ cookies, origins: [] }); } });
 
+test('System page checks signed release metadata and renders notes as text', async ({ page, request, playwright, baseURL }) => {
+  const url = '/elderbrain/api/system/check';
+  const anonymous = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  try { expect((await anonymous.post(url, { headers: { 'x-elderbrain-request': '1' }, data: {} })).status()).toBe(401); }
+  finally { await anonymous.dispose(); }
+  expect((await request.post(url, { data: {} })).status()).toBe(403);
+  const session = await (await request.get('/elderbrain/api/auth/session')).json();
+  const headers = { 'x-elderbrain-request': '1', 'x-csrf-token': session.csrf };
+  expect((await request.post(url, { headers, data: { baseUrl: 'https://untrusted.test/' } })).ok()).toBe(false);
+  await page.goto('/elderbrain/system');
+  await page.getByRole('button', { name: 'Check for updates' }).click();
+  await expect(page.getByText('Installed host: 1.0.0')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Release 1.2.3' })).toBeVisible();
+  await expect(page.getByText('120 seconds', { exact: true })).toBeVisible();
+  await expect(page.getByText('Improved offline updates. <script>unsafe()</script>', { exact: true })).toBeVisible();
+  await expect(page.getByText('Release signature verified', { exact: true })).toBeVisible();
+});
+
 test('update API requires authentication, CSRF and exact confirmed release identity', async ({ request, playwright, baseURL }) => {
   const url = '/elderbrain/api/system/update';
   const data = { version: '1.2.3', manifestSha256: 'a'.repeat(64), confirmUpdate: true, confirmDowntime: true };

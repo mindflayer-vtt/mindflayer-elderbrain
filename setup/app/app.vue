@@ -4,7 +4,7 @@ const loaded = ref(false);
 const error = ref("");
 const menuOpen = ref(false);
 const route = useRoute();
-const items = computed(() => ["Overview", "Displays", "Foundry", "Keypads", "Network", "Backups", "Logs", "Account"].map(label => {
+const items = computed(() => ["Overview", "Displays", "Foundry", "Keypads", "Network", "Backups", "System", "Logs", "Account"].map(label => {
   const suffix = label === "Overview" ? "" : label.toLowerCase();
   return { label, to: "/elderbrain/" + suffix, active: route.path.replace(/\/$/, "") === ("/elderbrain/" + suffix).replace(/\/$/, "") || route.path === "/" + suffix };
 }));

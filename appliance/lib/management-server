@@ -84,6 +84,9 @@ class Handler(socketserver.StreamRequestHandler):
                 from serial_release import release
                 selected = release()
                 result = {"ok": True, "output": json.dumps({"version": selected["version"]})}
+            elif action == 'release-check':
+                from release_catalog import check
+                result = {'ok': True, 'output': json.dumps(check())}
             elif action.startswith("update-start "):
                 size = int(action.removeprefix("update-start "))
                 if not 0 < size <= 2048:

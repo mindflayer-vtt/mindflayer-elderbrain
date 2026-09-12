@@ -1542,3 +1542,17 @@ reads, unauthorized peer rejection and exact forwarding to JobStore. Nuxt
 typecheck/build, request validator tests, 26 focused Python tests and whitespace
 checks pass. This adds API integration, not release discovery or a finished System
 page; those and power/backup controls remain pending. No live appliance changes.
+
+Added the Nuxt UI System navigation/page and read-only signed release discovery.
+The authenticated POST check accepts no browser-selected source or key. A fixed
+installer-owned configuration supplies an HTTPS metadata directory; pinned-key
+verification precedes publishing notes, versions and downtime. Missing source,
+incompatible release and failed checks are distinct from a ready-to-install
+release. No artifacts are downloaded, services changed or automatic update-ready
+claims made. The page explicitly labels the current metadata-only stage.
+Tests use actual signatures and cover tampering, source constraints, unsafe trust
+files, response bounds/redirect rejection, complete/incomplete release compatibility
+and host package inclusion. Ten focused Python tests, Nuxt typecheck/build, two
+production-server browser/API tests, shell syntax and diff checks pass. Browser
+coverage proves auth/CSRF, custom-source rejection and literal release-note text.
+Artifact preparation/download and final update/power controls remain pending.

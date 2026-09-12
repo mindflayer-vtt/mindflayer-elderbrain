@@ -28,6 +28,13 @@ let checkpointRetention = { enabled: false, keep: 10 };
 const management = net.createServer({ allowHalfOpen: true }, (socket) => {
   socket.once("data", (data) => {
     const action = data.toString().trim();
+    if (action === 'release-check') {
+      socket.end(JSON.stringify({ ok: true, output: JSON.stringify({ installedHostVersion: '1.0.0', state: 'checked', release: {
+        version: '1.2.3', hostVersion: '1.1.0', setupVersion: '2.0.0', notes: 'Improved offline updates. <script>unsafe()</script>',
+        downtimeSeconds: 120, compatible: true, manifestSha256: 'a'.repeat(64),
+      } }) }) + '\n');
+      return;
+    }
     if (action.startsWith('network-snapshot-restore-start ')) {
       const [, checkpoint, networkInterface, digest] = action.split(' ');
       if (!/^[a-f0-9]{64}$/.test(digest || '')) throw new Error('Expected confirmation hash only');

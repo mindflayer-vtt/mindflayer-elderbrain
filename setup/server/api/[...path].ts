@@ -30,6 +30,14 @@ export default defineEventHandler(async (event) => {
     return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as unknown;
   }
   try {
+    if (route === 'system/check' && method === 'POST') {
+      const input = await body();
+      if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length)
+        throw new Error('Release checks do not accept a custom source or key');
+      const result = await command(socket, 'release-check', 35000);
+      if (!result.ok) throw new Error('Release check failed. Check the configured source, signing key and network connection.');
+      return JSON.parse(result.output || 'null');
+    }
     if (route === 'system/update' && method === 'POST') {
       const payload = Buffer.from(JSON.stringify(updateRequest(await body())));
       const result = await backupUpload(socket, Readable.from([payload]), payload.length, 'update-start');

@@ -106,6 +106,7 @@ install -m 0644 "$PAYLOAD_DIR/appliance/lib/storage_guard.py" "$RUNTIME/storage_
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_jobs.py" "$RUNTIME/host_jobs.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/appliance_release.py" "$RUNTIME/appliance_release.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/update_request.py" "$RUNTIME/update_request.py"
+install -m 0644 "$PAYLOAD_DIR/appliance/lib/release_catalog.py" "$RUNTIME/release_catalog.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/local_snapshots.py" "$RUNTIME/local_snapshots.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_compatibility.py" "$RUNTIME/checkpoint_compatibility.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_components.py" "$RUNTIME/checkpoint_components.py"
