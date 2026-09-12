@@ -2057,3 +2057,40 @@ activation because its locally built Setup image intentionally lacked the declar
 OCI version label; rebuilding that test image with matching signed metadata was
 required before the successful job, demonstrating that image metadata validation
 fails closed.
+
+Live power-control qualification on that same installed appliance found and fixed
+one boot-boundary reporting defect. The protected HTTPS System API accepted a
+confirmed reboot and created its mandatory `before-shutdown` checkpoint, but the
+machine restarted before the worker could perform its final job-record write. The
+generic orphan handling would have called that successfully requested reboot
+`interrupted`. Recovery-owned `host_jobs.py` now reconciles an unlocked power job
+to the deliberately limited `completed`/`power-requested` result only when the
+root-private power record exactly names the job, action and safe backup fields,
+has state `requested`, and names a different valid boot ID. Same-boot, mismatched,
+protecting or extra-field records still become interrupted and cannot assert
+success.
+
+The fix was installed through a second real signed System update: version 1.0.3,
+sequence 3, manifest
+`791356727ec82364a8b160a30988342554fde4dd3402814945c402fb663dbe6b`.
+Because this changed a recovery-owned module, successful activation moved the
+transactional bootstrap selector from generation `ba5d7a52...` to `a8840ce2...`
+and, only in the final committing-recovery stage, moved the active recovery bundle
+from `8032f3c0...` to `30d0f203...`. The isolated recovery entry point and active
+bundle verifier passed afterward with every lifecycle unit active and no failed
+unit. This supplies live evidence that a candidate recovery generation can differ
+and is selected only after the release commits.
+
+A new API reboot then returned under a different boot ID. A fresh authenticated
+client caused job `a802650ae73349c58e3debfd19a3e1a4` to reconcile as completed
+with checkpoint `08999aa4d2b7e8c646e5f4cf221a4472`, whose live Btrfs metadata
+reported reason `before-shutdown`. A subsequent authenticated shutdown job
+`f2826e7e6598447e93b8b74e21cb9305` powered QEMU off cleanly in approximately
+21 seconds. Restarting that exact disk produced another new boot ID; the shutdown
+job reconciled identically and checkpoint `a436db5d9f458bdf478d2e6ca1f7e2e6`
+was present with reason `before-shutdown`. Version 1.0.3, sequence 3 and zero
+failed units persisted. These tests qualify the installed authenticated reboot
+and shutdown paths, bounded local pre-power protection, physical VM power effects
+and truthful next-boot job convergence. They do not claim a configured remote
+repository was exercised; remote pending/retry behavior remains unit- and earlier
+live-NFS-qualified separately.

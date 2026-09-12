@@ -30,6 +30,30 @@ COMMANDS['update'] = []
 COMMANDS['power'] = []
 
 
+def _boot_id():
+    return Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+
+
+def _completed_power(record, power):
+    """Return the public result when an accepted power request crossed a boot."""
+    selected = record.get('request')
+    backup = power.get('backup') if isinstance(power, dict) else None
+    if (record.get('kind') != 'power' or not isinstance(selected, dict) or not isinstance(power, dict)
+            or set(selected) != {'action', 'confirmPower'} or selected.get('confirmPower') is not True
+            or selected.get('action') not in ('reboot', 'shutdown')
+            or set(power) != {'state', 'action', 'bootId', 'backup', 'jobId'}
+            or power.get('state') != 'requested' or power.get('jobId') != record.get('id')
+            or power.get('action') != selected['action']
+            or not isinstance(power.get('bootId'), str)
+            or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', power['bootId'])
+            or power['bootId'] == _boot_id()
+            or not isinstance(backup, dict) or not set(backup) <= {'state', 'checkpoint'}
+            or not isinstance(backup.get('state'), str)
+            or any(not isinstance(value, str) for value in backup.values())):
+        return None
+    return {'state': 'requested', 'action': power['action'], 'backup': dict(backup)}
+
+
 class JobStore:
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -53,10 +77,20 @@ class JobStore:
                 # Re-read under the lock: the worker may just have finished.
                 record = json.loads(path.read_text())
                 if record["state"] in ACTIVE:
-                    record.update(state="interrupted", finishedAt=time.time(),
-                                  error="Worker stopped before completion. Inspect maintenance state and run the matching recovery operation.")
-                    if record.get("kind") == "keypad-install":
-                        record["error"] = "Installation worker stopped. Retain this job's provisioning backups and private recovery journal; inspect the keypad before retrying."
+                    result = None
+                    if record.get('kind') == 'power':
+                        power_path = self.directory.parent / 'power.json'
+                        try:
+                            result = _completed_power(record, json.loads(power_path.read_text()))
+                        except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+                            pass
+                    if result is not None:
+                        record.update(state='completed', stage='power-requested', finishedAt=time.time(), result=result)
+                    else:
+                        record.update(state="interrupted", finishedAt=time.time(),
+                                      error="Worker stopped before completion. Inspect maintenance state and run the matching recovery operation.")
+                        if record.get("kind") == "keypad-install":
+                            record["error"] = "Installation worker stopped. Retain this job's provisioning backups and private recovery journal; inspect the keypad before retrying."
                     save_record(path, record)
             finally:
                 os.close(fd)

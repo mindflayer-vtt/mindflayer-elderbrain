@@ -37,6 +37,35 @@ class JobTests(unittest.TestCase):
         self.assertEqual(saved['state'], 'completed')
         self.assertEqual(saved['result'], {'state': 'requested', 'action': 'reboot'})
 
+    def test_power_job_reconciles_only_after_its_exact_requested_boot(self):
+        root = Path(self.temp.name)
+        self.store = JobStore(root / 'jobs')
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        request = {'action': 'reboot', 'confirmPower': True}
+        save_record(path, {'id': self.identity, 'kind': 'power', 'state': 'running',
+                           'createdAt': 1, 'request': request})
+        power = {'state': 'requested', 'action': 'reboot',
+                 'bootId': '11111111-1111-1111-1111-111111111111',
+                 'backup': {'state': 'local-checkpoint', 'checkpoint': 'b' * 32},
+                 'jobId': self.identity}
+        save_record(root / 'power.json', power)
+        os.close(fd)
+        with patch('host_jobs._boot_id', return_value='22222222-2222-2222-2222-222222222222'):
+            saved = self.store.read(self.identity)
+        self.assertEqual(saved['state'], 'completed')
+        self.assertEqual(saved['stage'], 'power-requested')
+        self.assertEqual(saved['result'], {'state': 'requested', 'action': 'reboot', 'backup': power['backup']})
+
+        for change in ({'bootId': '22222222-2222-2222-2222-222222222222'},
+                       {'jobId': 'c' * 32}, {'action': 'shutdown'}, {'state': 'protecting'},
+                       {'backup': {'state': 'local-checkpoint', 'private': '/secret'}}):
+            save_record(path, {'id': self.identity, 'kind': 'power', 'state': 'running',
+                               'createdAt': 1, 'request': request})
+            save_record(root / 'power.json', {**power, **change})
+            with patch('host_jobs._boot_id', return_value='22222222-2222-2222-2222-222222222222'):
+                self.assertEqual(self.store.read(self.identity)['state'], 'interrupted')
+
     def test_update_recovery_reconciles_only_exact_terminal_outcome(self):
         path = self.store.path(self.identity)
         original = {'id': self.identity, 'kind': 'update', 'state': 'interrupted', 'createdAt': 1,
