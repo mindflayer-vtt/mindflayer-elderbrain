@@ -104,6 +104,7 @@ install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_bindings.py" "$RUNTIME/host_bin
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/storage_guard.py" "$RUNTIME/storage_guard.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_jobs.py" "$RUNTIME/host_jobs.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/local_snapshots.py" "$RUNTIME/local_snapshots.py"
+install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_compatibility.py" "$RUNTIME/checkpoint_compatibility.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/snapshot_service.py" "$RUNTIME/snapshot_service.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/keypad_inventory.py" "$RUNTIME/keypad_inventory.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/serial_bundle.py" "$RUNTIME/serial_bundle.py"

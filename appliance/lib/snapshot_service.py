@@ -43,7 +43,8 @@ def store(state='/var/lib/mindflayer-elderbrain', runtime='/opt/mindflayer-elder
         # Settings locks release before graphics resumes (its preparation reads them).
         with maintenance.window('snapshot', exclusive=lambda: stable_settings(state)):
             yield
-    return Snapshots(state, guard=guard, quiesce=quiesce)
+    from checkpoint_compatibility import capture
+    return Snapshots(state, guard=guard, quiesce=quiesce, compatibility=lambda: capture(runtime))
 
 
 def retention_settings(value=None, state='/var/lib/mindflayer-elderbrain', runtime='/opt/mindflayer-elderbrain'):

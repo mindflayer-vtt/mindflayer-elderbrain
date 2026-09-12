@@ -66,7 +66,11 @@ class SnapshotTests(unittest.TestCase):
                 Path(args[-1]).mkdir()
             return SimpleNamespace(stdout='ro=true' if args[:2] == ['btrfs', 'property'] else '')
         with tempfile.TemporaryDirectory() as directory:
-            store = Snapshots(directory, guard=lambda: None, quiesce=quiesce, run=run)
+            compatibility = {'schema': 1, 'applianceVersion': '1.0.0', 'composeSha256': 'a' * 64, 'images': {}}
+            def capture():
+                self.assertEqual(events, ['stop'])
+                return compatibility
+            store = Snapshots(directory, guard=lambda: None, quiesce=quiesce, run=run, compatibility=capture)
             # Root ownership is verified by real guest tests; local test runs unprivileged.
             def prepare():
                 store.root.mkdir(mode=0o700)
@@ -74,6 +78,9 @@ class SnapshotTests(unittest.TestCase):
                 result = store.create('manual')
             self.assertEqual(events, ['stop', 'resume'])
             self.assertTrue((store.root / (result['id'] + '.json')).is_file())
+            import json
+            saved = json.loads((store.root / (result['id'] + '.json')).read_text())
+            self.assertEqual(saved['compatibility'], compatibility)
 
     def test_failed_snapshot_always_resumes_and_does_not_publish_metadata(self):
         events = []

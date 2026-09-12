@@ -55,10 +55,11 @@ def retention_candidates(records, keep, protected=()):
 
 
 class Snapshots:
-    def __init__(self, state, *, quiesce, guard=None, run=subprocess.run):
+    def __init__(self, state, *, quiesce, guard=None, run=subprocess.run, compatibility=None):
         self.state = Path(state)
         self.root = self.state / 'snapshots'
         self.quiesce, self.guard, self.run = quiesce, guard or (lambda: check(target=str(self.state))), run
+        self.compatibility = compatibility
 
     def command(self, *args):
         return self.run(list(args), check=True, capture_output=True, text=True, timeout=120).stdout.strip()
@@ -95,7 +96,11 @@ class Snapshots:
                 raise ValueError('Checkpoint is not a real Btrfs subvolume')
             if self.command('btrfs', 'property', 'get', '-t', 's', str(destination), 'ro') != 'ro=true':
                 raise ValueError('Checkpoint is no longer read-only')
-            result.append({key: value[key] for key in ('version', 'id', 'createdAt', 'reason')})
+            public = {key: value[key] for key in ('version', 'id', 'createdAt', 'reason')}
+            if 'compatibility' in value:
+                from checkpoint_compatibility import validate
+                public['compatibility'] = validate(value['compatibility'])
+            result.append(public)
         return sorted(result, key=lambda value: (value['createdAt'], value['id']), reverse=True)
 
     def list(self):
@@ -279,6 +284,10 @@ class Snapshots:
             # the snapshot is durable, and its read-only property is verified.
             with self.quiesce():
                 self.guard()
+                compatibility = None
+                if self.compatibility is not None:
+                    from checkpoint_compatibility import validate
+                    compatibility = validate(self.compatibility())
                 validate_nested(self.command('btrfs', 'subvolume', 'list', '-o', str(self.state)))
                 self.command('sync', '-f', str(self.state))
                 self.command('btrfs', 'subvolume', 'snapshot', '-r', str(self.state), str(destination))
@@ -286,6 +295,8 @@ class Snapshots:
                     raise ValueError('Checkpoint is not read-only')
                 self.command('btrfs', 'filesystem', 'sync', str(self.state))
                 metadata = {'version': 1, 'id': identifier, 'createdAt': time.time(), 'reason': reason}
+                if compatibility is not None:
+                    metadata['compatibility'] = compatibility
                 if owner is not None:
                     self.write_pin(identifier, owner, purpose)
                 # Exclusive creation: incomplete orphan snapshots remain for

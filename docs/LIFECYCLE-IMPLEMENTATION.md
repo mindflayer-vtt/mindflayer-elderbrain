@@ -551,3 +551,14 @@ the coordinator must still verify/pin checkpoint identity and schema compatibili
 quiesce writers, create a rollback checkpoint, activate/recover and release pins.
 Network/security/device identity coordinators remain required. This intermediate
 module is not yet installed by provisioning or available to end users.
+
+New host-created checkpoints now capture compatibility metadata while writers
+are stopped: appliance version, Compose file SHA256 and actual container image
+IDs (including stopped containers). Added strict compatibility comparison;
+missing metadata or mismatched runtime is rejected, and Foundry restore requires
+a recorded Foundry image. Legacy checkpoints remain listable; no compatibility
+is invented for them. The new helper is installed by provisioning. Seven
+checkpoint projection/staging/compatibility tests plus six snapshot tests and
+static checks pass, including capture timing and persisted compatibility data.
+The future activation coordinator must enforce this check and later add explicit
+migration support; exact comparison alone is not a completed coordinated updater.
