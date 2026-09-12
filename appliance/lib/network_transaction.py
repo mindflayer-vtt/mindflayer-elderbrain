@@ -16,13 +16,14 @@ import time
 
 
 class NetworkTransaction:
-    def __init__(self, state, netplan, apply, verify_confirmation, clock=time.time, monotonic=time.monotonic, boot=None, verify_sources=None):
+    def __init__(self, state, netplan, apply, verify_confirmation, clock=time.time, monotonic=time.monotonic, boot=None, verify_sources=None, on_terminal=None):
         self.state = Path(state)
         self.state.mkdir(parents=True, mode=0o700, exist_ok=True)
         self.netplan = Path(netplan)
         self.apply = apply
         self.verify_confirmation = verify_confirmation
         self.verify_sources = verify_sources or (lambda _fingerprint: False)
+        self.on_terminal = on_terminal
         self.clock, self.monotonic = clock, monotonic
         self.boot = boot or Path('/proc/sys/kernel/random/boot_id').read_text().strip()
 
@@ -113,7 +114,9 @@ class NetworkTransaction:
     def expired(self, record):
         return record['boot'] != self.boot or self.clock() >= record['deadline'] or self.monotonic() >= record['expires']
 
-    def stage(self, changes, interface, seconds=120, fingerprint=None, confirmation=None):
+    def stage(self, changes, interface, seconds=120, fingerprint=None, confirmation=None, restore_owner=None):
+        if restore_owner is not None and (not isinstance(restore_owner, str) or not re.fullmatch(r'[a-f0-9]{32}', restore_owner)):
+            raise ValueError('Invalid network restore owner')
         if not isinstance(interface, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,15}', interface):
             raise ValueError('Invalid interface')
         if not 15 <= seconds <= 180 or not 1 <= len(changes) <= 64:
@@ -135,6 +138,8 @@ class NetworkTransaction:
             current = self.read()
             if current and current['phase'] not in ('confirmed', 'rolled-back'):
                 raise ValueError('Network transaction already in progress')
+            if current and current.get('restoreOwner') and not current.get('cleanupComplete'):
+                raise ValueError('Previous network restore cleanup is pending')
             files = {}
             for name, change in changes.items():
                 name = self.filename(name)
@@ -151,6 +156,8 @@ class NetworkTransaction:
             record = {'id': secrets.token_hex(16), 'phase': 'staged', 'interface': interface,
                       'deadline': self.clock() + seconds, 'expires': self.monotonic() + seconds, 'boot': self.boot, 'files': files,
                       'fingerprint': fingerprint, 'confirmation': confirmation}
+            if restore_owner is not None:
+                record['restoreOwner'] = restore_owner
             self.write(record)  # Original bytes are durable before any network file changes.
             return self.public(record)
 
@@ -175,7 +182,26 @@ class NetworkTransaction:
         record.pop('confirmation', None)
         self.write(record)
 
+    def finalize(self):
+        # Checkpoint cleanup takes its own store lock. Never call it while the
+        # network lock is held: checkpoint capture takes these locks in reverse.
+        with self.locked():
+            record = self.read()
+        if record and record['phase'] in ('confirmed', 'rolled-back') and self.on_terminal is not None:
+            self.on_terminal(record)
+            if record.get('restoreOwner'):
+                with self.locked():
+                    current = self.read()
+                    if current and current['id'] == record['id'] and current['phase'] == record['phase']:
+                        current['cleanupComplete'] = True
+                        self.write(current)
+
     def recover_boot(self, generate):
+        result = self._recover_boot(generate)
+        self.finalize()
+        return result
+
+    def _recover_boot(self, generate):
         """Restore unconfirmed sources before network services start.
 
         Regenerate backend files without starting/restarting networking. A failed
@@ -188,9 +214,16 @@ class NetworkTransaction:
             return self.public(record)
 
     def tick(self):
+        result = self._tick()
+        self.finalize()
+        return result
+
+    def _tick(self):
         with self.locked():
             record = self.read()
-            if not record or record['phase'] in ('confirmed', 'rolled-back'):
+            if not record:
+                return self.public(record)
+            if record['phase'] in ('confirmed', 'rolled-back'):
                 return self.public(record)
             if record['phase'] in ('applying', 'rolling-back') or self.expired(record):
                 self.restore(record)
@@ -217,6 +250,11 @@ class NetworkTransaction:
             return self.public(record)
 
     def confirm(self, identifier, proof):
+        result = self._confirm(identifier, proof)
+        self.finalize()
+        return result
+
+    def _confirm(self, identifier, proof):
         with self.locked():
             record = self.read()
             if not record or record['id'] != identifier or record['phase'] != 'pending':
@@ -236,6 +274,11 @@ class NetworkTransaction:
             return self.public(record)
 
     def cancel(self, identifier):
+        result = self._cancel(identifier)
+        self.finalize()
+        return result
+
+    def _cancel(self, identifier):
         with self.locked():
             record = self.read()
             if not record or record['id'] != identifier or record['phase'] in ('confirmed', 'rolled-back'):

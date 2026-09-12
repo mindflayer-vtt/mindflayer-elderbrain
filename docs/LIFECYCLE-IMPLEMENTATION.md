@@ -774,3 +774,14 @@ Credential-bearing contents remain private and require a caller-held source pin.
 Thirteen checkpoint tests pass, including missing scope, directory/file symlinks
 and FIFO rejection. This supplies the source reader for the pending checkpoint
 network coordinator; it does not expose network restore on its own.
+
+Timed network journals can now retain a validated private restore-owner ID and
+run retryable cleanup only after durable confirmation/rollback. Cleanup runs
+outside the network lock to avoid inversion with snapshot capture. Failed cleanup
+retains the terminal record and prevents a new transaction from overwriting it;
+successful cleanup is durably acknowledged for that same transaction. All 63
+network tests pass, including backend rollback failure, cleanup retry, lock
+release and owner validation. The production checkpoint-owner cleanup callback
+and full network checkpoint coordinator are still not wired; ordinary networking
+has no owner/callback and keeps its existing behavior. The VM reached GRUB and
+OpenSSH installation in the same preserve run.

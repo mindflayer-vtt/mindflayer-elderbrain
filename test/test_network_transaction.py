@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
+import fcntl
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'appliance/lib'))
@@ -12,6 +13,56 @@ spec.loader.exec_module(module)
 
 
 class NetworkTransactionTests(unittest.TestCase):
+    def test_restore_owner_is_private_and_terminal_cleanup_is_retryable(self):
+        owner = 'a' * 32
+        public = self.store.stage({'50-network.yaml': {'before': self.before, 'after': self.after}},
+                                  'ens3', restore_owner=owner)
+        self.assertNotIn('restoreOwner', public)
+        self.assertEqual(self.store.read()['restoreOwner'], owner)
+        observed = []
+        def cleanup(record):
+            with open(self.store.state / 'lock', 'a') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertIn(record['phase'], ('confirmed', 'rolled-back'))
+            self.assertEqual(self.store.read()['phase'], record['phase'])
+            self.assertNotIn('files', record)
+            observed.append(record['restoreOwner'])
+            if len(observed) == 1:
+                raise RuntimeError('temporary cleanup failure')
+        self.store.on_terminal = cleanup
+        self.store.tick()
+        self.assertEqual(observed, [])
+        with self.assertRaisesRegex(RuntimeError, 'cleanup'):
+            self.store.confirm(public['id'], 'trusted-destination')
+        self.assertEqual(self.store.read()['phase'], 'confirmed')
+        with self.assertRaisesRegex(ValueError, 'cleanup is pending'):
+            self.store.stage({'50-network.yaml': {'before': self.after, 'after': self.before}}, 'ens3')
+        self.store.tick()
+        self.assertTrue(self.store.read()['cleanupComplete'])
+        self.assertEqual(observed, [owner, owner])
+        self.assertEqual(self.source.read_bytes(), self.after)
+
+    def test_restore_owner_cleanup_follows_successful_rollback_only(self):
+        seen = []
+        self.store.on_terminal = lambda record: seen.append((record['phase'], self.source.read_bytes()))
+        self.store.stage({'50-network.yaml': {'before': self.before, 'after': self.after}},
+                          'ens3', seconds=15, restore_owner='a' * 32)
+        self.store.tick()
+        self.clock += 16
+        self.store.apply = lambda: (_ for _ in ()).throw(RuntimeError('backend unavailable'))
+        with self.assertRaises(RuntimeError):
+            self.store.tick()
+        self.assertEqual(seen, [])
+        self.store.apply = lambda: None
+        self.store.tick()
+        self.assertEqual(seen, [('rolled-back', self.before)])
+
+    def test_invalid_restore_owner_never_creates_transaction(self):
+        with self.assertRaises(ValueError):
+            self.store.stage({'50-network.yaml': {'before': self.before, 'after': self.after}},
+                              'ens3', restore_owner='../other-operation')
+        self.assertIsNone(self.store.read())
+
     def test_added_and_removed_sources_roll_back_on_timeout(self):
         self.store.stage({'50-network.yaml': {'before': self.before, 'after': None},
                           '70-restored.yaml': {'before': None, 'after': self.after}}, 'ens3', seconds=15)
