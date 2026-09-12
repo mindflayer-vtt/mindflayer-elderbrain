@@ -420,6 +420,8 @@ before committing the data transaction. An interrupted data switch is rolled bac
 to its starting state, its journal retained, then retried from the pinned snapshot.
 The completed data journal allows repeat recovery without replacing data again.
 
-This adapter is tested with real directory transactions and mocked Btrfs/storage
-hooks; actual whole-appliance update rollback still requires VM qualification.
+The adapter has passed real Btrfs checkpoint, interrupted rollback/retry, bind-alias
+refresh and pin-cleanup qualification on an isolated filesystem in QEMU using
+`test/qemu/update-checkpoints.py`. Runtime metadata is simulated; actual
+whole-appliance update rollback still requires combined VM qualification.
 Stable worker/boot recovery and the live update entry point remain unconnected.

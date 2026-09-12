@@ -1196,3 +1196,16 @@ interruption after data switching, incompatible/missing source and changed stora
 Btrfs/storage hooks are mocked in these tests; directory replacement is real.
 No live appliance changes. Actual combined VM update/data rollback qualification
 and stable worker/boot admission remain pending.
+
+Real Btrfs update-checkpoint qualification now passes in the disposable QEMU VM.
+test/qemu/update-checkpoints.py creates a fresh 1 GiB sparse file-backed filesystem
+inside a private mount namespace, captures a real read-only pinned checkpoint,
+changes every fixed data scope, injects process loss after directory switching,
+then retries and replays the data rollback. Real SSH/Netplan bind aliases in the
+isolated host fixture are refreshed and checked by inode; pin cleanup retains the
+checkpoint and interrupted-attempt journal. Evidence filesystem:
+/tmp/elderbrain-update-checkpoints-ls8koan4/fixture.btrfs in the VM. All test mounts
+were unmounted and the loop device detached. Actual storage identity is checked by
+fixture mount UUID; runtime compatibility metadata is simulated. No live runtime,
+Foundry workload or appliance data was modified. This qualifies the data rollback
+adapter, not full update activation or boot-time power-loss recovery.
