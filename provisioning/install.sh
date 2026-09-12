@@ -160,6 +160,8 @@ for network_service in systemd-networkd NetworkManager; do
   install -m 0644 "$PAYLOAD_DIR/provisioning/systemd/network-recovery.conf" "/etc/systemd/system/$network_service.service.d/elderbrain-recovery.conf"
 done
 if [[ -f /etc/elderbrain/storage.json ]]; then
+  install -d -m 0755 /etc/cloud/cloud.cfg.d
+  install -m 0644 "$PAYLOAD_DIR/provisioning/cloud/99-elderbrain-ssh-identity.cfg" /etc/cloud/cloud.cfg.d/99-elderbrain-ssh-identity.cfg
   host_storage_args=()
   if [[ -n ${ELDERBRAIN_STORAGE_RECEIPT:-} ]]; then host_storage_args+=(--receipt "$ELDERBRAIN_STORAGE_RECEIPT"); fi
   (cd "$PAYLOAD_DIR" && python3 -m provisioning.host_persistence "${host_storage_args[@]}")

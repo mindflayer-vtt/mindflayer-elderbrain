@@ -698,3 +698,20 @@ installer key and saved appliance identity. Neither trust file has been replaced
 This requires diagnosis before claiming preserve-reinstall success; do not reseed
 the existing baseline or treat a new key as proof of preservation. Installed tty2
 may contain the bootstrap password and must not be captured.
+
+Preserve failure diagnosed: first-boot cloud-init cc_ssh logged removal and
+regeneration of all host keys at 09:21:02 through the persistent /etc/ssh bind.
+Read-only comparison of the original 27-file baseline found exactly six changes:
+RSA/ECDSA/Ed25519 private/public host keys. All other tracked files and the
+appliance/data identity matched. This run fails SSH identity preservation.
+Diagnostics use `reinstalled-diagnostic-known-hosts` in the same test directory,
+after verifying the QEMU process owns the exact loopback forwarding and disk;
+the original appliance and temporary installer trust files remain unchanged.
+
+Provisioning now installs a cloud-init policy with ssh_deletekeys: false before
+binding persistent host directories. The installed cc_ssh source skips generation
+when the corresponding key already exists. The policy passes the installed
+cloud-init schema validator (an initially attempted empty ssh_genkeytypes list
+was rejected and removed); two local policy/order tests and shell checks pass.
+No policy was applied to the VM and no keys were restored or baseline reseeded.
+A new ISO/preserve reinstall must verify this fix end to end before qualification.
