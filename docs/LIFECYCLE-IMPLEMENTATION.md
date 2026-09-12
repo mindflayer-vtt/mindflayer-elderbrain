@@ -1171,3 +1171,14 @@ Playwright module successfully while the original dependency prefix stayed 0700.
 Evidence: /tmp/elderbrain-browser-deployment-t33btsb9 in the VM. The reusable
 test/qemu/browser-deployment.py leaves isolated evidence and changes no live runtime.
 Fixed deployment targets, checkpoint adapter and stable boot recovery remain next.
+
+Added a fixed code-owned deployment map covering runtime, CLI, ten managed units,
+individual storage/network drop-ins, Chrome policy and cloud-init SSH-identity
+policy. Manifest content cannot choose destinations. Preflight rejects symlinked
+sources/targets, unsafe source modes, missing parent directories and unexpected
+target types. It never creates missing OS structure or selects persistent settings,
+SSH credentials or user-created overrides. Added the previously omitted Chrome
+policy to the signed host inventory. Six tests cover inventory completeness,
+real temporary-directory multi-target switch/rollback, preserved settings and
+user overrides, rejected aliased targets, missing/writable parents and unsafe sources.
+No live appliance changes; checkpoint and stable worker/boot integration remain.

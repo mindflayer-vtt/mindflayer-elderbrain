@@ -315,6 +315,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_targets.py",
+    "path": "runtime/release_targets.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_staging.py",
     "path": "runtime/release_staging.py",
     "mode": 420
@@ -363,6 +368,11 @@
     "source": "provisioning/graphics/wait-ready",
     "path": "runtime/wait-ready",
     "mode": 493
+  },
+  {
+    "source": "provisioning/chrome/elderbrain.json",
+    "path": "templates/chrome/elderbrain.json",
+    "mode": 420
   },
   {
     "source": "config/defaults/appliance.env",

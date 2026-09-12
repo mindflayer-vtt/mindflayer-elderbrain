@@ -384,3 +384,20 @@ are 0644 or 0755 according to their executable bit. Configuration links and thei
 targets are never chmodded. Both Python environments remain fixed private-prefix
 links used by root services. This preserves private installation metadata and
 credentials while allowing kiosk code access after runtime deployment.
+
+## Fixed deployment targets
+
+`release_targets` defines the runtime directory, CLI, ten managed services, exact
+storage/network drop-ins, Chrome policy and cloud-init SSH-identity policy as a
+trusted code-owned mapping. No manifest field chooses a target. The same map is
+used for replacement and recovery. Sources come from the verified candidate;
+symlinked/unsafe source roots, aliased or mounted destinations, unexpected target
+types and missing destination parents are rejected before switching.
+
+Only individual managed configuration files are targets. User-created service
+overrides, SSH credentials/configuration, persistent data and runtime settings
+are not selected. The runtime carries its persistent settings aliases. Missing
+parents require explicit installation/migration work, not silent creation during
+activation. Chrome's managed policy is now included in the signed host inventory.
+Checkpoint integration and stable worker/boot recovery remain required before
+this map is used by a live update entry point.
