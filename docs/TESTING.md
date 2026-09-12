@@ -67,6 +67,14 @@ caches every coordinated image needed by immutable baseline finalization without
 starting the profile-gated Foundry container. A nonzero pull is propagated, Docker's
 registry error remains in the journal, and systemd retries after 30 seconds. An
 unreachable or nonexistent image therefore cannot produce an active stack.
+After baseline finalization, the installed offline stack and local graphical UI do
+not order themselves after `network-online.target`; cached services can therefore
+start when the appliance is disconnected. Network backup jobs retain their own
+network ordering and bounded retry policy. The appliance caps Netplan's
+`systemd-networkd-wait-online` command at 30 seconds so Docker's vendor dependency
+cannot indefinitely hide the local UI when every link is disconnected. Its timeout
+exit status is accepted as an intentional bounded-degradation result; the timeout
+remains in the journal and network consumers retain explicit retries.
 
 ## Real-hardware checklist
 

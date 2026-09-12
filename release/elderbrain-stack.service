@@ -1,7 +1,6 @@
 [Unit]
 Description=Mindflayer Elderbrain installed release container stack
-Wants=network-online.target
-After=network-online.target docker.service
+After=docker.service
 Requires=docker.service
 
 [Service]

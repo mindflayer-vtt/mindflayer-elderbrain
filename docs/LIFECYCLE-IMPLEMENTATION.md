@@ -1881,3 +1881,25 @@ creating a false early success before private keypad storage and management-brid
 checks. That probe and the Setup-group `compose exec` probe now receive `/dev/null`.
 The corrected diagnostic harness reached its final explicit bridge-verification
 marker; a clean unmodified-ISO run is still required.
+
+Clean BIOS installation of commit `3e36652` passed the complete unmodified harness,
+including its final bridge marker, persistent storage, HTTPS/authentication and
+graphics. The resulting Compose contains all four services as local `sha256:` image
+IDs with no build directives and `pull_policy: never`; release policy and the
+OS-local receipt agree on sequence 1. A normal reboot changed boot ID and returned
+baseline, management and graphics active. An additional abrupt reset with the QEMU
+link disabled then exposed indefinite boot ordering on `network-online.target`.
+The installed offline stack and local graphics no longer request or wait for that
+target; initial bootstrap pulling and network backup services retain their network
+ordering. Because Docker's vendor unit also requests `network-online.target`, a
+reviewed drop-in replaces Netplan's generated unbounded command with the same
+`--any --dns -o routable` readiness contract capped at 30 seconds. The drop-in is
+installed on clean systems and is part of the signed fixed deployment map. Exit
+status 1 is accepted as the bounded disconnected result so the local UI does not
+leave an otherwise healthy appliance with a failed unit; the timeout remains in
+the journal and network-dependent work retains explicit retries. A durability-synced
+diagnostic installation returned the Chromium login page 45 seconds after an abrupt
+QEMU reset with its link still disabled. After link restoration, baseline, stack,
+management and graphics were all active; the wait journal recorded timeout at
+30.1 seconds, treated it as a successful bounded result, and `systemctl --failed`
+was empty.

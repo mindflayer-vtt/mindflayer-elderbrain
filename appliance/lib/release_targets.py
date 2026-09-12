@@ -22,6 +22,7 @@ def bindings():
         result['etc/systemd/system/' + name + '.service.d/10-storage-required.conf'] = 'units/storage-required.conf'
     for name in ('systemd-networkd', 'NetworkManager'):
         result['etc/systemd/system/' + name + '.service.d/elderbrain-recovery.conf'] = 'units/network-recovery.conf'
+    result['etc/systemd/system/systemd-networkd-wait-online.service.d/50-elderbrain-timeout.conf'] = 'units/wait-online-timeout.conf'
     result['etc/systemd/system/elderbrain-network-recovery.service.d/20-persistent-netplan.conf'] = 'units/persistent-netplan.conf'
     return result
 

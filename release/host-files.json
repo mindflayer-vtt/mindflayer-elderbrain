@@ -568,5 +568,10 @@
     "source": "provisioning/systemd/storage-required.conf",
     "path": "units/storage-required.conf",
     "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/wait-online-timeout.conf",
+    "path": "units/wait-online-timeout.conf",
+    "mode": 420
   }
 ]

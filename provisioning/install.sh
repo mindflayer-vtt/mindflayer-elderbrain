@@ -187,6 +187,9 @@ for network_service in systemd-networkd NetworkManager; do
   install -d -m 0755 "/etc/systemd/system/$network_service.service.d"
   install -m 0644 "$PAYLOAD_DIR/provisioning/systemd/network-recovery.conf" "/etc/systemd/system/$network_service.service.d/elderbrain-recovery.conf"
 done
+install -d -m 0755 /etc/systemd/system/systemd-networkd-wait-online.service.d
+install -m 0644 "$PAYLOAD_DIR/provisioning/systemd/wait-online-timeout.conf" \
+  /etc/systemd/system/systemd-networkd-wait-online.service.d/50-elderbrain-timeout.conf
 if [[ -f /etc/elderbrain/storage.json ]]; then
   install -d -m 0755 /etc/cloud/cloud.cfg.d
   install -m 0644 "$PAYLOAD_DIR/provisioning/cloud/99-elderbrain-ssh-identity.cfg" /etc/cloud/cloud.cfg.d/99-elderbrain-ssh-identity.cfg
