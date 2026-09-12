@@ -39,7 +39,10 @@ failures.add_argument('--fail-health', action='store_true')
 failures.add_argument('--interrupt', action='store_true')
 failures.add_argument('--job', action='store_true')
 failures.add_argument('--download-job', type=Path, help='Reuse the explicitly identified prior disposable job signing fixture')
+failures.add_argument('--serve-download', type=Path,
+                      help='Expose a signed HTTPS release using the identified disposable signing fixture without submitting it')
 args = parser.parse_args()
+download_fixture = args.download_job or args.serve_download
 assert os.geteuid() == 0
 assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
 assert command('lsblk', '-dn', '-o', 'SERIAL', '/dev/vda') == 'elderbrain-vm-test'
@@ -61,8 +64,8 @@ spec = importlib.util.spec_from_file_location('assembler', ROOT / 'release/assem
 assembler = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(assembler)
 private, public = evidence / 'test-private.pem', evidence / 'test-public.pem'
-if args.download_job:
-    previous = args.download_job.resolve()
+if download_fixture:
+    previous = download_fixture.resolve()
     assert previous.parent == Path('/root') and previous.name.startswith('elderbrain-signed-activation-')
     assert (previous / 'job.json').is_file()
     private, public = previous / 'test-private.pem', previous / 'test-public.pem'
@@ -85,7 +88,7 @@ assembler.assemble(metadata, ROOT, ROOT / 'release/host-files.json', bundle, pri
 paths = {entry['path']: entry['mode'] for entry in assembler.host.entries(ROOT / 'release/host-files.json')}
 paths['runtime/VERSION'] = 0o644
 dependencies, prepared = evidence / 'dependencies', evidence / 'prepared'
-if args.job or args.download_job:
+if args.job or download_fixture:
     if args.job:
         assert not Path('/etc/elderbrain/release-public.pem').exists(), 'Do not replace an existing release trust pin'
         assert not Path('/etc/elderbrain/release-inventory.json').exists(), 'Do not replace an existing release inventory'
@@ -94,10 +97,10 @@ if args.job or args.download_job:
     releases.mkdir(mode=0o700, exist_ok=True)
     (releases / 'staging').mkdir(mode=0o700, exist_ok=True)
     prepared = releases / 'prepared'
-dependencies.mkdir(mode=0o700, exist_ok=bool(args.job or args.download_job))
-prepared.mkdir(mode=0o700, exist_ok=bool(args.job or args.download_job))
+dependencies.mkdir(mode=0o700, exist_ok=bool(args.job or download_fixture))
+prepared.mkdir(mode=0o700, exist_ok=bool(args.job or download_fixture))
 manifest, signature, key = (bundle / 'manifest.json').read_bytes(), (bundle / 'manifest.sig').read_bytes(), public.read_bytes()
-if not args.download_job:
+if not download_fixture:
     prepare(bundle / 'elderbrain-host.tar.zst', manifest, signature, key, paths, directory=prepared,
         platform=metadata['platform'], configuration_schema=1, environment_file=runtime / 'appliance.env',
         allow_download=False, dependency_archive=bundle / 'elderbrain-dependencies.tar.zst', dependency_directory=dependencies)
@@ -133,6 +136,14 @@ else:
     assert checked['release']['manifestSha256'] == hashlib.sha256(manifest).hexdigest()
     assert checked['release']['compatible'] is True
     print('CA-verified HTTPS announcement checked; runtime not prepared', flush=True)
+if args.serve_download:
+    save_record(evidence / 'source.json', {
+        'version': args.version, 'manifestSha256': hashlib.sha256(manifest).hexdigest(),
+        'evidence': str(evidence), 'signingFixture': str(previous)})
+    print(json.dumps({'state': 'signed-release-source-ready', 'version': args.version,
+                      'manifestSha256': hashlib.sha256(manifest).hexdigest(),
+                      'evidence': str(evidence / 'source.json')}), flush=True)
+    raise SystemExit(0)
 if args.job or args.download_job:
     # Disposable VM only: independent pin and reviewed inventory. No production
     # key is generated or overwritten by this fixture.
