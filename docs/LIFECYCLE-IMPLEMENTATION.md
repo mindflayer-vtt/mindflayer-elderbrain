@@ -1972,3 +1972,21 @@ active, no failed unit remained, and password-only SSH was rejected. Current
 production fresh and populated preserve installation are therefore qualified on
 both BIOS and UEFI paths. Missing-data boot refusal and interrupted preserve
 reinstall recovery remain outstanding destructive-storage gates.
+
+Missing-data boot refusal was qualified on a copy-on-write overlay of the
+production BIOS disk, leaving the qualified backing image inaccessible to guest
+writes. While the Btrfs data volume was mounted, the overlay's on-disk GPT entry 4
+was explicitly deleted without notifying the running kernel, synced, and powered
+off. A normal boot then waited for the exact saved data UUID for the bounded
+90-second device timeout and entered visible `emergency.target`; it did not fall
+back to an OS directory or show the appliance browser. From the emergency shell,
+Docker, stack, management and graphics were all inactive, `/dev/vda4` was absent,
+the persistent path was not a mountpoint, and its OS-side directory was empty.
+A second clean overlay of the untouched backing image still exposed partition 4
+with UUID `f5ed1b49-83f3-495c-8870-91581fff0489`, matched the saved ED25519 host
+key and passed the sealed preservation verifier; all lifecycle services returned
+active. This qualifies fail-closed missing-partition boot without modifying the
+retained production disk. The emergency shell's `systemctl poweroff` and a later
+ACPI power event did not terminate within their observation windows, so the
+disposable broken-storage VM was hard-stopped; bounded recovery shutdown and an
+appliance-specific recovery message remain open usability work.
