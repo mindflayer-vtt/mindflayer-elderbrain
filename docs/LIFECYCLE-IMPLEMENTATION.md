@@ -496,3 +496,25 @@ and selective preferences restore; do not claim full backup coverage yet.
 VM2232 preserve reinstall is now running unattended OS upgrades after successful
 curthooks and GRUB installation. Keep polling this existing install, not restarting
 it. The private host baseline remains the authoritative post-reinstall comparison.
+
+2026-09-12: the host's temporary directories and VM processes were lost. The
+VM2232 disk survived, but its host baseline did not. Booting the retained disk
+confirmed installation was interrupted while unpacking Chrome, before runtime
+installation. This run cannot qualify preservation. Cached-package recovery is
+running as guest unit elderbrain-test-package-recovery. No Lenovo access.
+Resumed VM: SSH2232/VNC5906, monitor
+`/tmp/elderbrain-resume-9411P7Th/monitor.sock`; SSH trust now retained at
+`test/.qemu/resumed-2232-known-hosts`.
+
+Added `test/qemu/preserve-baseline.sh` seed/verify helper. It requires a persistent
+absolute host directory, creates it exclusively, copies and syncs the private
+baseline out of the guest, and records a checksum. Verification uses that saved
+copy and SSH host identity. Set QEMU_SSH_PRIVATE_KEY and optionally QEMU_SSH_PORT;
+invoke with seed or verify and the same evidence directory. Reinstall is initiated
+separately. Unique fixture filenames preserve earlier test artifacts. Full helper
+verification awaits a healthy guest; syntax checks pass.
+
+The previous commit also added retention policy export/restore through
+service-config/checkpoint-retention.json, rollback coverage and maintenance
+exclusion for policy writes. Unit tests passed; the root-owned VM fixture test
+was interrupted before its result was observed and still needs verification.

@@ -38,11 +38,12 @@ def main():
     os_uuid = command('findmnt', '-no', 'UUID', '--mountpoint', '/')
     if args.operation == 'seed':
         assert not args.manifest.exists(), 'Do not overwrite a previous baseline'
+        fixture_name = '.preserve-test-fixture-' + secrets.token_hex(8)
         files = [STATE / '.elderbrain-volume.json', STATE / 'traefik/admin-tls.yaml']
         for scope in SCOPES:
             parent = STATE / scope
             assert parent.is_dir() and not parent.is_symlink()
-            target = parent / '.preserve-test-fixture'
+            target = parent / fixture_name
             with open(target, 'xb') as stream:
                 stream.write(secrets.token_bytes(128))
                 os.fchmod(stream.fileno(), 0o600)
