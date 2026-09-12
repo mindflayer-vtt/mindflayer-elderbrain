@@ -947,3 +947,16 @@ pass, including real signed zstd extraction, hash-before-decompression ordering,
 private-directory cleanup and an actual kernel-enforced decompression failure.
 The production inventory/builder and durable activation coordinator remain next;
 this private staging helper is not yet installed or exposed through the updater.
+
+Added reviewed `release/host-files.json` (83 source entries) and a deterministic
+unsigned host-code builder. It adds the independent host VERSION, writes sorted
+regular USTAR entries with normalized owner/time/mode, compresses with zstd and
+publishes via an exclusive hard link after fsync. Missing/nonregular/symlinked
+sources and duplicate/reserved inventory paths fail closed. Live environment and
+Sway settings are not runtime payload entries; defaults are templates. Private
+ISO configuration, signing keys, Setup source/caches and installed dependency
+directories are excluded. Four builder tests pass, including reproducibility,
+no overwrite and a full 84-file real signature/staging round trip. A local
+unsigned 0.0.0 test artifact exists at `/tmp/elderbrain-host.tar.zst`; it is not a
+production release and was not deployed or published. Prebuilt Setup/dependency
+packaging, release signing/publication and actual installation remain pending.

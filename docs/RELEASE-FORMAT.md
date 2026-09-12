@@ -1,7 +1,7 @@
 # Coordinated appliance release format
 
-Status: metadata verification is implemented in `appliance_release.py`.
-Production packaging, downloads, trust-key installation, migration, activation,
+Status: metadata verification and reviewed host-code packaging are implemented.
+Full runtime/image packaging, downloads, trust-key installation, migration, activation,
 rollback and update UI are not implemented by this module. Ordinary startup still
 uses the existing build/pull flow until installation can supply prepared images.
 
@@ -60,7 +60,9 @@ replay policy belong in the release-selection/activation coordinator.
 archive into a fresh private directory, and verifies the copy's signed size/hash
 before decompression. The caller supplies an exact trusted file inventory and
 normalized modes (`0644` or `0755`). Package metadata cannot expand that inventory
-or choose live destinations. The production inventory/builder is still pending.
+or choose live destinations. `release/host-files.json` is the reviewed repository
+inventory used by `release/build-host.py`; include generated `runtime/VERSION`
+with mode `0644` when constructing the staging allowlist.
 
 Packages contain regular file entries only, without directory entries, links,
 special files, sparse/PAX metadata or privileged mode bits. Paths must be canonical
@@ -76,3 +78,27 @@ The staging context yields only the private tree and verified manifest, with no
 service operation or live filesystem replacement. On success or error it removes
 its own temporary tree. Activation must copy verified staged files to a durable
 versioned release directory and record that transition before this context exits.
+
+## Building the host code artifact
+
+Create an empty output directory, then run:
+
+```sh
+python3 release/build-host.py --version 1.0.0 OUTPUT/elderbrain-host.tar.zst
+```
+
+The version is the host component version, not necessarily the coordinated or
+Setup version. The command emits the artifact filename/size/SHA-256 for the release
+manifest. It does not sign, publish, deploy, or overwrite an existing artifact.
+Sorted USTAR file entries have normalized modes, zero timestamps and numeric
+owner/group zero; single-threaded zstd produces reproducible bytes with the same
+tool version. Sources must be regular files without symlinked path components.
+
+The reviewed inventory includes host modules, CLI, browser helper source, service
+units, dependency lock inputs and configuration templates. It excludes private
+ISO configuration, signing keys, mutable runtime settings, application data,
+Setup source/build caches and installed dependency directories. Templates are
+not instructions to overwrite user settings. A production release still needs
+the prebuilt Setup image and a verified strategy for host dependencies (including
+browser helper Node dependencies and Python environments). This source artifact
+alone is not yet a complete offline-installable host runtime.

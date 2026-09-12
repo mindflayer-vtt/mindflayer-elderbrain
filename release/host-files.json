@@ -1,0 +1,417 @@
+[
+  {
+    "source": "appliance/bin/elderbrain",
+    "path": "bin/elderbrain",
+    "mode": 493
+  },
+  {
+    "source": "config/defaults/borgmatic-requirements.txt",
+    "path": "dependencies/borgmatic-requirements.txt",
+    "mode": 420
+  },
+  {
+    "source": "config/defaults/serial-requirements.txt",
+    "path": "dependencies/serial-requirements.txt",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/admin_tls.py",
+    "path": "runtime/admin_tls.py",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/admin-console.py",
+    "path": "runtime/admin-console.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/appliance_release.py",
+    "path": "runtime/appliance_release.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/backup_archive.py",
+    "path": "runtime/backup_archive.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/backup_crypto.py",
+    "path": "runtime/backup_crypto.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/backup_service.py",
+    "path": "runtime/backup_service.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/backup_uploads.py",
+    "path": "runtime/backup_uploads.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/beamer_runtime.py",
+    "path": "runtime/beamer_runtime.py",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/beamer-login.mjs",
+    "path": "runtime/beamer/beamer-login.mjs",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/beamer-worker.mjs",
+    "path": "runtime/beamer/beamer-worker.mjs",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/package-lock.json",
+    "path": "runtime/beamer/package-lock.json",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/package.json",
+    "path": "runtime/beamer/package.json",
+    "mode": 420
+  },
+  {
+    "source": "setup/shared/bootstrap-words.json",
+    "path": "runtime/bootstrap-words.json",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/borg_repository.py",
+    "path": "runtime/borg_repository.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/borg_service.py",
+    "path": "runtime/borg_service.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/borg_settings.py",
+    "path": "runtime/borg_settings.py",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/browser_process.py",
+    "path": "runtime/browser_process.py",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/browser-launcher",
+    "path": "runtime/browser-launcher",
+    "mode": 493
+  },
+  {
+    "source": "provisioning/graphics/browser-session.py",
+    "path": "runtime/browser-session.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/checkpoint_compatibility.py",
+    "path": "runtime/checkpoint_compatibility.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/checkpoint_components.py",
+    "path": "runtime/checkpoint_components.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/checkpoint_restore.py",
+    "path": "runtime/checkpoint_restore.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/checkpoint_staging.py",
+    "path": "runtime/checkpoint_staging.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/display_preview.py",
+    "path": "runtime/display_preview.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/domain_routes.py",
+    "path": "runtime/domain_routes.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/esptool-runner.py",
+    "path": "runtime/esptool-runner.py",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/generate-admin-password.py",
+    "path": "runtime/generate-admin-password.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/host_bindings.py",
+    "path": "runtime/host_bindings.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/host_displays.py",
+    "path": "runtime/host_displays.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/host_jobs.py",
+    "path": "runtime/host_jobs.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/host_metrics.py",
+    "path": "runtime/host_metrics.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/host_network.py",
+    "path": "runtime/host_network.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/installation_backend.py",
+    "path": "runtime/installation_backend.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/installation_job.py",
+    "path": "runtime/installation_job.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/installation_server.py",
+    "path": "runtime/installation_server.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/keypad_inventory.py",
+    "path": "runtime/keypad_inventory.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/kiosk_keyboard.py",
+    "path": "runtime/kiosk_keyboard.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/local_snapshots.py",
+    "path": "runtime/local_snapshots.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/management-server",
+    "path": "runtime/management-server",
+    "mode": 493
+  },
+  {
+    "source": "appliance/lib/network_checkpoint_restore.py",
+    "path": "runtime/network_checkpoint_restore.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_config.py",
+    "path": "runtime/network_config.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_confirmation.py",
+    "path": "runtime/network_confirmation.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_https.py",
+    "path": "runtime/network_https.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_listener.py",
+    "path": "runtime/network_listener.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_service.py",
+    "path": "runtime/network_service.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_sources.py",
+    "path": "runtime/network_sources.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_staging.py",
+    "path": "runtime/network_staging.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_tls.py",
+    "path": "runtime/network_tls.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_transaction.py",
+    "path": "runtime/network_transaction.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/network_worker.py",
+    "path": "runtime/network_worker.py",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/prepare-admin",
+    "path": "runtime/prepare-admin",
+    "mode": 493
+  },
+  {
+    "source": "provisioning/graphics/prepare-browser.py",
+    "path": "runtime/prepare-browser.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/release_staging.py",
+    "path": "runtime/release_staging.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/restore_service.py",
+    "path": "runtime/restore_service.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/restore_transaction.py",
+    "path": "runtime/restore_transaction.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/serial_bundle.py",
+    "path": "runtime/serial_bundle.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/serial_install.py",
+    "path": "runtime/serial_install.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/serial_provision.py",
+    "path": "runtime/serial_provision.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/serial_release.py",
+    "path": "runtime/serial_release.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/snapshot_service.py",
+    "path": "runtime/snapshot_service.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/storage_guard.py",
+    "path": "runtime/storage_guard.py",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/wait-ready",
+    "path": "runtime/wait-ready",
+    "mode": 493
+  },
+  {
+    "source": "config/defaults/appliance.env",
+    "path": "templates/appliance.env",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/cloud/99-elderbrain-ssh-identity.cfg",
+    "path": "templates/cloud/99-elderbrain-ssh-identity.cfg",
+    "mode": 420
+  },
+  {
+    "source": "compose/compose.yaml",
+    "path": "templates/compose.yaml",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/ssh/99-elderbrain.conf",
+    "path": "templates/ssh/99-elderbrain.conf",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/graphics/sway.conf",
+    "path": "templates/sway.conf",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-admin-console.service",
+    "path": "units/elderbrain-admin-console.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-backup.service",
+    "path": "units/elderbrain-backup.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-display-watchdog.service",
+    "path": "units/elderbrain-display-watchdog.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-graphics.service",
+    "path": "units/elderbrain-graphics.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-management.service",
+    "path": "units/elderbrain-management.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-network-confirmation.service",
+    "path": "units/elderbrain-network-confirmation.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-network-recovery.service",
+    "path": "units/elderbrain-network-recovery.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-network-watchdog.service",
+    "path": "units/elderbrain-network-watchdog.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-stack.service",
+    "path": "units/elderbrain-stack.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-storage.service",
+    "path": "units/elderbrain-storage.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/network-recovery.conf",
+    "path": "units/network-recovery.conf",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/persistent-netplan.conf",
+    "path": "units/persistent-netplan.conf",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/storage-required.conf",
+    "path": "units/storage-required.conf",
+    "mode": 420
+  }
+]
