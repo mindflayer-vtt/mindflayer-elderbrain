@@ -22,12 +22,13 @@ class NetworkServiceTests(unittest.TestCase):
             'configuration': {'network': {'ethernets': {'ens3': {'addresses': ['10.0.2.20/24']}}}}}
         transaction.return_value.stage.return_value = {'id': 'b' * 32, 'phase': 'staged'}
         archived = {'50-test.yaml': b'private-archived'}
-        result = service.restore_files(archived, 'ens3')
+        result = service.restore_files(archived, 'ens3', restore_owner='c' * 32)
         prepare.assert_called_once_with(archived)
         call = transaction.return_value.stage.call_args
         self.assertEqual(call.args, (changes, 'ens3'))
         self.assertEqual(call.kwargs['confirmation']['address'], '10.0.2.20')
         self.assertEqual(call.kwargs['confirmation']['mode'], 'static')
+        self.assertEqual(call.kwargs['restore_owner'], 'c' * 32)
         self.assertNotIn(result['token'], str(call.kwargs))
         self.assertNotIn('private-', str(result))
         self.assertEqual(available.call_count, 2)

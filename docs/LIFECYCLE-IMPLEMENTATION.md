@@ -801,3 +801,27 @@ with no global trust fallback. Only initial seeding permits accept-new. Five
 regression tests pass for missing/empty/linked trust, corrupt/missing checksum,
 and strict verification arguments; shell syntax and diff checks pass. End-to-end
 preserve qualification still awaits this installation's completion.
+
+Private `network_checkpoint_restore` now coordinates source pinning, repeated
+storage/runtime compatibility checks, writer quiescing, a pinned before-restore
+checkpoint, service resumption outside settings locks, and durable handoff to
+the timed network journal. Its production factory uses verified persistent
+storage and the fixed-scope Netplan reader. Network staging carries the private
+restore-owner ID; neither credentials nor the one-time token enter maintenance
+records. Pending network work retains maintenance exclusion and both pins.
+Generic backup recovery rejects this operation rather than resuming it blindly.
+
+Terminal cleanup releases pins without starting services, making the callback
+suitable for early boot. Private per-owner completion receipts permit retry if
+another maintenance operation replaced the terminal global record before the
+network worker acknowledged cleanup. Tests cover process loss before/after
+handoff, stage response failure, validation failure, service-resume failure,
+cleanup retry, maintenance reuse, incompatible/changed storage, and early-boot
+callback safety. All 77 network tests pass; backup-service tests also pass.
+Shell syntax and diff checks pass. The module is installed by provisioning but
+the production network-worker callback, dedicated recovery routing and API/UI
+admission are still not connected; network checkpoint restore is not exposed yet.
+
+The same live installer processes 21289/24511/24736 remain active; dpkg advanced
+to node-gyp at 09:52:14. No reinstall restart, baseline replacement, Ventoy copy
+or physical Lenovo access was performed.

@@ -37,7 +37,7 @@ def start(values):
     return {**result, 'token': token, 'warnings': candidate['warnings']}
 
 
-def restore_files(archived, interface):
+def restore_files(archived, interface, *, restore_owner=None):
     """Private entry point for a verified checkpoint coordinator, not a raw API.
 
     Caller owns source pin/compatibility, rollback checkpoint and maintenance
@@ -54,7 +54,7 @@ def restore_files(archived, interface):
     available()
     token, binding = issue(settings)
     result = transaction().stage(candidate['changes'], interface,
-        fingerprint=candidate['fingerprint'], confirmation=binding)
+        fingerprint=candidate['fingerprint'], confirmation=binding, restore_owner=restore_owner)
     return {**result, 'token': token, 'warnings': [
         'The complete archived Netplan configuration will replace current network settings.',
         'Confirm through the selected interface before the deadline or all network changes will roll back.']}

@@ -108,6 +108,7 @@ install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_compatibility.py" "$RUNTI
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_components.py" "$RUNTIME/checkpoint_components.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_staging.py" "$RUNTIME/checkpoint_staging.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_restore.py" "$RUNTIME/checkpoint_restore.py"
+install -m 0644 "$PAYLOAD_DIR/appliance/lib/network_checkpoint_restore.py" "$RUNTIME/network_checkpoint_restore.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/snapshot_service.py" "$RUNTIME/snapshot_service.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/keypad_inventory.py" "$RUNTIME/keypad_inventory.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/serial_bundle.py" "$RUNTIME/serial_bundle.py"
