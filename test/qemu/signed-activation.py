@@ -22,6 +22,7 @@ from release_apply import activate
 from release_prepare import prepare
 from release_recovery import health
 from backup_service import save_record
+from host_jobs import JobStore
 
 
 def command(*args):
@@ -34,6 +35,7 @@ parser.add_argument('--version', default='1.0.1')
 failures = parser.add_mutually_exclusive_group()
 failures.add_argument('--fail-health', action='store_true')
 failures.add_argument('--interrupt', action='store_true')
+failures.add_argument('--job', action='store_true')
 args = parser.parse_args()
 assert os.geteuid() == 0
 assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
@@ -71,8 +73,16 @@ assembler.assemble(metadata, ROOT, ROOT / 'release/host-files.json', bundle, pri
 paths = {entry['path']: entry['mode'] for entry in assembler.host.entries(ROOT / 'release/host-files.json')}
 paths['runtime/VERSION'] = 0o644
 dependencies, prepared = evidence / 'dependencies', evidence / 'prepared'
-dependencies.mkdir(mode=0o700)
-prepared.mkdir(mode=0o700)
+if args.job:
+    assert not Path('/etc/elderbrain/release-public.pem').exists(), 'Do not replace an existing release trust pin'
+    assert not Path('/etc/elderbrain/release-inventory.json').exists(), 'Do not replace an existing release inventory'
+    dependencies = Path('/usr/lib/elderbrain-dependencies')
+    releases = Path('/var/lib/elderbrain-releases')
+    releases.mkdir(mode=0o700, exist_ok=True)
+    (releases / 'staging').mkdir(mode=0o700, exist_ok=True)
+    prepared = releases / 'prepared'
+dependencies.mkdir(mode=0o700, exist_ok=args.job)
+prepared.mkdir(mode=0o700, exist_ok=args.job)
 manifest, signature, key = (bundle / 'manifest.json').read_bytes(), (bundle / 'manifest.sig').read_bytes(), public.read_bytes()
 prepare(bundle / 'elderbrain-host.tar.zst', manifest, signature, key, paths, directory=prepared,
     platform=metadata['platform'], configuration_schema=1, environment_file=runtime / 'appliance.env',
@@ -80,6 +90,24 @@ prepare(bundle / 'elderbrain-host.tar.zst', manifest, signature, key, paths, dir
 print('Signed runtime prepared from cached images and offline dependencies', flush=True)
 provision()
 command('systemctl', 'daemon-reload')
+if args.job:
+    # Disposable VM only: independent pin and reviewed inventory. No production
+    # key is generated or overwritten by this fixture.
+    for destination, value in ((Path('/etc/elderbrain/release-public.pem'), key),
+            (Path('/etc/elderbrain/release-inventory.json'), json.dumps(paths).encode())):
+        with destination.open('xb') as stream:
+            os.fchmod(stream.fileno(), 0o644)
+            stream.write(value)
+            stream.flush()
+            os.fsync(stream.fileno())
+    before = command('systemctl', 'show', 'elderbrain-management', '--property=InvocationID', '--value')
+    submitted = JobStore('/var/lib/mindflayer-elderbrain/jobs').submit('update', {
+        'version': args.version, 'manifestSha256': hashlib.sha256(manifest).hexdigest(),
+        'confirmUpdate': True, 'confirmDowntime': True})
+    save_record(evidence / 'job.json', {'id': submitted['id'], 'version': args.version, 'managementBefore': before})
+    print(json.dumps({'state': 'update-job-submitted', 'id': submitted['id'],
+                      'evidence': str(evidence / 'job.json')}), flush=True)
+    raise SystemExit(0)  # Worker must survive this submitting process exiting.
 marker = Path('/var/lib/mindflayer-elderbrain/foundry') / ('.elderbrain-rollback-test-' + uuid.uuid4().hex)
 injected = []
 if args.fail_health or args.interrupt:

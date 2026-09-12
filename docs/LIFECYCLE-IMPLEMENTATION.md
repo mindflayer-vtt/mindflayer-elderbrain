@@ -1514,3 +1514,19 @@ validation into a small shared module and explicitly provisioned it plus its
 stdlib-only release-metadata dependency. Actual execution still uses retained
 recovery code; the management runtime never imports the activation closure during
 submission. Shell syntax, request/worker/package tests and whitespace checks pass.
+
+Real persistent update-job qualification now passes on the disposable QEMU VM.
+The signed fixture's --job mode prepared host 1.0.4 with compatible Setup 1.0.1,
+installed an exclusive disposable public trust pin and reviewed inventory at the
+worker's fixed paths, and submitted confirmed version/digest through JobStore.
+The submitting process exited; the independent stable worker completed job
+19a9ede79f74441e89e7739727c1a042. Evidence:
+/root/elderbrain-signed-activation-dakkxr47/job.json; source fixture
+/root/elderbrain-job-source-G2hxE9WD.
+The separate update-job-status.py verifier confirmed completed state, runtime
+VERSION 1.0.4, a changed management service InvocationID, matching maintenance
+job/operation IDs, offline Compose validation and actual management/CA-verified
+Setup health. This proves the worker survives replacement/restart of management;
+it does not yet qualify job reconciliation after boot or the public UI workflow.
+No production trust key, repository push, registry publication or physical Lenovo
+change was involved. The development PC remains on.

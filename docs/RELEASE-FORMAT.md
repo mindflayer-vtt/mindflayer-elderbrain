@@ -611,7 +611,14 @@ Its own live job may be exempted from admission; other active jobs remain exclud
 Progress and redacted results are durable, failures retain root-private diagnostics,
 and maintenance records carry jobId for later recovery/status correlation.
 
-Installer trust/preparation configuration, real VM scoped-worker qualification,
-boot-time job outcome reconciliation, release discovery/download and authenticated
+Real VM scoped-worker qualification now passes using the fixture's `--job` mode:
+the submitting process exits, the stable worker replaces the runtime and restarts
+management, and `test/qemu/update-job-status.py` verifies the durable result,
+matching maintenance operation, changed management invocation and actual service
+health. The fixture installs a disposable test public key only when no trust pin
+exists; it does not provision a production release key.
+
+Installer trust/preparation configuration, boot-time job outcome reconciliation,
+release discovery/download and authenticated
 System-page API/UI integration remain pending. This job path is not yet a complete
 end-user update workflow.
