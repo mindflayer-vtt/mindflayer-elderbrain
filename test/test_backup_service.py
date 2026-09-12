@@ -151,6 +151,12 @@ class MaintenanceTests(unittest.TestCase):
             legacy = root / "legacy.tar.zst"
             (contents / 'service-config/checkpoint-retention.json').unlink()
             backup_archive.create(legacy, {name: contents / name for name in manifest["roots"] if name != "keypad-installations"}, version="test", identity="test-appliance")
+            # A valid archive checksum is not sufficient: settings must still
+            # pass semantic validation before any live services are stopped.
+            (contents / 'service-config/checkpoint-retention.json').write_text('{"enabled":true,"keep":0}')
+            invalid_policy = root / 'invalid-policy.tar.zst'
+            backup_archive.create(invalid_policy, {name: contents / name for name in manifest['roots']},
+                                  version='test', identity='test-appliance')
         from restore_service import restore_host, recover_host
         (state / "elderbrain/secrets/admin.json").write_text("changed-secret")
         (runtime / "sway.conf").write_text("changed-display")
@@ -175,6 +181,11 @@ class MaintenanceTests(unittest.TestCase):
         self.assertEqual(json.loads(policy.read_text()), {'enabled': True, 'keep': 3})
         with backup_archive.stage(legacy_restore["rollbackArchive"], parent=root) as (contents, _):
             self.assertEqual((contents / "keypad-installations/private-plan.json").read_text(), '{"credential":"saved-device-secret"}')
+        events = list(self.services.events)
+        with self.assertRaisesRegex(ValueError, 'Retention requires'):
+            restore_host(invalid_policy, state, runtime, self.maintenance, host_root=host)
+        self.assertEqual(self.services.events, events)
+        self.assertEqual(json.loads(policy.read_text()), {'enabled': True, 'keep': 3})
         (runtime / "VERSION").write_text("different-version")
         events = list(self.services.events)
         with self.assertRaisesRegex(ValueError, "appliance version"):

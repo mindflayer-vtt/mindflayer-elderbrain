@@ -518,3 +518,15 @@ The previous commit also added retention policy export/restore through
 service-config/checkpoint-retention.json, rollback coverage and maintenance
 exclusion for policy writes. Unit tests passed; the root-owned VM fixture test
 was interrupted before its result was observed and still needs verification.
+
+Root-owned retention archive verification now passed on VM2232 in isolated
+fixture code at `/root/elderbrain-policy-test-AVrqN1Jn`: all eight backup-service
+tests passed, including policy round-trip, rollback archive policy, legacy archive
+behavior, private file permissions, and semantic rejection of an invalid keep=0
+policy before services stop or live configuration changes. The same tests passed
+locally. This fixture does not modify the installed appliance configuration.
+
+Package recovery completed successfully. Provisioning recovery is still running
+as elderbrain-test-provision-recovery.service, currently installing remaining
+dependencies. It uses the original ISO payload, not newer local source. The
+preserve-reinstall baseline helper still awaits a healthy starting installation.
