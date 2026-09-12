@@ -251,8 +251,15 @@ and checks each extracted file's signed size/hash before yielding its private
 tree. It never runs pip, npm, or dependency code. Format 1 remains readable for
 code-only development artifacts, not complete offline activation.
 
-This authenticates dependency bytes but does not itself prove that the wheels
-match every staged requirement or install correctly on the current host. Durable
-preparation still needs to consume this archive, bind its input hashes to the
-host package's locks, and perform offline installation before dependencies can
-be marked prepared or the release can be activated.
+Durable preparation requires the dependency archive for format 2 and rejects an
+extra unsigned dependency archive for format 1. Before image inspection or pulls,
+it authenticates and stages the archive, checks its receipt platform/Python target
+and file inventory, and matches the input hashes against the staged host's serial
+and borgmatic requirements and browser lockfile. It retains both the exact
+authenticated archive and extracted inputs in the atomically published release.
+
+The preparation receipt reports `dependencyInputsVerified`, but still leaves
+`dependenciesPrepared` and `activationReady` false. A builder's
+`offlineInstallVerified` claim cannot override this: matching input hashes does
+not prove that wheels satisfy those requirements or install on the current host.
+Offline installation and runtime checks must succeed before activation eligibility.

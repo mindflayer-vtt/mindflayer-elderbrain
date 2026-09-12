@@ -1049,3 +1049,17 @@ and an intentionally inconsistent signed per-file hash. Existing format-1 tests
 remain supported for code-only development. Durable preparation/offline install
 integration remains next; activationReady remains false and no production release
 or signing key was created or published.
+
+Durable preparation now requires the signed dependency archive for format 2 and
+rejects unsigned extra dependency archives for format 1. Before Docker activity,
+it verifies/stages dependency bytes, checks the receipt target and exact signed
+file inventory, and binds its three input hashes to the staged host requirements
+and browser lockfile. Verified inputs and the exact authenticated compressed
+archive are retained in the atomically published prepared release. Receipts now
+report dependencyInputsVerified separately; dependenciesPrepared/activationReady
+remain false even if a builder claims offlineInstallVerified=true. Six new tests
+cover successful retention, missing/extra archives, host-lock mismatch, tampering
+and invalid Python target. All 421 host tests pass (five skipped) with local socket
+permission; the initial sandbox run failed only the 12 socket-dependent tests.
+No live runtime changed. Offline installation integration and activation/rollback
+remain next.

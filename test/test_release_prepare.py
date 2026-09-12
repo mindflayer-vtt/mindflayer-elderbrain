@@ -1,4 +1,6 @@
 import json
+import hashlib
+from copy import deepcopy
 import fcntl
 from pathlib import Path
 import subprocess
@@ -9,7 +11,7 @@ from unittest.mock import patch
 
 import test.test_release_assembly as assembly_fixture
 import test.test_appliance_release as release_fixture
-from release_prepare import prepare
+from release_prepare import prepare, DEPENDENCY_INPUTS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,6 +25,7 @@ class ReleasePrepareTests(unittest.TestCase):
     def setUp(self):
         fixture = release_fixture.ApplianceReleaseTests()
         fixture.setUp()
+        self.fixture = fixture
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -111,6 +114,72 @@ class ReleasePrepareTests(unittest.TestCase):
         self.destination.chmod(0o755)
         with self.assertRaisesRegex(ValueError, 'private canonical'):
             self.prepare()
+        self.assertEqual(self.calls, [])
+
+    def signed_dependencies(self, *, mismatch=False, target=None):
+        inputs = self.root / 'dependency-source'
+        files = {}
+        for name in ('wheels/example-1.0-py3-none-any.whl', 'node/playwright-core-1.63.0.tgz'):
+            file = inputs / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(b'fixture-not-installable')
+            files[name] = {'size': file.stat().st_size, 'sha256': hashlib.sha256(file.read_bytes()).hexdigest()}
+        hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in DEPENDENCY_INPUTS}
+        if mismatch:
+            hashes['provisioning/graphics/package-lock.json'] = '0' * 64
+        (inputs / 'dependencies.json').write_text(json.dumps({
+            'format': 1, 'platform': self.release['platform'], 'python': target or '3.14.4',
+            'files': files, 'inputs': hashes, 'offlineInstallVerified': True}))
+        metadata = deepcopy(self.release)
+        metadata['format'] = 2
+        del metadata['host']['artifact']
+        self.bundle = self.root / 'complete-bundle'
+        self.release = assembly_fixture.assembler.assemble(metadata, ROOT, ROOT / 'release/host-files.json',
+            self.bundle, self.fixture.private, self.fixture.public, dependency_directory=inputs)
+        return self.bundle / 'elderbrain-dependencies.tar.zst'
+
+    def test_signed_dependency_inputs_retained_but_not_activation_ready(self):
+        archive = self.signed_dependencies()
+        receipt = self.prepare(dependency_archive=archive)
+        final = self.destination / '1.2.3'
+        self.assertTrue(receipt['dependencyInputsVerified'])
+        self.assertFalse(receipt['dependenciesPrepared'])
+        self.assertFalse(receipt['activationReady'])
+        self.assertEqual((final / archive.name).read_bytes(), archive.read_bytes())
+        for name in self.release['dependencies']['files']:
+            self.assertEqual((final / 'dependency-inputs' / name).read_bytes(),
+                             (self.root / 'dependency-source' / name).read_bytes())
+
+    def test_missing_signed_dependency_archive_rejected_before_docker(self):
+        self.signed_dependencies()
+        with self.assertRaisesRegex(ValueError, 'Dependency archive'):
+            self.prepare()
+        self.assertEqual(self.calls, [])
+
+    def test_unsigned_extra_dependency_archive_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'Dependency archive'):
+            self.prepare(dependency_archive=self.root / 'unsigned.tar.zst')
+        self.assertEqual(self.calls, [])
+
+    def test_dependency_host_lock_mismatch_rejected_before_docker(self):
+        archive = self.signed_dependencies(mismatch=True)
+        with self.assertRaisesRegex(ValueError, 'Dependency inputs differ'):
+            self.prepare(dependency_archive=archive)
+        self.assertEqual(self.calls, [])
+        self.assertFalse((self.destination / '1.2.3').exists())
+
+    def test_tampered_dependency_archive_rejected_before_docker(self):
+        archive = self.signed_dependencies()
+        archive.write_bytes(b'x' * archive.stat().st_size)
+        with self.assertRaises(ValueError):
+            self.prepare(dependency_archive=archive)
+        self.assertEqual(self.calls, [])
+        self.assertFalse((self.destination / '1.2.3').exists())
+
+    def test_invalid_python_patch_rejected_before_docker(self):
+        archive = self.signed_dependencies(target='3.14.invalid')
+        with self.assertRaisesRegex(ValueError, 'build target'):
+            self.prepare(dependency_archive=archive)
         self.assertEqual(self.calls, [])
 
 
