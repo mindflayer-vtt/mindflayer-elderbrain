@@ -1955,3 +1955,20 @@ failed units, and password-only SSH remained rejected. This qualifies the curren
 production baseline's populated BIOS preserve reinstall. Populated UEFI preserve,
 missing-data boot refusal and interrupted reinstall recovery remain outstanding
 destructive-storage gates.
+
+The retained populated UEFI disk was independently seeded and reinstalled from
+the same production ISO. Its first boot attempt used the prior OVMF variable store
+and returned to the installed OS because the persistent disk entry outranked the
+one-time virtual CD preference; no installer prompt or disk mutation occurred.
+Repeating with an isolated fresh OVMF variable store, equivalent to explicitly
+choosing removable installation media in firmware, reached the guarded selector
+and accepted only serial `elderbrain-vm-test`, retained data UUID
+`0a052009-d8da-4aaf-9696-bf581557371c` and the exact preserve confirmation. The
+sealed baseline then passed: OS UUID changed, while data/fixture bytes and metadata,
+SSH identity and runtime settings remained exact. All four installed-appliance
+suites passed. The reinstalled guest reported UEFI firmware and `/dev/vda2` as the
+VFAT ESP mounted at `/boot/efi`; sequence 1 policy and every lifecycle service were
+active, no failed unit remained, and password-only SSH was rejected. Current
+production fresh and populated preserve installation are therefore qualified on
+both BIOS and UEFI paths. Missing-data boot refusal and interrupted preserve
+reinstall recovery remain outstanding destructive-storage gates.
