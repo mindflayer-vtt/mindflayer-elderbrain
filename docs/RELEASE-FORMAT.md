@@ -564,3 +564,14 @@ the original Compose/startup-unit hashes and inodes before normal service startu
 management and Setup health then pass. See `test/qemu/interrupted-baseline.py`.
 This is baseline file-migration recovery evidence, not full signed-release
 activation, application-data rollback or physical power-loss qualification.
+
+`release_apply.activate` is the internal coordinated activation adapter. It must
+run outside the replaceable runtime and receive an independently pinned public
+key, reviewed inventory and authenticated bootstrap tree. Storage is verified
+before opening maintenance; the Activation coordinator authenticates the signed
+manifest and holds admission/settings locks before the adapter proves installed
+recovery and validates the previous offline runtime. Candidate reconstruction
+remains open through file copying, activation and any immediate rollback. The
+adapter wires the fixed deployment map, pinned checkpoints, storage refresh and
+management/Setup health probes, and returns only id/state/version. This is not yet
+a public job/API entry point or evidence of completed end-to-end activation.

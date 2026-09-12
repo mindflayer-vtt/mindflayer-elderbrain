@@ -1414,3 +1414,24 @@ followed by reboot, not physical abrupt power loss or full signed update/data
 rollback. The existing offline baseline remains installed and functional. The
 focused migration/recovery suite passes 15 tests; diff whitespace check passes.
 The physical Lenovo was not contacted and the development PC remains on.
+
+Added release_apply.activate wiring the existing signed Activation coordinator,
+authenticated runtime reconstruction, fixed targets, UpdateCheckpoints and live
+management/Setup health adapters. It refuses execution from the replaceable
+runtime, requires verified persistent storage, proves installed recovery and
+validates the previous offline runtime inside coordinator admission before any
+service interruption. ExitStack retains candidate staging throughout transaction
+copying/activation/rollback. Four wiring tests cover lifetime/redaction, absent
+storage, failed recovery/previous-runtime preflight and changed candidate metadata.
+These tests mock host adapters; existing component suites retain signature and
+file-transaction coverage. Full local suite: 523 tests, five skipped, passing.
+
+Built current Setup source as elderbrain-setup-release-test:1.0.1 inside the
+disposable VM without changing the running stack or publishing externally.
+Docker build and Nuxt production compilation passed. Labels prove version 1.0.1
+and host API min/max 1. The local image store reports RepoDigest
+elderbrain-setup-release-test@sha256:dc84e0a36a1b954ff6cd66a8880d045f9644ea1ec3bb764cdfbd5ba597e9186b,
+so signed cached-image qualification does not require an external test registry.
+npm reported one low-severity audit finding during installation; it was not
+remediated in this activation-wiring change. Full real signed preparation and
+activation/rollback qualification, plus the persistent public update job, remain.
