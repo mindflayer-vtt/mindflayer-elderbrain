@@ -2003,3 +2003,22 @@ guard independently from missing-device handling. Emergency-shell poweroff again
 failed to terminate within 30 seconds, confirming the bounded recovery-shutdown
 defect rather than a one-off missing-device effect; only the disposable overlay
 was hard-stopped.
+
+Interrupted populated preserve reinstall recovery was qualified on a third
+copy-on-write overlay of the same sealed BIOS baseline. Power was deliberately
+cut after partitioning had completed, the OS filesystem had been reformatted and
+Curtin had started extracting the replacement image. Rebooting that exact
+interrupted overlay from the same production ISO still discovered only the
+expected appliance disk and retained data UUID
+`f5ed1b49-83f3-495c-8870-91581fff0489`; the guarded preserve selection and exact
+confirmation were accepted again, and the reinstall completed without manual
+repair. The normal 30-minute observer expired while the guest was still making
+active disk progress, so the authoritative VM was left running and became ready
+at approximately 36 minutes rather than being restarted. The sealed verifier
+then proved a new OS UUID while preserving the persistent volume identity,
+fixture bytes and metadata, SSH host identity and runtime settings. The complete
+guest, storage, HTTPS/authentication and administration-UI suites passed. Storage,
+baseline, stack, management, graphics and bounded wait-online services were all
+active with no failed unit, password-only SSH was rejected, and the recovered VM
+powered off cleanly. This qualifies recovery by safely rerunning a preserve
+reinstall interrupted after destructive OS replacement had begun.
