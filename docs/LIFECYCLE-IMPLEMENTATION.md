@@ -1,0 +1,498 @@
+# Appliance lifecycle implementation
+
+The September 11 lifecycle goal is implementation work, not yet included in the
+qualified `6116339a` Ventoy image. Keep Elderbrain local and leave physical hosts on.
+
+## Delivery sequence and acceptance gates
+
+1. Persistent storage: explicit destructive fresh install and UUID/metadata-checked
+   OS reinstall; reject ambiguous layouts. Separate ext4 OS (including disposable
+   container images/cache) and Btrfs user state. Persist host configuration and
+   credentials as well as container data. Gate every writer, including Docker
+   automatic container restarts, on verified data mounting. Verify BIOS and UEFI
+   fresh installs, populated reinstall with byte/identity preservation, missing
+   data refusal and disk-selection negative cases in disposable VMs.
+2. Coordinated read-only Btrfs checkpoints with retention: preferences, network
+   with timed rollback, keypad preferences vs identities, whole Foundry instance,
+   and explicit advanced security/recovery. Quiesce affected writers; capture
+   subvolumes explicitly. Show keypad differences and separate physical reapply.
+   Test restore failure recovery and coherent multi-component capture.
+3. Signed coordinated releases: versioned host tooling/templates/migrations,
+   prebuilt digest-pinned Setup and compatible dependency/schema manifests.
+   Verify trust, compatibility, disk space and operation locks; checkpoint,
+   stage without changing user config, activate, health-check, retain rollback.
+   Ordinary boot must neither build nor pull; verify disconnected cold boot.
+   Independently updated Setup must satisfy installed host API compatibility.
+4. Authenticated/CSRF-protected System page: update check, versions/change notes/
+   downtime, confirmed update/shutdown/reboot, durable root jobs, interlocks
+   against firmware flashing, restores and update activation.
+5. Backup policy: existing persistent scheduled timer, optional orderly shutdown
+   (not reboot) and pre-update backups, interval/change deduplication. Local
+   checkpoint before bounded remote attempt; retain pending work and retry next
+   boot; expose successful remote backup age and pending uploads.
+6. Plymouth Mindflayer logo/spinner, matching service/browser loading screen,
+   useful phase text, Esc logs, bounded failure with recovery instructions,
+   accessible recovery console, tested transition to login without a black gap.
+
+## Current progress
+
+`iso/storage_plan.py` implements a pure storage-plan generator with fail-closed
+selection and preserve validation. It emits a stable four-partition GPT layout:
+BIOS boot, EFI, 48 GiB OS and remaining Btrfs data (at least 24 GiB). Preserve mode
+retains partition geometry, EFI and data filesystems, reformatting only OS.
+Disk serial, filesystem UUID and appliance marker must agree; duplicate serials
+and cloned data UUIDs are rejected. No disk operations are performed by this code.
+
+`iso/storage_probe.py` now provides read-only live inventory with explicit tree
+relationships, rejecting mounted descendants, swap and active holders as targets.
+`appliance/lib/storage_guard.py` verifies an exact writable Btrfs top-level mount,
+filesystem UUID and matching root-owned appliance identity; it never creates
+replacement directories. The guard is not yet installed/enforced by services.
+
+`iso/storage_existing.py` inspects the selected block device directly, rejects
+multi-device Btrfs, mounts privately with `ro,nologreplay,nosuid,nodev,noexec`
+and explicitly selects the filesystem root. It unmounts on marker-read failure
+and attempts exact unmount after a mount timeout. Cleanup never recursively
+removes anything. `iso/storage_prepare.py` validates geometry before mounting,
+requires the real volume marker, then probes again to reject changed disks or
+newly attached clones. Unit tests cover these paths; real Btrfs inspection and
+installer integration are still pending. The read-only mount explicitly disables
+log replay because [Btrfs can replay logs even on a read-only mount](https://btrfs.readthedocs.io/en/latest/btrfs-man5.html).
+
+`iso/storage_select.py` implements explicit console selection with no default
+mode or disk. It requires an exact serial and `ERASE <serial>` for fresh install,
+or the data UUID and `REINSTALL OS <serial>` for preserve. It produces a private
+selection receipt and atomically replaces only the storage section of the
+autoinstall configuration, preserving other installer settings. This executable
+is not yet invoked by the ISO early commands.
+
+`provisioning/storage_initialize.py` initializes a fresh identity only on an
+empty verified Btrfs data mount; preserve mode requires the original marker and
+never creates a replacement. Provisioning accepts `ELDERBRAIN_STORAGE_RECEIPT`
+and checks any installed storage identity before creating state directories.
+For this layout it installs storage verification dependencies for Docker and
+all Elderbrain system services, bound to the dedicated mount. Legacy live
+upgrades remain unchanged. These dependencies still need systemd/VM runtime
+verification; unit/source tests are not proof of boot ordering.
+
+`provisioning/host_persistence.py` prepares persistent Netplan and SSH directories
+(server policy/host keys and root/installer authorized keys). Fresh mode copies
+metadata-preserving contents; preserve mode refuses missing directories instead
+of replacing them with installer defaults. It generates idempotent bind-mount
+fstab entries and rejects existing conflicting targets. Actual mount activation
+is not connected yet. Tests exercise real temporary-directory copies, permission
+preservation, no-reseed behavior, symlink refusal and fstab conflict detection.
+
+Restore orchestration now has an alias-refresh barrier before validation and
+restart, repeated after rollback and interrupted-commit recovery. Failure tests
+verify rollback on refresh failure and no writer restart if recovery refresh also
+fails. `appliance/lib/host_bindings.py` supplies the fixed-target mount refresh
+implementation (UUID/source validation, normal unmount, bind and inode check).
+Host restore/recovery now detects and verifies the installed storage identity,
+maps SSH restore targets to canonical persistent directories and supplies this
+refresh barrier. Refresh supports aliases referencing either the previous tree
+or the rejected tree during rollback. Five mount-command/mapping tests cover
+ordering, interrupted unmount recovery, wrong-volume refusal and inode-check
+failure. They mock mount syscalls: direct Btrfs/VM tests are still required and
+these tests alone do not qualify mounted-directory restores.
+
+Real Btrfs binding test passed on the existing disposable Ubuntu VM (SSH 2226),
+using `unshare --mount --propagation private` and a newly created 256 MiB regular
+file, not an appliance disk. `test/qemu/storage-bindings.py` exercised actual
+journaled directory replacement, stale bind-inode visibility, refresh to new
+data, rollback while the alias referenced the rejected tree, and recovery after
+an interrupted unmount. Test mounts were unmounted normally. VM artifacts remain
+at `/tmp/elderbrain-storage-bindings-lpjszv7p`; copied test code is at
+`/tmp/elderbrain-storage-test-code-zJKeiKlT`. This verifies the mount mechanism,
+not full host-service restore, fresh/reinstall boot or installer disk selection.
+
+`provisioning/runtime_settings.py` now persists `appliance.env` and `sway.conf`
+under `host/runtime`, with stable runtime symlinks. Provisioning for the new
+layout uses this helper instead of overwriting persistent values. Restore maps
+these settings to their canonical files, preserving symlinks and rename-based
+atomic updates. Tests cover custom values surviving OS alias recreation,
+permissions, missing-data refusal, conflicting OS settings and restored values
+becoming visible through the aliases. Installed software/Compose stays on OS.
+
+Host-directory activation is now wired into provisioning for identified data
+volumes: validate/seed directories, publish conflict-checked fstab, then bind
+mount and validate SSH configuration. The storage service requires these aliases
+as well as the data mount. Persistent installations regenerate Netplan before
+network recovery/network startup, because the early generator can otherwise read
+OS-side defaults before the bind mounts exist. Activation failure tests verify
+no fstab publication or mount calls when preserved directories are missing.
+Boot ordering and real activation/reinstall still require VM validation.
+
+The ISO source now invokes explicit selection on tty3 in early commands and
+copies the verified receipt into the target before provisioning. Empty initial
+storage configuration replaces the old automatic direct layout; selection
+failure aborts. The VM harness now allocates 96 GiB and an explicit test disk
+serial to meet the layout requirements. It still requires answering the console
+prompts; automated selection and fresh/preserve VM qualification remain pending.
+The existing Ventoy ISO is unchanged and still uses the old layout. Do not use
+that image to attempt preserve-data reinstall. No new storage ISO is qualified.
+
+Storage action semantics follow the
+[Curtin storage documentation](https://curtin.readthedocs.io/en/latest/topics/storage.html).
+Local snapshots and same-disk backups do not protect against physical disk loss.
+
+## Storage ISO candidate and live test
+
+Built candidate (not qualified, not on Ventoy):
+`/mnt/local-hdd-Stores2/elderbrain-storage-iso-PGYvkyS4/mindflayer-elderbrain-e57c24f58122.iso`
+SHA256 `b68707b599958bc40a8bd8976e57f4db193b699c6428c98b936a8da946c8961f`.
+Ubuntu signature/checksum verified; build session 26683 completed successfully.
+Host regression: 276 tests, 5 optional skips, no failures.
+
+First QEMU launch exited before boot because serial was passed to the block
+format rather than virtio device; harness corrected to explicit virtio-blk-pci.
+Replacement harness session 20835 is running with SSH 2228/VNC 5904, work root
+`/tmp/elderbrain-storage-vm-2xOWp33T`, fresh disk
+`/mnt/local-hdd-Stores2/elderbrain-storage-iso-PGYvkyS4/elderbrain-disk.jgJFQQvB/disk.qcow2`.
+VM runtime is `/tmp/elderbrain-storage-vm-2xOWp33T/run.NszwZp`, QEMU PID 1414650.
+Console selection ran, but early commands terminated with
+`ValueError: Expected an autoinstall document`: Subiquity normalizes
+`/autoinstall.yaml` to the inner mapping. Read-only `lsblk /dev/vda` confirmed
+the 96 GiB disk remained unpartitioned. Selector now accepts both wrapped and
+normalized documents, covered by a regression test; this fix is NOT in candidate
+`b68707b5`. Candidate therefore failed installation qualification.
+
+The initial prompt on tty3 was obscured when Subiquity switched to tty1; manual
+Ctrl+Alt+F3 revealed it. Improve prompt visibility before hardware handoff.
+Live-installer diagnostic SSH was enabled using the ISO's public key, with
+known-hosts `/tmp/elderbrain-storage-live-known-hosts`; an SSH response at 2228
+is now the live installer, NOT proof of installed-appliance boot. Preserve VM
+for diagnosis; a corrected ISO build and clean test are still required.
+
+Corrected selector accepted the real live `/autoinstall.yaml` and freshly probed
+`elderbrain-vm-test` inventory in a non-mutating check; the disk was still empty.
+Prompt waiting now reclaims tty3 only when Subiquity switches to tty1; operator
+diagnostic consoles remain accessible. Error tracebacks go to tty3. Storage
+tests: 49 passing. Corrected ISO build started in
+`/mnt/local-hdd-Stores2/elderbrain-storage-fixed-Jncwa4Ve`; qualification pending.
+
+Corrected build session 34669 completed. Candidate SHA256:
+`3fad5c99ded1edab53dd51588ffc05dbe05fe953232b46ed41cb0b95e2a94fcd`.
+New clean VM harness session **88308**, SSH **2230**, VNC **5905**, PID **1419374**,
+runtime `/tmp/elderbrain-storage-fixed-vm-TaScAsTI/run.7tYCh3`, disk
+`/mnt/local-hdd-Stores2/elderbrain-storage-fixed-Jncwa4Ve/elderbrain-disk.PXKhCTRa/disk.qcow2`.
+Latest observed screen: booting live installer, no selection submitted yet.
+Full host regression passed: 280 tests, 5 optional skips.
+
+Harness now waits for installed VERSION and storage identity, not merely SSH,
+and runs `guest-storage.py` to verify persistent mount identity, separate OS
+filesystem, directory aliases, runtime links and systemd storage dependencies.
+These harness/test additions were made after ISO payload capture and run from
+the host; they do not change installed code in this candidate.
+
+Clean candidate `3fad5c99` displayed the tty3 selection prompt automatically
+(no manual console switch). Fresh selection for `elderbrain-vm-test` was
+submitted and accepted. Latest screen shows successful storage configuration
+conversion/application and installer package setup in progress. Harness 88308
+remains live waiting for installed-appliance SSH/identity. Continue this VM;
+do not restart or treat slow package installation as terminal failure.
+
+## Foundry ownership repair on physical appliance
+
+User confirmed the reinstalled Lenovo is at **10.0.96.126**. Read-only checks
+confirmed container `2410daa2498b` bound `/var/lib/mindflayer-elderbrain/foundry`
+to `/data` writable, but the empty directory was `root:root 0755`. Corrected
+only that directory to `1000:1000`, retained 0755, and restarted only Foundry.
+It passed the volume check, completed startup, and is **healthy**, with local
+HTTP **302** responding on port 30000. No software deployment or OS reboot.
+Dedicated SSH known-hosts: `/tmp/elderbrain-hardware-126-known-hosts`.
+
+Local provisioning now applies Foundry ownership explicitly, with a guest
+access check. Real temporary-fixture test on VM 2226 reproduced the original
+failure and verified UID/GID 1000 read/write, preserved file content and no
+ownership traversal through an external symlink. Fixture retained at
+`/tmp/elderbrain-foundry-permissions-b9i9txmg`. This fix is newer than candidate
+`3fad5c99`; that ISO still needs the fix in a subsequent build.
+
+Real read-only Btrfs inspection test uncovered that the guest kernel rejects
+standalone `nologreplay`. Changed inspection to `rescue=nologreplay` (no recovery
+or integrity bypass options). `test/qemu/storage-inspection.py` then passed:
+correct identity, complete image SHA256 unchanged across inspection, wrong UUID
+rejected, inspection mountpoints cleaned up. Fixture on VM 2226:
+`/tmp/elderbrain-inspection-d6vt2v2p`. Source unit/static checks pass. This fix is
+also newer than ISO `3fad5c99` and must be included before preserve-install tests.
+
+## LAN domain routing repair
+
+The Lenovo now has a permanent DHCP reservation at **10.0.96.90**, confirmed
+by the user and the previously trusted SSH host key. DNS for
+`foundry.home.viromania.com` correctly reaches it. The 404 was caused by the
+Displays domain setting not being projected into Traefik's routing rules.
+
+Added atomic, idempotent `domain_routes.py` projection of the committed domain
+for Foundry, Mindflayer and Setup. Traefik watches the dynamic directory;
+existing Docker services/middleware and default hostname routes are retained.
+Only confirmation activates a new domain, and the display watchdog reconciles
+on recovery/startup (including after restore). Preview/cancel never activate
+an uncommitted domain. Domain labels are validated in both host and Setup.
+This changes hostname routing, not external DNS or custom browser URLs, and
+does not issue new HTTPS certificates. Foundry retains its existing HTTP route.
+
+Deployed only the two host files and provider-directory change to the Lenovo;
+original files are under `/root/elderbrain-domain-fix-UBa1Grfe`.
+Recreated only Traefik, restarted management/display watchdog; Foundry stayed
+running. Verified Foundry's new hostname returns HTTP302 to `/license`, Setup's
+new hostname HTTPS200 (certificate verification bypassed for this test), and
+all four containers remain healthy. Local GUI explanatory text/validation
+will be included in the next build, not rebuilt on the physical appliance.
+Elderbrain remains local/unpushed; current candidate ISO predates this fix.
+
+The management restart exposed a second issue: systemd removed/recreated
+`/run/elderbrain`, leaving Setup's bind mount on the old directory (host inode
+5282, container inode 3076, socket missing). Added `RuntimeDirectoryPreserve=yes`
+to management's unit locally and on hardware; backed up the original unit beside
+the routing backup. Restarted only Setup to remount the current directory.
+Verified identical directory inode and successful management query from inside
+Setup; all containers healthy. Host regression: 284 tests, 5 optional skips
+before adding the runtime unit regression; Setup: 36 tests and typecheck pass.
+
+Follow-up browser issue: saved and projected URLs were correct, but
+`configured=false` caused browser-session to discard all views and use defaults.
+Saved views now apply independently of onboarding completion; missing first-boot
+views still get the administration fallback. Added a regression using the
+reported Foundry+Spotify tabs (10 browser unit tests pass). Deployed the single
+browser-session file with original retained in the same hardware backup directory
+and restarted only graphics to activate the saved tabs.
+
+The user confirmed tabs opened correctly; process inspection also verified
+the configured Foundry and Spotify URLs in the actual admin browser arguments.
+
+## Persistent-storage clean boot evidence and compositor repair
+
+VM2230 successfully installed and booted candidate `3fad5c99`: storage identity,
+Btrfs state mount, all persistent host directory aliases, runtime symlinks and
+data directory filesystem checks passed. Separate ext4 OS UUID and storage
+dependencies were verified. The newer guest check correctly rejects Foundry
+ownership in that older ISO; source already fixes it.
+
+The compositor was repeatedly crashing: its persistent `sway.conf` symlink
+traversed private `host/runtime` (0700), unreadable by the kiosk user. Added
+a narrowly scoped Sway runtime projection in prepare-browser, and pointed
+graphics at `/run/elderbrain-browser/sway.conf`. Actual VM repair (originals
+under `/root/sway-storage-fix`) verified Sway active without restarts, Chrome
+running, projected file root:kiosk0640, private runtime still root0700.
+This is diagnostic repair, NOT clean-ISO qualification.
+
+Intermediate ISO build `/mnt/local-hdd-Stores2/elderbrain-storage-next-stmJuYri`
+completed but predates the compositor repair; do not install it for qualification.
+Corrected build session **54561** uses
+`/mnt/local-hdd-Stores2/elderbrain-storage-sway-bmduDTGg`; completion and a new
+clean test remain pending. No new ISO has been placed on Ventoy.
+
+Corrected build 54561 completed successfully. New clean harness session
+**25376**, SSH **2232**, VNC **5906**, work root
+`/tmp/elderbrain-storage-clean-AFS69C37`, disposable disk
+`/mnt/local-hdd-Stores2/elderbrain-storage-sway-bmduDTGg/elderbrain-disk.8HbY3j8v/disk.qcow2`.
+Boot launched; storage selection and qualification pending. Existing VM2230
+passed the general guest checks after its explicitly documented runtime Sway
+repair (container pins, private management bridge, serial/v3 tooling).
+
+Clean candidate SHA256:
+`0b058049da08dcb4ce3f13891f2ad97630dbe0d2248b8c580cb57566f4264761`.
+VM2232 PID1435337, monitor
+`/tmp/elderbrain-storage-clean-AFS69C37/run.IGGsVg/monitor.sock`.
+Fresh selection submitted successfully; actual partitioning/formatting observed.
+Continue harness25376; no installed-guest checks have passed for this ISO yet.
+
+Added disposable-only `test/qemu/storage-unavailable.py`: runtime-mask the
+data mount, stop it, verify writers stop and stack startup fails without creating
+replacement data, then unmask and restore previously active services in finally.
+Running in VM2230 as session42631; observed restoration reached mounted data and
+active Docker, stack still starting (existing boot rebuild/pull behavior).
+Do not restart the test merely because its output is buffered or restoration is
+slow. The script's subprocess timeout does not cancel systemd's underlying job;
+if it times out, inspect pending systemd jobs and finish restoration.
+
+Session42631 completed exit0: **PASS** missing mount stops writers, rejects
+stack startup, creates no replacement data; original mounts and active services
+restored successfully. This verifies live mount-loss handling, not yet booting
+with an absent partition or preserve-data reinstallation.
+
+Added `test/qemu/storage-preserve.py` to seed disposable data fixtures and
+capture a private baseline of content hashes, owners/modes, persistent runtime,
+Netplan and SSH identity. Copy the baseline to the host before reinstall, then
+verify it against the new OS; it requires a changed OS UUID and identical data
+identity. Not yet executed: the clean guest is still extracting the OS image.
+Provisioning now initializes Traefik TLS settings only if absent, using the
+existing create-if-absent helper, instead of overwriting preserved settings.
+Default-helper tests and static checks pass. This small preservation fix is
+newer than ISO0b058049 and must be included in the preserve-reinstall candidate.
+
+## Beamer username follow-up (local only)
+
+User powered the Lenovo off; do not contact or deploy to it until told otherwise.
+Implemented requested username form default `Beamer`, private credential storage
+and host projection. Login resolves an exact unique name before password
+submission, then checks the resolved ID against the module's selected Player;
+the session watchdog retains that ID. Duplicate/missing names and privileged
+accounts fail closed. Legacy ID records remain readable and operational.
+Setup37 unit tests, typecheck, production build and targeted real-browser form
+test pass. Host projection5 tests and login helper2 tests pass. Real Foundry
+integration test now exercises username login but has not yet been rerun.
+Initial browser test used an old production bundle and failed as expected;
+after rebuild the updated default-name/save/privacy flow passed.
+Clean VM2232 continued through bootloader and postinstall/cloud-init stages
+while these tests ran; harness25376 remains the installation handle.
+
+Real Foundry14.367 probe session68291 now passed username resolution/login,
+least-privilege Player verification and camera settings. Persistent-profile
+wrong-password and revocation checks are still running; preserve this process.
+Only the isolated `elderbrain-beamer` fixture world on loopback30001 is used,
+not the physical appliance. Its temporary test user is cleaned up by the probe.
+VM2232 is still in Subiquity security updates; its live-installer SSH currently
+rejects the installed root key (expected before late provisioning). The host key
+in `/tmp/elderbrain-storage-2232-known-hosts` may therefore be the live installer,
+not the final appliance identity. Do not interpret this as installation failure.
+
+Session68291 completed exit0: real username login, cached-profile wrong-password
+rejection, ready heartbeat and revocation shutdown all passed. Temporary test
+user removed from the isolated world. No Lenovo deployment performed.
+
+## Snapshot foundation (not yet wired into host jobs or UI)
+
+Added `local_snapshots.py`: verified persistent storage, private root-owned
+checkpoint directory, exclusive lock, minimum free space, mandatory quiesce
+context, read-only snapshot creation/property verification, filesystem sync and
+durable completion metadata. Incomplete snapshots are retained for diagnosis.
+Unsupported nested user-data subvolumes are rejected rather than silently omitted
+(Btrfs snapshots are nonrecursive; see
+https://btrfs.readthedocs.io/en/latest/btrfs-subvolume.html).
+
+Three unit tests pass. Real private-namespace Btrfs test on VM2226 passed:
+prior data retained after source mutation, snapshot writes return EROFS, second
+snapshot captures current content, nested data rejected. Test image retained at
+`/tmp/elderbrain-snapshot-na8new83`; mount removed and loop device detached.
+Still required: actual writer orchestration/durable jobs, list/retention/recovery,
+component-selective restores, automatic checkpoints and UI. No claim of a
+finished snapshot feature. VM2232 advanced to Elderbrain late provisioning.
+
+Snapshot listing now validates private metadata, IDs, timestamps and actual
+read-only Btrfs subvolumes. Explicit retention keeps at least the newest N and
+caller-supplied protected IDs; verifies all records before deleting anything,
+uses exact subvolume paths and committed Btrfs deletion, and preserves source
+data. Corrupt/incomplete records block pruning for diagnosis. Four unit tests
+pass; real Btrfs listing/protected retention/pruning passed on VM2226 fixture
+`/tmp/elderbrain-snapshot-6siyxwck`. Only the old test snapshot was removed;
+the newer fixture snapshot and image remain, unmounted with loop detached.
+Durable pin ownership and interrupted-prune recovery still need orchestration.
+
+Pruning now durably renames completion metadata to a deletion intent before
+the Btrfs delete; explicit recovery revalidates the target and completes pending
+deletions, including a crash after committed deletion but before metadata cleanup.
+Real Btrfs interruption test passed on VM2226 at
+`/tmp/elderbrain-snapshot-fr01z834`; only test checkpoints pruned, source intact,
+newest checkpoint retained. Host-job boot recovery/pin orchestration still pending.
+
+Enabled diagnostic root SSH only in VM2232's live installer using the ISO public
+key (not a target payload change). Its existing known-hosts entry now works for
+live-installer inspection. `/target/var/log/elderbrain-provisioning.log` showed
+active Node/npm package unpacking, with a running dpkg process; not stalled.
+The tty2 diagnostic shell is live-installer-only; do not screenshot tty2 after
+the installed appliance boots. Harness25376 remains the clean qualification job.
+
+Added `snapshot_service.py` coordinator using the existing durable Maintenance
+window/host-service stop and recovery mechanism. Its optional exclusive context
+holds existing display/network transaction locks, rejects pending settings, and
+releases locks before service resume (graphics preparation reads those locks).
+Maintenance locking excludes backup/restore/flashing. Two coordinator tests and
+eight existing backup tests pass. Not yet installed or exposed as a host job/API;
+full checkpoint pause/resume integration on an installed guest is still required.
+VM2232 continued unpacking Node package306+ during this work.
+
+Installed VM2230 integration passed using temporary code at
+`/tmp/elderbrain-checkpoint-integration-lCQ5vtmj`: actual Compose containers and
+graphics were proven stopped at capture, read-only checkpoint created, original
+services resumed healthy, durable maintenance state completed. Retained private
+checkpoint `c2f1f546018e4ecd2fb10c664ad6d159`; no user data deleted.
+Added root CLI `snapshot-create/list/recover`, installation of the coordinator,
+and allowlisted persistent host-job kinds for create/recovery. Worker result
+only exposes public checkpoint metadata; 12 job tests pass. HTTP/UI wiring and
+full end-to-end job test still pending; no hardware deployment. Full host suite
+before the new job regression: 294 tests, 5 optional skips.
+
+Clean ISO0b058049 VM2232 harness25376 completed exit0, with no installed-code
+patches: general appliance checks, persistent storage identity/aliases/OS
+separation, Foundry1000 ownership/access, HTTPS/CSRF/login gate, bootstrap,
+visible admin browser and host metrics all passed. Installed SSH known-hosts:
+`/tmp/elderbrain-storage-2232-installed-known-hosts`, fingerprint
+`SHA256:Zm/rP5Lr230n39ZHTEyZkyhFCD22NtEOgF7IBtd0rRo`.
+The separate older entry is the live installer key. Reboot test now requested
+on this disposable VM; preserve-reinstall and missing-partition boot remain.
+
+Added authenticated/CSRF-protected snapshot list/create/recover HTTP routes,
+explicit downtime confirmation and a Nuxt UI Local checkpoints card on Backups.
+It polls host jobs across temporary disconnection, lists verified checkpoints,
+and clearly labels selective restore/retention controls as not available yet.
+Setup typecheck passes. Production build + targeted browser test session68249
+pending. No deployment of this newer source to the clean VM or physical Lenovo.
+
+Checkpoint UI production build and targeted confirmation/list/job browser test
+passed. Clean VM2232 rebooted from boot IDc3f3c3db-c3f7-45e8-adef-a3f97e7a5db6
+to2933693e-34d8-4f61-a8a3-e8046f053bc3; general appliance/browser checks and all
+persistent-storage checks passed again without code patches. Preserve-data OS
+reinstall and absent-partition boot tests remain, along with UEFI qualification.
+
+The user has powered off the Lenovo; leave it untouched until they report it on.
+VM2232 preserve-reinstall baseline was seeded once and copied privately to the
+host at `/tmp/elderbrain-storage-clean-AFS69C37/preserve-baseline.json` (27 files).
+New ISO at `/mnt/local-hdd-Stores2/elderbrain-preserve-iso-wIGsVkGC/`
+`mindflayer-elderbrain-e57c24f58122.iso` is readable, includes snapshot_service,
+and has SHA256 `5c0427b507b79b9656eca96c86f6ae228a26499344296ab0b4ca827fbfed1b5b`.
+Inserted it into VM2232's unused virtual CD and gracefully rebooted, selected
+the Elderbrain installer, then restored subsequent boot order to disk. Preserve
+selection and baseline verification remain pending; no new ISO copied to Ventoy.
+
+VM2232 preserve selection was accepted with disk serial `elderbrain-vm-test`
+and data UUID `84f7219a-b5db-4127-8ea8-2e6850746cf8`. Curtin has replaced the
+OS filesystem (new UUID `a2040e32-aa13-4baa-9164-7a29ab1aab01`) and mounted
+the unchanged Btrfs data UUID at the target path. Installation is still running
+in curthooks; this is not yet a full preservation pass. Live-installer-only SSH
+was enabled using the ISO public key, with separate known-hosts file
+`/tmp/elderbrain-preserve-2232-live-known-hosts`; installed-host trust remains
+separate. Returned the screen to tty1. Host regressions: 295 tests passed with
+5 optional skips; static checks passed. Startup inspection confirms build/pull
+commands remain in the stack unit and need replacement by installation/update
+image preparation, not merely removal without providing installed images.
+
+Checkpoint retention now honors private durable per-operation reservations
+(`update`, `restore`, `pending-backup`), in addition to caller-supplied pins.
+Creation can reserve a checkpoint under the same lock before publishing its
+completion metadata. Reservations do not expire automatically; only matching
+owner/purpose release them. Multiple owners are supported. Malformed metadata
+and deletion-intent/reservation conflicts block deletion. Workflow integration
+and user-facing retention settings remain to implement.
+
+Real Btrfs test passed on VM2226 fixture `/tmp/elderbrain-snapshot-_u3g0bsk`:
+store reopening preserves reservations, idempotent acquisition, multiple owners,
+wrong-purpose release rejection, corrupt-pin fail-closed retention, readonly
+snapshots and interrupted deletion recovery. Only obsolete fixture checkpoints
+were deleted; source data stayed unchanged, newest fixture checkpoint/image
+retained, filesystem unmounted and loop detached. Five snapshot unit tests and
+static checks pass. This code is newer than the currently reinstalling ISO.
+
+Added opt-in automatic checkpoint retention (disabled by default, suggested
+keep=10, valid range 1–1000). Private atomic settings live in snapshots/.retention.
+After a successful capture and writer resume, retention runs under the store
+lock and protects the newly captured checkpoint plus all durable reservations.
+Saving settings itself never deletes checkpoints. The Backups Nuxt UI card now
+has an explicit automatic-deletion checkbox and count; authenticated/CSRF API
+requires deletion confirmation to enable it. No arbitrary delete-path API.
+
+Verification: production Setup build and typecheck passed; all 3 checkpoint
+browser/API tests passed; 297 host tests passed, 5 optional skips; static checks
+passed. Real Btrfs fixture `/tmp/elderbrain-snapshot-rm6l_hjs` proved settings
+survive store reopening, saving alone does not prune, successful captures enforce
+the count, and pinned checkpoints survive beyond the count. Obsolete fixture
+checkpoints removed only; source intact, newest/protected snapshots and image
+retained, filesystem unmounted and loop detached. No hardware deployment.
+Retention settings still need inclusion in manual/remote configuration archives
+and selective preferences restore; do not claim full backup coverage yet.
+
+VM2232 preserve reinstall is now running unattended OS upgrades after successful
+curthooks and GRUB installation. Keep polling this existing install, not restarting
+it. The private host baseline remains the authoritative post-reinstall comparison.

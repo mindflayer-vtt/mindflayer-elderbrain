@@ -1,0 +1,29 @@
+[Unit]
+Description=Elderbrain native Wayland kiosk
+After=network-online.target elderbrain-stack.service systemd-user-sessions.service getty@tty1.service
+Conflicts=getty@tty1.service
+Wants=network-online.target
+Requires=elderbrain-stack.service
+Requires=elderbrain-display-watchdog.service
+After=elderbrain-display-watchdog.service
+
+[Service]
+User=elderbrain-kiosk
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Environment=XDG_RUNTIME_DIR=/run/elderbrain-kiosk
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+ExecStartPre=/opt/mindflayer-elderbrain/wait-ready
+ExecStartPre=+/usr/bin/python3 /opt/mindflayer-elderbrain/prepare-browser.py
+ExecStart=/usr/bin/sway --config /run/elderbrain-browser/sway.conf
+Restart=always
+RestartSec=2
+RuntimeDirectory=elderbrain-kiosk
+RuntimeDirectoryMode=0700
+
+[Install]
+WantedBy=graphical.target

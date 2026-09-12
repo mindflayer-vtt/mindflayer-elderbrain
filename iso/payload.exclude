@@ -1,0 +1,25 @@
+# Build caches, development state and credentials are never implicit ISO input.
+.git
+.agents
+.codex
+.ssh
+.pki
+.env
+.env.*
+*.secret
+secrets.json
+local.mk
+/config/private/
+/test/.qemu/
+/cache/
+/out/
+node_modules
+.nuxt
+.output
+.cache
+__pycache__
+*.pyc
+.venv
+venv
+test-results
+playwright-report

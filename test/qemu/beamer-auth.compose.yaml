@@ -1,0 +1,6 @@
+# Disposable VM only: masks, but never overwrites, its original onboarding account.
+services:
+  elderbrain-setup:
+    image: elderbrain-setup:beamer-integration
+    volumes:
+      - /tmp/elderbrain-beamer-auth/admin.json:/state/secrets/admin.json:ro

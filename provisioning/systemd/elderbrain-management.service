@@ -1,0 +1,16 @@
+[Unit]
+Description=Elderbrain privileged management bridge
+After=docker.service
+
+[Service]
+Type=simple
+ExecStart=/opt/mindflayer-elderbrain/management-server
+Restart=always
+RestartSec=2
+RuntimeDirectory=elderbrain
+RuntimeDirectoryMode=0750
+# Setup bind-mounts this directory. Replacing it strands the running container.
+RuntimeDirectoryPreserve=yes
+
+[Install]
+WantedBy=multi-user.target

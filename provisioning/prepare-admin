@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+runtime=/opt/mindflayer-elderbrain
+state=/var/lib/mindflayer-elderbrain
+. "$runtime/appliance.env"
+install -d -m 0700 "$state/elderbrain/secrets"
+if [[ ! -e "$state/elderbrain/secrets/admin.json" && ! -s "$state/elderbrain/secrets/initial-password" ]]; then
+  (umask 077; python3 "$runtime/generate-admin-password.py" "$runtime/bootstrap-words.json" > "$state/elderbrain/secrets/initial-password")
+  chown 1000:1000 "$state/elderbrain/secrets/initial-password"
+fi
+tls="$state/traefik/tls"
+install -d -m 0700 "$tls"
+if ! openssl x509 -in "$tls/admin.crt" -noout >/dev/null 2>&1; then
+  umask 077
+  # An interrupted first boot may leave empty files. Preserve a valid CA when
+  # only its leaf is incomplete, so already trusted clients keep the same anchor.
+  if ! openssl x509 -in "$tls/ca.crt" -noout >/dev/null 2>&1; then
+    openssl req -x509 -newkey rsa:3072 -nodes -keyout "$tls/ca.key" -out "$tls/ca.crt" \
+      -days 3650 -subj '/CN=Elderbrain local administration CA' \
+      -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign'
+  fi
+  san="DNS:elderbrain,DNS:localhost,DNS:$ELDERBRAIN_HOST,IP:127.0.0.1"
+  for address in $(hostname -I); do
+    [[ $address =~ ^[0-9a-fA-F:.]+$ ]] && san="$san,IP:$address"
+  done
+  openssl req -new -newkey rsa:3072 -nodes -keyout "$tls/admin.key" -out "$tls/admin.csr" \
+    -subj "/CN=$ELDERBRAIN_HOST" -addext "subjectAltName=$san" \
+    -addext 'extendedKeyUsage=serverAuth'
+  openssl x509 -req -in "$tls/admin.csr" -CA "$tls/ca.crt" -CAkey "$tls/ca.key" \
+    -set_serial "0x$(openssl rand -hex 16)" -out "$tls/admin.crt" -days 825 -copy_extensions copy
+fi
+install -m 0644 "$tls/ca.crt" /usr/local/share/ca-certificates/elderbrain-admin.crt
+update-ca-certificates >/dev/null
+# Chrome uses NSS on Linux. Trust this appliance's CA in its dedicated kiosk account.
+kiosk_home=$(getent passwd elderbrain-kiosk | cut -d: -f6)
+install -d -m 0700 -o elderbrain-kiosk -g elderbrain-kiosk "$kiosk_home/.pki" "$kiosk_home/.pki/nssdb"
+if [[ ! -f "$kiosk_home/.pki/nssdb/cert9.db" ]]; then
+  runuser -u elderbrain-kiosk -- certutil -N --empty-password -d "sql:$kiosk_home/.pki/nssdb"
+fi
+runuser -u elderbrain-kiosk -- certutil -A -n elderbrain-admin -t 'C,,' \
+  -i /usr/local/share/ca-certificates/elderbrain-admin.crt -d "sql:$kiosk_home/.pki/nssdb"
+# The dedicated admin-console service owns tty2 and refreshes it when this file
+# appears, changes, or is removed after the initial password is changed.

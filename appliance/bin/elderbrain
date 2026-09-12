@@ -1,0 +1,87 @@
+#!/bin/bash
+set -euo pipefail
+COMPOSE_DIR=${ELDERBRAIN_COMPOSE_DIR:-/opt/mindflayer-elderbrain}
+STATE_DIR=${ELDERBRAIN_STATE_DIR:-/var/lib/mindflayer-elderbrain}
+COMPOSE=(docker compose --env-file "$COMPOSE_DIR/appliance.env" -f "$COMPOSE_DIR/compose.yaml")
+usage() {
+  echo 'Usage: elderbrain {status|initial-password|reset-admin-password|restart-foundry|restart-mindflayer|restart-browser-session|logs [service]|backup [destination]|backup-preview ARCHIVE|backup-recover|restore ARCHIVE --confirm-restore|restore-recover|update|reboot|shutdown}'
+  echo 'Encrypted backups: backup-encrypted [destination], backup-preview-encrypted ARCHIVE, restore-encrypted ARCHIVE --confirm-restore (optional --passphrase-fd N)'
+  echo 'Remote backups: borg-settings, borg-configure (JSON stdin), borg-schedule, borg-init, borg-test, borg-list, borg-backup, borg-fetch ARCHIVE, borg-recovery-kit'
+  echo 'Local checkpoints: snapshot-create, snapshot-list, snapshot-recover (persistent Btrfs installation required)'
+}
+require_root() { [[ $EUID -eq 0 ]] || { echo 'must run as root' >&2; exit 1; }; }
+case ${1:-} in
+  snapshot-create|snapshot-list|snapshot-recover)
+    require_root
+    exec python3 "$COMPOSE_DIR/snapshot_service.py" "${1#snapshot-}" ;;
+  backup-encrypted)
+    require_root
+    shift
+    exec python3 "$COMPOSE_DIR/backup_service.py" backup --encrypted "$@" ;;
+  backup-preview-encrypted)
+    require_root
+    shift
+    exec python3 "$COMPOSE_DIR/backup_service.py" preview --encrypted "$@" ;;
+  restore-encrypted)
+    require_root
+    shift
+    exec python3 "$COMPOSE_DIR/backup_service.py" restore --encrypted "$@" ;;
+  borg-settings|borg-configure|borg-schedule|borg-scheduled|borg-init|borg-test|borg-list|borg-backup|borg-fetch|borg-recovery-kit)
+    require_root
+    operation=${1#borg-}
+    shift
+    exec python3 "$COMPOSE_DIR/borg_service.py" "$operation" "$@" ;;
+  initial-password)
+    require_root
+    cat "$STATE_DIR/elderbrain/secrets/initial-password" ;;
+  reset-admin-password)
+    require_root
+    (umask 077; python3 "$COMPOSE_DIR/generate-admin-password.py" "$COMPOSE_DIR/bootstrap-words.json" > "$STATE_DIR/elderbrain/secrets/initial-password")
+    chown 1000:1000 "$STATE_DIR/elderbrain/secrets/initial-password"
+    install -m 0600 -o 1000 -g 1000 /dev/null "$STATE_DIR/elderbrain/secrets/admin-reset.request"
+    echo 'Administrator sessions will be revoked on the next request. New temporary password:'
+    cat "$STATE_DIR/elderbrain/secrets/initial-password" ;;
+  status)
+    . "$COMPOSE_DIR/appliance.env"
+    printf 'appliance-version: %s\n' "$(cat "$COMPOSE_DIR/VERSION")"
+    printf 'mindflayer-server-image: %s\n' "$MINDFLAYER_SERVER_IMAGE"
+    "${COMPOSE[@]}" ps --format json
+    systemctl is-active elderbrain-graphics.service || true ;;
+  start-foundry) require_root; "${COMPOSE[@]}" --profile foundry up -d foundry ;;
+  restart-foundry) require_root; "${COMPOSE[@]}" --profile foundry up -d --force-recreate foundry ;;
+  restart-mindflayer) require_root; "${COMPOSE[@]}" restart mindflayer-server ;;
+  restart-browser-session) require_root; systemctl restart elderbrain-graphics.service ;;
+  logs) "${COMPOSE[@]}" logs --tail 200 --no-color "${2:-}" ;;
+  foundry-logs)
+    require_root
+    container=$("${COMPOSE[@]}" ps -a -q foundry)
+    if [[ -z $container ]]; then
+      echo 'Foundry has not been configured or its container has not been created.'
+    else
+      docker inspect --format 'Foundry container state: {{.State.Status}}' "$container"
+      docker logs --tail 500 --timestamps "$container" 2>&1
+    fi ;;
+  backup)
+    require_root
+    echo 'Creating a secret-bearing backup. Running appliance services will stop temporarily.' >&2
+    exec python3 "$COMPOSE_DIR/backup_service.py" backup "${2:-$STATE_DIR/backups}" ;;
+  backup-preview)
+    require_root
+    [[ -n ${2:-} ]] || { echo 'backup-preview requires an archive path' >&2; exit 2; }
+    exec python3 "$COMPOSE_DIR/backup_service.py" preview "$2" ;;
+  backup-recover)
+    require_root
+    exec python3 "$COMPOSE_DIR/backup_service.py" recover ;;
+  restore)
+    require_root
+    [[ -n ${2:-} && ${3:-} == --confirm-restore ]] || { echo 'Inspect with backup-preview first, then: elderbrain restore ARCHIVE --confirm-restore' >&2; exit 2; }
+    echo 'Restoring trusted configuration, including credentials and SSH access; appliance services will stop temporarily.' >&2
+    exec python3 "$COMPOSE_DIR/backup_service.py" restore "$2" --confirm-restore ;;
+  restore-recover)
+    require_root
+    exec python3 "$COMPOSE_DIR/backup_service.py" restore-recover ;;
+  update) echo 'Updates are release-driven; see docs/ADMIN.md. No automatic update was performed.' ;;
+  reboot) require_root; systemctl reboot ;;
+  shutdown) require_root; systemctl poweroff ;;
+  *) usage; exit 2 ;;
+esac

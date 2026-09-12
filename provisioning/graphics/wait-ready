@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+url=https://127.0.0.1/elderbrain/health
+for attempt in $(seq 1 120); do
+  curl --fail --silent --max-time 2 "$url" >/dev/null && exit 0
+  sleep 1
+done
+echo 'Elderbrain setup UI did not become ready' >&2
+exit 1

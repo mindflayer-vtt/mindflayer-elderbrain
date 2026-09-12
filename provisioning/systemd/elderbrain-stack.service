@@ -1,0 +1,22 @@
+[Unit]
+Description=Mindflayer Elderbrain container stack
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/mindflayer-elderbrain
+ExecStartPre=/opt/mindflayer-elderbrain/prepare-admin
+ExecStartPre=/usr/bin/docker compose --env-file appliance.env -f compose.yaml build elderbrain-setup
+ExecStartPre=/usr/bin/docker compose --env-file appliance.env -f compose.yaml pull --ignore-buildable
+ExecStart=/usr/bin/docker compose --env-file appliance.env -f compose.yaml up -d --no-build --remove-orphans --wait
+ExecStartPost=/usr/bin/systemctl --no-block start elderbrain-graphics.service
+ExecStop=/usr/bin/docker compose --env-file appliance.env -f compose.yaml down
+TimeoutStartSec=0
+Restart=on-failure
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target

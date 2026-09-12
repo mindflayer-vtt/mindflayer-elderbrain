@@ -1,0 +1,27 @@
+#cloud-config
+autoinstall:
+  version: 1
+  early-commands:
+    - bash /cdrom/elderbrain/iso/select-storage.sh
+  interactive-sections: []
+  locale: en_US.UTF-8
+  keyboard: {layout: us}
+  identity:
+    hostname: elderbrain
+    username: elderbrain-installer
+    password: "!"
+  ssh:
+    install-server: true
+    allow-pw: false
+  storage:
+    # Replaced by explicit selection before storage probing. No default disk.
+    config: []
+  packages: [openssh-server, btrfs-progs]
+  late-commands:
+    - curtin in-target --target=/target -- mkdir -p /opt/elderbrain-payload
+    - cp -a /cdrom/elderbrain/. /target/opt/elderbrain-payload/
+    - install -m 0600 /run/elderbrain-storage-receipt.json /target/opt/elderbrain-payload/storage-receipt.json
+    - curtin in-target --target=/target -- install -d -m 0700 /root/.ssh
+    - curtin in-target --target=/target -- install -m 0600 /opt/elderbrain-payload/root-authorized-key /root/.ssh/authorized_keys
+    - curtin in-target --target=/target -- env ELDERBRAIN_OFFLINE_INSTALL=1 ELDERBRAIN_STORAGE_RECEIPT=/opt/elderbrain-payload/storage-receipt.json bash /opt/elderbrain-payload/provisioning/install.sh
+  shutdown: reboot

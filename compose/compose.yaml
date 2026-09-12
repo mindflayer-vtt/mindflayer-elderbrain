@@ -1,0 +1,123 @@
+name: mindflayer-elderbrain
+
+networks:
+  proxy: {}
+
+secrets:
+  foundry_config:
+    file: ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain/elderbrain}/secrets/foundry-config.json
+
+services:
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3.7.5}
+    restart: unless-stopped
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --ping=true
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/traefik:/etc/traefik/dynamic:ro
+    networks: [proxy]
+    healthcheck:
+      test: [CMD, traefik, healthcheck, --ping]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  elderbrain-setup:
+    image: ${SETUP_IMAGE:-elderbrain-setup:1}
+    build: ${SETUP_CONTEXT:-../setup}
+    restart: unless-stopped
+    environment:
+      STATE_DIR: /state
+      MINDFLAYER_WS_URL: ws://mindflayer-server:8080/ws
+      MINDFLAYER_SERVER_IMAGE: ${MINDFLAYER_SERVER_IMAGE:?MINDFLAYER_SERVER_IMAGE must be a pinned registry image}
+      MANAGEMENT_SOCKET: /run/elderbrain/management.sock
+      APPLIANCE_VERSION_FILE: /opt/elderbrain/VERSION
+    volumes:
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/elderbrain:/state
+      - /run/elderbrain:/run/elderbrain
+      - ${ELDERBRAIN_VERSION_FILE:-/opt/mindflayer-elderbrain/VERSION}:/opt/elderbrain/VERSION:ro
+    networks: [proxy]
+    depends_on:
+      mindflayer-server:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.elderbrain.rule: "Host(`${ELDERBRAIN_HOST:-elderbrain.elderbrain.local}`) || PathPrefix(`/elderbrain`)"
+      traefik.http.routers.elderbrain.entrypoints: websecure
+      traefik.http.routers.elderbrain.tls: "true"
+      traefik.http.routers.elderbrain-http.rule: "Host(`${ELDERBRAIN_HOST:-elderbrain.elderbrain.local}`) || PathPrefix(`/elderbrain`)"
+      traefik.http.routers.elderbrain-http.entrypoints: web
+      traefik.http.routers.elderbrain-http.middlewares: elderbrain-https
+      traefik.http.routers.elderbrain-http.service: elderbrain
+      traefik.http.middlewares.elderbrain-https.redirectscheme.scheme: https
+      traefik.http.routers.elderbrain.middlewares: elderbrain-strip
+      traefik.http.middlewares.elderbrain-strip.stripprefix.prefixes: /elderbrain
+      traefik.http.services.elderbrain.loadbalancer.server.port: "8080"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  mindflayer-server:
+    image: ${MINDFLAYER_SERVER_IMAGE:?MINDFLAYER_SERVER_IMAGE must be a pinned registry image}
+    restart: unless-stopped
+    environment:
+      MINDFLAYER_DATA_DIR: /data
+      MINDFLAYER_FIRMWARE_DIR: /firmware
+      FOUNDRY_PORT: 8080
+      DEVICE_PORT: 10443
+    volumes:
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/mindflayer:/data
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/firmware:/firmware:ro
+    expose: ["8080"]
+    # Required by the keypad protocol: TLS with a device-pinned server key, not HTTP.
+    ports:
+      - "${DEVICE_PORT:-10443}:10443"
+    networks: [proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.mindflayer.rule: "Host(`${MINDFLAYER_HOST:-mindflayer.elderbrain.local}`)"
+      traefik.http.routers.mindflayer.entrypoints: web
+      traefik.http.services.mindflayer.loadbalancer.server.port: "8080"
+    healthcheck:
+      test: [CMD, node, -e, "require('http').get('http://127.0.0.1:8080/',r=>process.exit(r.statusCode>=200&&r.statusCode<400?0:1)).on('error',e=>{console.error(e.message);process.exit(1)})"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  foundry:
+    image: ${FOUNDRY_IMAGE:-ghcr.io/felddy/foundryvtt:14.367}
+    hostname: elderbrain-foundry
+    restart: unless-stopped
+    profiles: [foundry]
+    volumes:
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/foundry:/data
+    secrets:
+      - source: foundry_config
+        target: config.json
+    environment:
+      FOUNDRY_HOSTNAME: ${FOUNDRY_HOST:-foundry.elderbrain.local}
+      FOUNDRY_PROXY_SSL: ${FOUNDRY_PROXY_SSL:-false}
+      CONTAINER_PRESERVE_CONFIG: "true"
+    expose: ["30000"]
+    # Kiosk-only login path; never publish Foundry's direct port to the LAN.
+    ports: ["127.0.0.1:30000:30000"]
+    networks: [proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.foundry.rule: "Host(`${FOUNDRY_HOST:-foundry.elderbrain.local}`)"
+      traefik.http.routers.foundry.entrypoints: web
+      traefik.http.services.foundry.loadbalancer.server.port: "30000"

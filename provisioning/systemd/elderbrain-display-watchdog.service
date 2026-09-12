@@ -1,0 +1,13 @@
+[Unit]
+Description=Elderbrain display preview rollback watchdog
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/mindflayer-elderbrain/display_preview.py
+Restart=always
+RestartSec=1
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

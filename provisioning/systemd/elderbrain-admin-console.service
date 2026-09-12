@@ -1,0 +1,24 @@
+[Unit]
+Description=Elderbrain local administrator bootstrap display
+After=systemd-user-sessions.service
+Conflicts=getty@tty2.service autovt@tty2.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/mindflayer-elderbrain/admin-console.py
+Restart=always
+RestartSec=2
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+TTYPath=/dev/tty2
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

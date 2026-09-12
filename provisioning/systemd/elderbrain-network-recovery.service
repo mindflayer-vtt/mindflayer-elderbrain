@@ -1,0 +1,18 @@
+[Unit]
+Description=Restore unconfirmed Elderbrain networking before network startup
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target shutdown.target
+Wants=network-pre.target
+Conflicts=shutdown.target
+RequiresMountsFor=/var/lib/mindflayer-elderbrain /etc/netplan /opt/mindflayer-elderbrain
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/mindflayer-elderbrain/network_worker.py recover-boot
+RemainAfterExit=yes
+TimeoutStartSec=45
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,6 @@
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/dynamic/tls/admin.crt
+        keyFile: /etc/traefik/dynamic/tls/admin.key

@@ -1,0 +1,20 @@
+name: CI
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm, cache-dependency-path: setup/package-lock.json}
+      - run: npm ci
+        working-directory: setup
+      - run: make lint test
+      - run: make compose-check
+      - run: npm run build
+        working-directory: setup
+      - run: npx playwright install --with-deps chromium
+        working-directory: setup
+      - run: npm run test:browser
+        working-directory: setup

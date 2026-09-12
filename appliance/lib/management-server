@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+import json, os, socket, socketserver, subprocess, struct, shutil
+from host_jobs import JobStore
+from backup_uploads import UploadStore
+from keypad_inventory import registered_keypads, usb_serial_devices, installation_receipts
+from host_metrics import Metrics
+
+METRICS = Metrics()
+
+SOCKET = os.environ.get("ELDERBRAIN_MANAGEMENT_SOCKET", "/run/elderbrain/management.sock")
+ALLOWED = {"status", "start-foundry", "restart-foundry", "restart-mindflayer", "restart-browser-session", "foundry-logs", "borg-settings"}
+JOBS = JobStore(os.path.join(os.environ.get("ELDERBRAIN_STATE_DIR", "/var/lib/mindflayer-elderbrain"), "jobs"))
+
+class Handler(socketserver.StreamRequestHandler):
+    def handle(self):
+        self.request.settimeout(30)
+        _, uid, _ = struct.unpack("3i", self.request.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+        if uid not in (0, 1000):
+            self.wfile.write(b'{"ok":false,"error":"unauthorized peer"}\n')
+            return
+        action = self.rfile.readline(1024).decode("ascii", "strict").strip()
+        try:
+            if action == "beamer-refresh":
+                from beamer_runtime import refresh
+                result = {'ok': True, 'output': json.dumps(refresh())}
+            elif action == "beamer-status":
+                from beamer_runtime import status
+                result = {'ok': True, 'output': json.dumps(status())}
+            elif action == "display-preview-status" or action.startswith(("display-preview-start ", "display-preview-confirm ", "display-preview-cancel ")):
+                from display_preview import DisplayPreview
+                store = DisplayPreview(str(JOBS.directory.parent))
+                if action == "display-preview-status":
+                    with store.locked():
+                        value = store.public(store.read())
+                elif action.startswith("display-preview-start "):
+                    subprocess.run(['systemctl', 'is-active', '--quiet', 'elderbrain-display-watchdog.service'], check=True, timeout=5)
+                    size = int(action.split(' ', 1)[1])
+                    if not 0 < size <= 65536:
+                        raise ValueError('Invalid preview size')
+                    payload = self.rfile.read(size)
+                    if len(payload) != size:
+                        raise ValueError('Incomplete preview')
+                    value = store.begin(json.loads(payload))
+                else:
+                    operation, identifier = action.split(' ', 1)
+                    value = store.confirm(identifier) if operation == 'display-preview-confirm' else store.cancel(identifier)
+                result = {'ok': True, 'output': json.dumps(value)}
+            elif action == "network-status" or action.startswith(("network-start ", "network-cancel ")):
+                import network_service
+                if action == "network-status":
+                    value = network_service.status()
+                elif action.startswith("network-start "):
+                    size = int(action.split(' ', 1)[1])
+                    if not 0 < size <= 2048:
+                        raise ValueError('Invalid network request size')
+                    payload = self.rfile.read(size)
+                    if len(payload) != size:
+                        raise ValueError('Incomplete network request')
+                    value = network_service.start(json.loads(payload))
+                else:
+                    value = network_service.cancel(action.split(' ', 1)[1])
+                result = {'ok': True, 'output': json.dumps(value)}
+            elif action == "host-displays":
+                from host_displays import discover
+                result = {"ok": True, "output": json.dumps(discover())}
+            elif action == "host-network":
+                from host_network import discover
+                result = {"ok": True, "output": json.dumps(discover())}
+            elif action == "host-metrics":
+                result = {"ok": True, "output": json.dumps(METRICS.snapshot())}
+            elif action.startswith("kiosk-keyboard "):
+                from kiosk_keyboard import operate
+                parts = action.split(" ")
+                if len(parts) not in (2, 3):
+                    raise ValueError("Invalid keyboard request")
+                result = {"ok": True, "output": json.dumps(operate(parts[1], parts[2] if len(parts) == 3 else None))}
+            elif action == "keypad-usb-devices":
+                result = {"ok": True, "output": json.dumps(usb_serial_devices())}
+            elif action == "keypad-release":
+                from serial_release import release
+                selected = release()
+                result = {"ok": True, "output": json.dumps({"version": selected["version"]})}
+            elif action.startswith("keypad-install-start "):
+                size = int(action.removeprefix("keypad-install-start "))
+                if not 0 < size <= 2048:
+                    raise ValueError("Invalid installation request size")
+                payload = self.rfile.read(size)
+                if len(payload) != size:
+                    raise ValueError("Incomplete installation request")
+                result = {"ok": True, "output": json.dumps(JOBS.submit("keypad-install", json.loads(payload)))}
+            elif action == "keypad-registrations":
+                result = {"ok": True, "output": json.dumps(registered_keypads(JOBS.directory.parent))}
+            elif action == "keypad-installations":
+                result = {"ok": True, "output": json.dumps(installation_receipts(JOBS.directory.parent))}
+            elif action.startswith(("backup-encrypted-start ", "restore-preview-encrypted-start ")):
+                operation, length = action.split(" ", 1)
+                size = int(length)
+                if not 0 < size <= 8192:
+                    raise ValueError("Invalid encryption request size")
+                payload = self.rfile.read(size)
+                if len(payload) != size:
+                    raise ValueError("Incomplete encryption request")
+                input_data = json.loads(payload)
+                kind = operation.removesuffix("-start")
+                result = {"ok": True, "output": json.dumps(JOBS.submit(kind,
+                    input_data.get("uploadId") if kind == "restore-preview-encrypted" else None,
+                    passphrase=input_data["passphrase"]))}
+            elif action in ("borg-init-start", "borg-test-start", "borg-list-start", "borg-backup-start", "borg-recovery-kit-start"):
+                result = {"ok": True, "output": json.dumps(JOBS.submit(action.removesuffix("-start")))}
+            elif action.startswith("borg-fetch-start "):
+                result = {"ok": True, "output": json.dumps(JOBS.submit("borg-fetch", action.removeprefix("borg-fetch-start ")))}
+            elif action.startswith("borg-configure "):
+                size = int(action.removeprefix("borg-configure "))
+                if not 0 < size <= 65536:
+                    raise ValueError("Invalid settings size")
+                payload = self.rfile.read(size)
+                if len(payload) != size:
+                    raise ValueError("Incomplete settings")
+                proc = subprocess.run(["/usr/local/sbin/elderbrain", "borg-configure"], input=payload,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+                result = {"ok": proc.returncode == 0, "output": proc.stdout.decode() if proc.returncode == 0 else "",
+                          "error": None if proc.returncode == 0 else "Unable to save backup destination or activate schedule"}
+            elif action.startswith(("backup-upload ", "backup-upload-encrypted ")):
+                operation, length = action.split(" ", 1)
+                uploaded = UploadStore(JOBS.directory.parent / "uploads").receive(self.rfile, int(length))
+                result = {"ok": True, "output": json.dumps({"uploadId": uploaded["id"]} if operation == "backup-upload-encrypted"
+                    else JOBS.submit("restore-preview", uploaded["id"]))}
+            elif action.startswith("restore-start "):
+                result = {"ok": True, "output": json.dumps(JOBS.submit("restore", action.removeprefix("restore-start ")))}
+            elif action.startswith(("backup-download ", "recovery-download ")):
+                data, size = JOBS.open_backup(action.split(" ", 1)[1], recovery=action.startswith("recovery-download "))
+                with data:
+                    encrypted = JOBS.read(action.split(" ", 1)[1]).get("kind") == "backup-encrypted"
+                    self.wfile.write((json.dumps({"ok": True, "size": size, "encrypted": encrypted}) + "\n").encode())
+                    try:
+                        shutil.copyfileobj(data, self.wfile, 1024 * 1024)
+                    except (OSError, ConnectionError):
+                        pass
+                return
+            elif action == "jobs-list":
+                result = {"ok": True, "output": json.dumps(JOBS.list())}
+            elif action == "snapshots-list":
+                from snapshot_service import store
+                result = {"ok": True, "output": json.dumps(store().list())}
+            elif action == 'snapshots-retention' or action.startswith('snapshots-retention-set '):
+                from snapshot_service import retention_settings
+                value = None
+                if action != 'snapshots-retention':
+                    _, enabled, keep = action.split(' ')
+                    if enabled not in ('true', 'false') or not keep.isdecimal():
+                        raise ValueError('Invalid retention settings')
+                    value = {'enabled': enabled == 'true', 'keep': int(keep)}
+                result = {'ok': True, 'output': json.dumps(retention_settings(value))}
+            elif action in ("snapshot-create-start", "snapshot-recover-start"):
+                result = {"ok": True, "output": json.dumps(JOBS.submit(action.removesuffix("-start")))}
+            elif action in ("backup-start", "backup-recover-start", "restore-recover-start"):
+                result = {"ok": True, "output": json.dumps(JOBS.submit(action.removesuffix("-start")))}
+            elif action not in ALLOWED:
+                result = {"ok": False, "error": "unsupported action"}
+            else:
+                proc = subprocess.run(["/usr/local/sbin/elderbrain", action], text=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+                result = {"ok": proc.returncode == 0, "action": action, "output": proc.stdout[-12000:]}
+        except subprocess.TimeoutExpired:
+            result = {"ok": False, "error": "Host operation timed out"}
+        except Exception:
+            result = {"ok": False, "error": "Host operation unavailable; check active jobs and maintenance state"}
+        self.wfile.write((json.dumps(result) + "\n").encode())
+
+class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+os.makedirs(os.path.dirname(SOCKET), mode=0o750, exist_ok=True)
+os.chown(os.path.dirname(SOCKET), 0, 1000)
+try: os.unlink(SOCKET)
+except FileNotFoundError: pass
+with Server(SOCKET, Handler) as server:
+    METRICS.start()
+    # Only root and the setup container's mapped UID can use this scoped bridge.
+    os.chown(SOCKET, 0, 1000)
+    os.chmod(SOCKET, 0o660)
+    server.serve_forever()

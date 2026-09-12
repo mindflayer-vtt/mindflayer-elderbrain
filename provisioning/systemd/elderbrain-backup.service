@@ -1,0 +1,13 @@
+[Unit]
+Description=Scheduled Elderbrain Borgmatic backup
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/elderbrain borg-scheduled
+TimeoutStartSec=24h
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

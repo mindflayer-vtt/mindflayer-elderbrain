@@ -85,6 +85,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!/appliance/lib/
 lib64/
 parts/
 sdist/
@@ -192,6 +193,20 @@ celerybeat.pid
 # Environments
 .env
 .venv
+cache/
+out/
+*.iso
+local.mk
+config/private/
+setup/node_modules/
+provisioning/graphics/node_modules/
+setup/.nuxt/
+setup/.output/
+setup/test-results/
+setup/playwright-report/
+test/.qemu/
+*.secret
+secrets.json
 env/
 venv/
 ENV/

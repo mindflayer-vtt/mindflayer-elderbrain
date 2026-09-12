@@ -1,0 +1,17 @@
+[Unit]
+Description=Elderbrain network transaction rollback watchdog
+Requires=elderbrain-network-recovery.service
+After=elderbrain-network-recovery.service network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/mindflayer-elderbrain/network_worker.py
+Restart=always
+RestartSec=1
+TimeoutStopSec=5
+KillMode=control-group
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

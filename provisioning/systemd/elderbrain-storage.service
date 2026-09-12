@@ -1,0 +1,17 @@
+[Unit]
+Description=Verify Elderbrain persistent data identity
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target shutdown.target
+Conflicts=shutdown.target
+RequiresMountsFor=/var/lib/mindflayer-elderbrain
+RequiresMountsFor=/etc/netplan /etc/ssh /root/.ssh /home/elderbrain-installer/.ssh
+BindsTo=var-lib-mindflayer\x2delderbrain.mount
+After=var-lib-mindflayer\x2delderbrain.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/mindflayer-elderbrain/storage_guard.py
+RemainAfterExit=yes
+TimeoutStartSec=20
+UMask=0077

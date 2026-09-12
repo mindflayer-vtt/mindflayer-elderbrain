@@ -1,0 +1,3 @@
+# Dependabot discovery entry; the installer uses the included pinned file.
+-r borgmatic-requirements.txt
+-r serial-requirements.txt
