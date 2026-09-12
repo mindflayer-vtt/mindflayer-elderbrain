@@ -263,3 +263,26 @@ The preparation receipt reports `dependencyInputsVerified`, but still leaves
 `offlineInstallVerified` claim cannot override this: matching input hashes does
 not prove that wheels satisfy those requirements or install on the current host.
 Offline installation and runtime checks must succeed before activation eligibility.
+
+## Offline dependency installation
+
+`release_dependencies.install` independently authenticates and stages both signed
+archives, binds dependency inputs to the host locks again, checks exact Python
+pins and the browser archive's lockfile SHA-512, and installs into an exclusively
+created `DIRECTORY/RELEASE_VERSION` prefix. The supported host is Ubuntu 26.04
+amd64 with Python 3.14. Each install/check command runs in a network namespace
+without networking, with a sanitized environment. Pip accepts only local wheels
+with no dependency resolution; npm uses its local archive offline with lifecycle
+scripts disabled. Python package versions, dependency consistency, imports and
+the browser helper are checked before the completion receipt is fsynced.
+
+Python environments are created at their final paths and must never be moved.
+Failed or interrupted prefixes remain without `installation.json`; the installer
+refuses to overwrite them. A future coordinator must handle explicit cleanup or
+recovery, deployment permissions, runtime links and activation. The installed
+receipt reports `dependenciesPrepared: true` but `activationReady: false`; it is
+not an authorization to activate and does not qualify OS packages or images.
+
+Dependency archives use PAX only where needed for long wheel filenames. Staging
+accepts only an exact `path` extension matching an allowlisted signed name, not
+other PAX metadata. Host-code archives retain their stricter no-PAX contract.

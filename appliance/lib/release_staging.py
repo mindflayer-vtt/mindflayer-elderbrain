@@ -94,9 +94,11 @@ Callers must never supply live runtime/configuration as the inventory root.
             total = 0
             for member in package:
                 name = safe_name(member.name)
+                safe_metadata = (not member.pax_headers or (component == 'dependencies'
+                                 and member.pax_headers == {'path': name}))
                 if (name not in paths or name in members or not member.isfile()
                         or member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE)
-                        or member.pax_headers or member.mode & 0o7000
+                        or not safe_metadata or member.mode & 0o7000
                         or not 0 <= member.size <= FILE_LIMIT):
                     raise ValueError('Unexpected or unsafe host archive member')
                 members[name] = member

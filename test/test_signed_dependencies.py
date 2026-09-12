@@ -63,6 +63,21 @@ class SignedDependencyTests(unittest.TestCase):
                 (output / 'manifest.sig').read_bytes(), self.fixture.public.read_bytes(), parent=self.root, component='dependencies'):
             pass
 
+    def test_long_wheel_filename_roundtrips_with_only_path_metadata(self):
+        receipt_file = self.inputs / 'dependencies.json'
+        receipt = json.loads(receipt_file.read_text())
+        old = 'wheels/example-1.0-py3-none-any.whl'
+        name = 'wheels/example-1.0-cp314-cp314-' + 'manylinux_2_17_x86_64.' * 5 + 'whl'
+        (self.inputs / old).rename(self.inputs / name)
+        receipt['files'][name] = receipt['files'].pop(old)
+        receipt_file.write_text(json.dumps(receipt))
+        self.assemble()
+        output = self.root / 'release'
+        with stage(output / 'elderbrain-dependencies.tar.zst', (output / 'manifest.json').read_bytes(),
+                   (output / 'manifest.sig').read_bytes(), self.fixture.public.read_bytes(),
+                   parent=self.root, component='dependencies') as (_, tree):
+            self.assertEqual((tree / name).read_bytes(), (self.inputs / name).read_bytes())
+
     def test_unsafe_signed_inventory_and_missing_format2_component_rejected(self):
         value = self.assemble()
         changed = deepcopy(value)

@@ -1063,3 +1063,26 @@ and invalid Python target. All 421 host tests pass (five skipped) with local soc
 permission; the initial sandbox run failed only the 12 socket-dependent tests.
 No live runtime changed. Offline installation integration and activation/rollback
 remain next.
+
+Added independent signed offline dependency installation at an exclusive stable
+version prefix. It re-stages both authenticated archives, checks input/lock hashes,
+installs exact wheel pins without network/dependency resolution, installs the
+locked browser tarball with scripts disabled, and checks versions/imports/pip
+consistency. All subprocesses use unshare --net and a sanitized environment.
+Completion is fsynced only after installed files; partial prefixes remain without
+a completion marker and cannot be overwritten or relocated. Activation remains
+false; live runtime links/permissions and update recovery are not yet connected.
+
+Real QEMU qualification passed using the existing 27-wheel/browser input bundle.
+Evidence: /root/elderbrain-signed-deps-s8pogki6 (fresh private source directories
+were used per attempt).
+The test signs only disposable test artifacts with non-deliverable image refs;
+no production release or live service changed. Both Python environments passed
+offline checks, browser import passed, and borgmatic 2.1.7 ran after staging
+cleanup. Earlier retained failures exposed a missing file in the test source copy,
+USTAR's filename limit for a real wheel, and npm rejecting a shared /dev/null
+configuration pathname. Fixed packaging with dependency-only path PAX metadata
+under the exact signed allowlist and separate empty npm configuration files.
+Added four installer tests, one long-filename archive regression and the reusable
+QEMU signed-dependency qualification. The full host suite runs 426 tests with five
+skipped; the focused post-npm-fix tests pass as well.

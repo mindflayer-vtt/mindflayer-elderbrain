@@ -43,7 +43,9 @@ def pack(directory, destination):
         raise ValueError('Invalid dependency artifact filename')
     with tempfile.TemporaryDirectory(prefix='dependency-package-', dir=destination.parent) as temporary:
         raw = Path(temporary) / 'dependencies.tar'
-        with tarfile.open(raw, 'w', format=tarfile.USTAR_FORMAT) as package:
+        # Wheel platform tags can exceed USTAR's 100-byte filename field.
+        # PAX emits only a path extension for these normalized integer headers.
+        with tarfile.open(raw, 'w', format=tarfile.PAX_FORMAT) as package:
             for name, expected in sorted(value['files'].items()):
                 file = directory / name
                 if file.resolve() != file:
