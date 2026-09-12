@@ -533,3 +533,19 @@ locally trusted installation baseline, not a signed release or an alternative
 trust path for downloaded updates. Missing cached images fail rather than pulling.
 Installing the baseline and offline stack unit, proving their rollback behavior
 and enabling update admission remain separate steps.
+
+`release_baseline_install.Migration` now journals replacement of only the live
+Compose file and stack unit. Its internal install API requires a caller-supplied
+bootstrap prerequisite check and authenticated offline stack unit. It rechecks
+prepared bytes, original live Compose and current configured image identities
+under job/maintenance/settings locks. A stable completed stack is required; no
+container is stopped or recreated. Configuration and current application health
+must pass before committing; previous files remain retained by RestoreTransaction.
+
+Standalone boot recovery recognizes baseline maintenance records. Before writers
+start, it reverses any uncommitted pair replacement; a committed transaction is
+retained even if its completion record was lost. A late recovery attempt refuses
+unfinished migration. UpdateServices also accepts immutable local image IDs for
+the trusted legacy rollback baseline; signed candidate authentication and registry
+digest requirements are unchanged. Concrete bootstrap-proof admission and the
+installed-VM migration/offline reboot qualification remain required.

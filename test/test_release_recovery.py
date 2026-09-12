@@ -80,6 +80,17 @@ class RecoveryEntryTests(unittest.TestCase):
                 recover('files')
             maintenance.assert_not_called()
 
+    def test_baseline_recovery_routes_to_fixed_migration_before_update_adapter(self):
+        with patch('release_recovery.persistent_identity', return_value='fixture'), \
+                patch('release_recovery.Maintenance') as maintenance, \
+                patch('release_recovery.Migration') as migration, \
+                patch('release_recovery.UpdateCheckpoints') as checkpoints:
+            maintenance.return_value.previous.return_value = {'operation': 'baseline'}
+            migration.return_value.recover.return_value = {'id': 'a' * 32, 'state': 'rolled-back', 'private': 'omit'}
+            self.assertEqual(recover('files'), {'id': 'a' * 32, 'state': 'rolled-back'})
+            migration.return_value.recover.assert_called_once_with(early=True)
+            checkpoints.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

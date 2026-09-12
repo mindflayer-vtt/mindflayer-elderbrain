@@ -1337,3 +1337,23 @@ evidence at /root/elderbrain-offline-baseline-ibx0g_er/0dc4cd35af924053a34d10f59
 Live Compose remained byte-identical. Baseline installation, offline stack-unit
 switching and rollback/boot qualification remain; signed release verification
 requirements are unchanged. Nothing was pushed or changed on the physical Lenovo.
+
+Added journaled baseline migration for fixed Compose/stack-unit targets, using
+the retained-file RestoreTransaction. The internal caller must provide the
+bootstrap prerequisite check and trusted offline unit. Source admission rechecks
+prepared hashes/rendering, live Compose and current configured cached image IDs,
+preventing stale preparation from hiding a changed image override/tag. Stable
+stack state, config and existing application health precede commit; containers are
+not restarted. Boot recovery now dispatches baseline records before the update
+adapter, refuses late unfinished recovery and asserts writer quiescence before
+early rollback. Generic backup recovery refuses baseline records. Runtime service
+validation accepts immutable local image IDs in addition to registry digests;
+signed-release validation was not weakened.
+
+Tests use real file transactions with mocked host/storage hooks: successful
+replacement, validation rollback, process loss after replacement, power loss
+between the two replacements, commit/completion-record gap, missing bootstrap,
+active-writer refusal, and actual prepared-source/cache revalidation. Recovery
+routing and local-ID-versus-mutable-tag validation also pass. No VM files were
+changed this turn. Concrete bootstrap-proof admission and real baseline switch,
+offline reboot and full signed-update rollback qualification remain pending.

@@ -16,6 +16,7 @@ from release_activation import Activation
 from release_checkpoints import UpdateCheckpoints
 from release_services import UpdateServices
 from release_targets import targets
+from release_baseline_install import Migration
 from restore_service import persistent_identity
 
 
@@ -66,6 +67,9 @@ def recover(action, *, host_root=Path('/')):
     services = UpdateServices(runtime, health_check=lambda saved: health(
         saved, state, management_socket=host_root / 'run/elderbrain/management.sock'))
     maintenance = Maintenance(state / 'maintenance', services)
+    if maintenance.previous().get('operation') == 'baseline':
+        record = Migration(maintenance, host_root=host_root).recover(early=action == 'files')
+        return {key: record[key] for key in ('id', 'state')}
     if maintenance.previous().get('operation') != 'update':
         return {'state': 'no-update-recovery-needed'}
     checkpoints = UpdateCheckpoints(state, runtime, maintenance, host_root=host_root)

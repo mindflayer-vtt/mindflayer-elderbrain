@@ -56,7 +56,7 @@ class Maintenance:
     def recover(self):
         with self.locked():
             record = self.previous()
-            if record.get('operation') == 'update':
+            if record.get('operation') in ('update', 'baseline'):
                 raise RuntimeError('Update recovery must resolve runtime and checkpoint state before starting services')
             if record.get("operation") in ("restore", "network-restore"):
                 raise RuntimeError("Restore recovery must roll back configuration before starting services")

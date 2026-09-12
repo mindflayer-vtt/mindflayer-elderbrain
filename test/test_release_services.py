@@ -11,6 +11,14 @@ from release_services import UpdateServices
 
 
 class UpdateServiceTests(unittest.TestCase):
+    def test_local_baseline_ids_are_immutable_but_tags_still_fail(self):
+        for service in self.config['services'].values():
+            service['image'] = 'sha256:' + 'b' * 64
+        self.services.validate()
+        self.config['services']['foundry']['image'] = 'foundry:latest'
+        with self.assertRaisesRegex(ValueError, 'offline digest-pinned'):
+            self.services.validate()
+
     def setUp(self):
         self.calls = []
         self.health = []

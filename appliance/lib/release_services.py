@@ -71,7 +71,7 @@ class UpdateServices(HostServices):
         for service in services.values():
             if (not isinstance(service, dict) or 'build' in service
                     or service.get('pull_policy') != 'never'
-                    or not re.fullmatch(IMAGE, str(service.get('image', '')))):
+                    or not re.fullmatch('(?:' + IMAGE + '|sha256:[a-f0-9]{64})', str(service.get('image', '')))):
                 raise ValueError('Update runtime must use offline digest-pinned images without builds')
 
     def resume_restored(self, saved):
