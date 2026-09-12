@@ -389,7 +389,7 @@ credentials while allowing kiosk code access after runtime deployment.
 
 ## Fixed deployment targets
 
-`release_targets` defines the runtime directory, CLI, eleven managed services, exact
+`release_targets` defines the runtime directory, CLI, twelve managed services, exact
 storage/network drop-ins, Chrome policy and cloud-init SSH-identity policy as a
 trusted code-owned mapping. No manifest field chooses a target. The same map is
 used for replacement and recovery. Sources come from the verified candidate;
@@ -516,21 +516,19 @@ only after all stable links and enablement links exist. An interruption before t
 single selection exposes no partial generation and a retry converges. Existing
 pre-updater regular-file layouts are not migrated.
 
-Even a completed bootstrap receipt has `activationReady: false`: this internal
-installer does not establish the signed runtime baseline, reload/start services or
-authorize updates. Provisioning invokes it before daemon reload and writer
-enablement. Installed-VM boot and complete activation/recovery qualification remain
-required before exposing updates.
+Even a completed bootstrap receipt has `activationReady: false`: bootstrap
+publication alone does not establish the runtime baseline or authorize updates.
+Provisioning invokes it before daemon reload and writer enablement. The separate
+first-boot baseline finalizer establishes that authority only after the initial
+stack is healthy and converted to immutable offline startup policy.
 
-Provisioning now invokes `provisioning/recovery_bootstrap.py` after persistent
-host settings are bound and before daemon reload/writer enablement. This uses the
-trusted ISO payload and the reviewed host inventory, not unauthenticated downloaded
-archives. Legacy installations without persistent-storage metadata skip this hook;
-the bootstrap API itself rejects a missing storage identity. The staging directory
-is temporary and the independent recovery bundle survives its removal. This does
-not migrate the legacy stack startup to prebuilt/offline release operation.
+Provisioning invokes `provisioning/recovery_bootstrap.py` after persistent host
+settings are bound and before daemon reload/writer enablement. This uses the
+trusted ISO payload and reviewed host inventory, not unauthenticated downloaded
+archives. The bootstrap API rejects a missing storage identity. The staging
+directory is temporary and the independent recovery bundle survives its removal.
 
-`release_baseline.prepare` stages the legacy installation's offline rollback
+`release_baseline.prepare` stages the trusted ISO installation's offline rollback
 Compose configuration without modifying live runtime files. Under host job,
 maintenance and settings locks it resolves all four configured services, requires
 each image to be cached for Linux amd64, and pins their immutable local image IDs.
@@ -540,10 +538,10 @@ fields; expanded secrets are never written to the preparation directory.
 
 The private durable baseline includes original/generated Compose, their hashes,
 image IDs and a baseline-prepared receipt with activationReady false. This is a
-locally trusted installation baseline, not a signed release or an alternative
-trust path for downloaded updates. Missing cached images fail rather than pulling.
-Installing the baseline and offline stack unit, proving their rollback behavior
-and enabling update admission remain separate steps.
+locally trusted installation baseline established by the explicitly installed ISO,
+not an alternative trust path for downloaded updates. Missing cached images fail
+rather than pulling. `elderbrain-baseline.service` installs it transactionally
+before management, graphics or backup retry can start.
 
 `release_baseline_install.Migration` now journals replacement of only the live
 Compose file and stack unit. Its internal install API requires a caller-supplied
@@ -741,9 +739,10 @@ installer copies source/key plus the reviewed payload inventory into
 Re-running with identical inputs is allowed; replacing an existing key, source
 or inventory requires an explicit migration and is refused here. The installed
 baseline must use a semantic host version; old Git/dirty labels are deliberately
-not accepted by release discovery. This provisions trust,
-not a production signed release or the offline baseline needed for first-update
-rollback; complete fresh-ISO update qualification remains pending.
+not accepted by release discovery. This provisions online-update trust; the
+separate trusted-ISO baseline finalizer establishes immutable first-update rollback
+and the accepted release sequence. Complete fresh-ISO update qualification remains
+pending.
 
 ## Two-phase recovery authority
 
@@ -802,7 +801,13 @@ It never advances for an activation that rolls back.
 The candidate bootstrap generation identity is also retained in the update journal.
 Final boot recovery selects it only for a completed activation, closing the crash
 window after activation commit but before the original worker's selector write.
-Rolled-back updates retain the previous recovery authority. A clean install still
-needs to seed the first signed baseline sequence before normal update qualification;
-until that installer integration exists, the anti-replay implementation is not a
-complete releasable baseline.
+Rolled-back updates retain the previous recovery authority. A clean or explicit
+preserve-data reinstall copies authenticated build metadata from the trusted ISO.
+On first boot, the baseline finalizer verifies its exact source identity, requires
+the matching semantic runtime, installs immutable local image references through
+the recoverable migration, and only then records that ISO's sequence. A private
+OS-local completion receipt makes later boots idempotent; a higher sequence
+accepted by a successful online update remains valid. Because a preserve reinstall
+replaces the OS-local receipt, it explicitly re-establishes the selected ISO as the
+new baseline even when retained control state previously recorded a higher release.
+Normal discovery and activation still reject equal or lower signed releases.

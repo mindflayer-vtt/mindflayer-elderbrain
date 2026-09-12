@@ -17,7 +17,12 @@ if [[ -n ${QEMU_SSH_PRIVATE_KEY:-} ]]; then
 else
   key="$test_state/id_ed25519"; [[ -f $key ]] || ssh-keygen -q -t ed25519 -N '' -f "$key"
 fi
-if [[ -n ${ISO:-} ]]; then iso=$ISO; else iso=$(make -s -C "$ROOT" iso SSH_PUBLIC_KEY="$key.pub" | tail -1); fi
+if [[ -n ${ISO:-} ]]; then
+  iso=$ISO
+else
+  iso=$(make -s -C "$ROOT" iso APPLIANCE_VERSION="${APPLIANCE_VERSION:-1.0.0}" \
+    APPLIANCE_RELEASE_SEQUENCE="${APPLIANCE_RELEASE_SEQUENCE:-1}" SSH_PUBLIC_KEY="$key.pub" | tail -1)
+fi
 [[ -f $iso ]] || { echo "ISO not found: $iso" >&2; exit 2; }
 disk_work=$work
 if [[ -n ${QEMU_DISK_ROOT:-} ]]; then

@@ -390,6 +390,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_baseline_seed.py",
+    "path": "runtime/release_baseline_seed.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_bootstrap.py",
     "path": "runtime/release_bootstrap.py",
     "mode": 420
@@ -492,6 +497,11 @@
   {
     "source": "provisioning/systemd/elderbrain-admin-console.service",
     "path": "units/elderbrain-admin-console.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-baseline.service",
+    "path": "units/elderbrain-baseline.service",
     "mode": 420
   },
   {

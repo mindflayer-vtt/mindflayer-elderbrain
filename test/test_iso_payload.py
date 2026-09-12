@@ -52,12 +52,13 @@ class IsoPayloadTests(unittest.TestCase):
             subprocess.run(['git', 'add', 'tracked.txt'], cwd=repository, check=True)
             subprocess.run(['git', 'commit', '-qm', 'fixture'], cwd=repository, check=True)
             (repository / 'untracked-secret.txt').write_text('must-not-be-copied')
-            result = tracked.stage(repository, payload, '1.2.3')
+            result = tracked.stage(repository, payload, '1.2.3', 7)
             self.assertEqual((payload / 'tracked.txt').read_text(), 'reviewed\n')
             self.assertFalse((payload / 'untracked-secret.txt').exists())
             self.assertEqual((payload / 'VERSION').read_text(), '1.2.3\n')
             self.assertEqual(json.loads((payload / 'build-metadata.json').read_text()), result)
             self.assertEqual(result['inputMode'], 'tracked-commit')
+            self.assertEqual(result['releaseSequence'], 7)
             identity = result.pop('sourceIdentity')
             encoded = json.dumps(result, sort_keys=True, separators=(',', ':')).encode()
             self.assertEqual(identity, hashlib.sha256(encoded).hexdigest())
@@ -77,21 +78,24 @@ class IsoPayloadTests(unittest.TestCase):
             file.write_text('changed\n')
             (root / 'dirty').mkdir()
             with self.assertRaisesRegex(ValueError, 'clean tracked'):
-                tracked.stage(repository, root / 'dirty', '1.0.0')
+                tracked.stage(repository, root / 'dirty', '1.0.0', 1)
             file.write_text('first\n')
             (repository / 'link').symlink_to('tracked.txt')
             subprocess.run(['git', 'add', 'link'], cwd=repository, check=True)
             subprocess.run(['git', 'commit', '-qm', 'symlink'], cwd=repository, check=True)
             (root / 'linked').mkdir()
             with self.assertRaisesRegex(ValueError, 'unsupported entries'):
-                tracked.stage(repository, root / 'linked', '1.0.0')
+                tracked.stage(repository, root / 'linked', '1.0.0', 1)
 
     def test_semantic_build_identity_rejects_implicit_or_git_versions(self):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
             for version in ('', 'abc123', '1.0', '01.0.0'):
                 with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'stable semantic'):
-                    tracked.metadata(destination, version, 'a' * 40, 'b' * 40)
+                    tracked.metadata(destination, version, 1, 'a' * 40, 'b' * 40)
+            for sequence in (0, -1, True, 2 ** 63):
+                with self.subTest(sequence=sequence), self.assertRaisesRegex(ValueError, 'positive 63-bit'):
+                    tracked.metadata(destination, '1.0.0', sequence, 'a' * 40, 'b' * 40)
 
     def test_iso_builder_uses_tracked_payload_by_default_and_labels_dirty_opt_in(self):
         builder = (ROOT / 'iso/build.sh').read_text()
@@ -99,3 +103,4 @@ class IsoPayloadTests(unittest.TestCase):
         self.assertIn('DEV_ALLOW_DIRTY_WORKTREE', builder)
         self.assertIn('suffix=-dirty', builder)
         self.assertIn('APPLIANCE_VERSION must be a stable semantic version', builder)
+        self.assertIn('APPLIANCE_RELEASE_SEQUENCE must be a positive 63-bit integer', builder)

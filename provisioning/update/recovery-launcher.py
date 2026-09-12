@@ -92,7 +92,7 @@ def selected(directory):
 
 
 def launch(phase, directory=Path('/usr/lib/elderbrain-recovery'), *, job=None, lock_fd=None):
-    if phase not in ('storage', 'files', 'finish', 'job'):
+    if phase not in ('storage', 'baseline', 'files', 'finish', 'job'):
         raise ValueError('Invalid recovery phase')
     if phase != 'job' and (job is not None or lock_fd is not None):
         raise ValueError('Unexpected worker arguments')
@@ -118,13 +118,18 @@ def launch(phase, directory=Path('/usr/lib/elderbrain-recovery'), *, job=None, l
         if not guard.is_file():
             raise ValueError('Verified recovery bundle has no storage guard')
         arguments = [str(guard)]
+    if phase == 'baseline':
+        finalizer = entrypoint.parent / 'release_baseline_seed.py'
+        if not finalizer.is_file():
+            raise ValueError('Verified recovery bundle has no baseline finalizer')
+        arguments = [str(finalizer)]
     os.execve('/usr/bin/python3', ['/usr/bin/python3', '-I', '-B', *arguments],
               {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'})
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('phase', choices=('storage', 'files', 'finish', 'job'))
+    parser.add_argument('phase', choices=('storage', 'baseline', 'files', 'finish', 'job'))
     parser.add_argument('job', nargs='?')
     parser.add_argument('lock_fd', nargs='?', type=int)
     args = parser.parse_args()

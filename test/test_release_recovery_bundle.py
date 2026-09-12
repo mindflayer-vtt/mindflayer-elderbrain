@@ -179,6 +179,15 @@ class RecoveryBundleTests(unittest.TestCase):
         argv = execute.call_args.args[1]
         self.assertEqual(argv, ['/usr/bin/python3', '-I', '-B', str(Path(result['directory']) / 'storage_guard.py')])
 
+    def test_baseline_phase_uses_verified_finalizer_outside_live_runtime(self):
+        result = self.install()
+        select(result['id'], directory=self.directory, maintenance=Maintenance(self.root / 'maintenance', None))
+        with patch.object(launcher.os, 'execve') as execute:
+            launcher.launch('baseline', self.directory)
+        argv = execute.call_args.args[1]
+        self.assertEqual(argv, ['/usr/bin/python3', '-I', '-B',
+            str(Path(result['directory']) / 'release_baseline_seed.py')])
+
 
 if __name__ == '__main__':
     unittest.main()

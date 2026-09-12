@@ -3,13 +3,15 @@
 Install `bash curl git gpg xorriso rsync tar squashfs-tools coreutils`, then run:
 
 ```sh
-make iso APPLIANCE_VERSION=1.0.0 SSH_PUBLIC_KEY=/absolute/path/to/id_ed25519.pub
+make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
+  SSH_PUBLIC_KEY=/absolute/path/to/id_ed25519.pub
 ```
 
 For example, to use your server administration key for a hardware test:
 
 ```sh
-make iso APPLIANCE_VERSION=1.0.0 SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub"
+make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
+  SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub"
 ```
 
 The key is selected at build time, not hard-coded. Choose another public-key
@@ -21,9 +23,11 @@ The builder downloads and caches the pinned Ubuntu 26.04.1 live-server amd64
 image, verifies Ubuntu's signed checksum and the ISO checksum, then embeds only
 the files in the clean, committed Git tree. Staged or modified tracked files make
 a production build fail; untracked files are not archive inputs. A generated
-`build-metadata.json` binds the semantic appliance version, source commit, source
-tree and a SHA-256 source identity. `VERSION` contains only the supplied semantic
-version, and both version and commit appear in the ISO filename. The builder then
+`build-metadata.json` binds the semantic appliance version, positive 63-bit release
+sequence, source commit, source tree and a SHA-256 source identity. `VERSION`
+contains only the supplied semantic version; version, sequence and commit appear
+in the ISO filename. The sequence establishes the accepted update baseline and
+must increase for each subsequently signed appliance release. The builder then
 adds deliberately selected configuration inputs and recreates the hybrid BIOS/UEFI
 ISO. It does not embed or build Mindflayer server source. `local.mk` may set the
 build variables and is ignored. Only an SSH public key is accepted.
@@ -65,7 +69,8 @@ your SMTP server, port, TLS mode, sender and optional credentials. The private
 directory is Git-ignored and excluded from the ISO unless explicitly selected:
 
 ```sh
-make iso APPLIANCE_VERSION=1.0.0 SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" \
+make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
+  SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" \
   SMTP_CONFIG=config/private/smtp.json
 ```
 

@@ -1,6 +1,7 @@
 [Unit]
 Description=Elderbrain privileged management bridge
-After=docker.service
+Requires=elderbrain-baseline.service
+After=docker.service elderbrain-baseline.service
 
 [Service]
 Type=simple

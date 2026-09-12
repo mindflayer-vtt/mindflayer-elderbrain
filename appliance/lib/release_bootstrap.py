@@ -25,7 +25,7 @@ from release_staging import inventory
 from restore_service import persistent_identity
 
 WRITERS = ('docker.service', 'docker.socket', 'containerd.service', 'elderbrain-stack.service',
-           'elderbrain-graphics.service', 'elderbrain-backup.service',
+           'elderbrain-baseline.service', 'elderbrain-graphics.service', 'elderbrain-backup.service',
            'elderbrain-backup-retry.service', 'elderbrain-management.service',
            'elderbrain-display-watchdog.service', 'elderbrain-network-watchdog.service',
            'elderbrain-network-confirmation.service', 'elderbrain-network-recovery.service',
@@ -291,7 +291,7 @@ def verify_installed(tree, allowed_paths, *, host_root=Path('/')):
                 raise ValueError('Aliased recovery proof source')
             value = read_regular(source, 4 * 1024 ** 2)
             descriptors[source.name] = {'size': len(value), 'sha256': hashlib.sha256(value).hexdigest()}
-    if not {'release_recovery.py', 'release_baseline_install.py'} <= set(descriptors):
+    if not {'release_recovery.py', 'release_baseline_install.py', 'release_baseline_seed.py'} <= set(descriptors):
         raise ValueError('Recovery proof lacks migration entry points')
     manifest = json.dumps({'format': 2, 'recoveryApi': RECOVERY_API,
                           'entrypoint': 'release_recovery.py', 'files': descriptors},

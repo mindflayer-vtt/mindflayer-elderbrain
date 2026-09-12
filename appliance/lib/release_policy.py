@@ -51,6 +51,20 @@ class ReleasePolicy:
         return sequence
 
     def commit(self, record):
+        selected = self.selected(record)
+        sequence = selected['highestSequence']
+        current = self.current()
+        if sequence < current['highestSequence']:
+            raise ValueError('Refusing to roll back accepted release sequence')
+        if sequence == current['highestSequence']:
+            if current != selected:
+                raise ValueError('Release sequence identity conflicts with accepted state')
+            return current
+        save_record(self.path, selected)
+        return selected
+
+    @staticmethod
+    def selected(record):
         if not isinstance(record, dict):
             raise ValueError('Invalid release acceptance record')
         sequence, version, digest = (record.get(name) for name in
@@ -60,14 +74,11 @@ class ReleasePolicy:
                 or not re.fullmatch(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', version)
                 or not isinstance(digest, str) or not re.fullmatch(r'[a-f0-9]{64}', digest)):
             raise ValueError('Invalid release acceptance record')
-        current = self.current()
-        if sequence < current['highestSequence']:
-            raise ValueError('Refusing to roll back accepted release sequence')
-        selected = {'format': 1, 'highestSequence': sequence,
-                    'version': version, 'manifestSha256': digest}
-        if sequence == current['highestSequence']:
-            if current != selected:
-                raise ValueError('Release sequence identity conflicts with accepted state')
-            return current
+        return {'format': 1, 'highestSequence': sequence,
+                'version': version, 'manifestSha256': digest}
+
+    def install_baseline(self, record):
+        """Explicit clean/preserve install authority may establish a new baseline."""
+        selected = self.selected(record)
         save_record(self.path, selected)
         return selected

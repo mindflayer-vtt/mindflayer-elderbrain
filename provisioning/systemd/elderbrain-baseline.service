@@ -1,0 +1,15 @@
+[Unit]
+Description=Finalize immutable Elderbrain install baseline
+Requires=elderbrain-stack.service
+After=elderbrain-stack.service
+Before=elderbrain-management.service elderbrain-graphics.service elderbrain-backup-retry.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /usr/libexec/elderbrain-recovery.py baseline
+RemainAfterExit=yes
+TimeoutStartSec=15min
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -203,7 +203,8 @@ def create_archive(destination, source_state, policy_state, runtime, operation, 
         save_record(managed / 'checkpoint-retention.json', policy)
         units = managed / "systemd"
         units.mkdir()
-        for name in ("elderbrain-stack.service", "elderbrain-management.service",
+        for name in ("elderbrain-stack.service", "elderbrain-baseline.service",
+                     "elderbrain-management.service",
                      "elderbrain-graphics.service", "elderbrain-backup.service",
                      "elderbrain-backup-retry.service"):
             shutil.copy2(host_root / "etc/systemd/system" / name, units / name)

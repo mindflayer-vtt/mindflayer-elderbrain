@@ -9,6 +9,9 @@ trap 'chmod -R u+w "$WORK" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 for command in curl git gpg xorriso rsync tar unsquashfs sha256sum; do command -v "$command" >/dev/null || { echo "missing build dependency: $command" >&2; exit 2; }; done
 version=${APPLIANCE_VERSION:-}
 [[ $version =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'APPLIANCE_VERSION must be a stable semantic version' >&2; exit 2; }
+sequence=${APPLIANCE_RELEASE_SEQUENCE:-}
+[[ $sequence =~ ^[1-9][0-9]*$ ]] || { echo 'APPLIANCE_RELEASE_SEQUENCE must be a positive 63-bit integer' >&2; exit 2; }
+(( ${#sequence} < 19 )) || [[ ${#sequence} == 19 && $sequence < 9223372036854775808 ]] || { echo 'APPLIANCE_RELEASE_SEQUENCE must be a positive 63-bit integer' >&2; exit 2; }
 key=${SSH_PUBLIC_KEY:-}
 if [[ -n ${UPDATE_SOURCE_CONFIG:-} || -n ${UPDATE_PUBLIC_KEY:-} ]]; then
   [[ -n ${UPDATE_SOURCE_CONFIG:-} && -n ${UPDATE_PUBLIC_KEY:-} ]] || { echo 'UPDATE_SOURCE_CONFIG and UPDATE_PUBLIC_KEY must be supplied together' >&2; exit 2; }
@@ -36,16 +39,16 @@ commit=$(git -C "$ROOT" rev-parse --verify 'HEAD^{commit}')
 if [[ ${DEV_ALLOW_DIRTY_WORKTREE:-0} == 1 ]]; then
   rsync -a --exclude-from="$ROOT/iso/payload.exclude" "$ROOT/" "$WORK/tree/elderbrain/"
   tree=$(git -C "$ROOT" rev-parse --verify 'HEAD^{tree}')
-  python3 - "$WORK/tree/elderbrain" "$version" "$commit" "$tree" <<'PY'
+  python3 - "$WORK/tree/elderbrain" "$version" "$sequence" "$commit" "$tree" <<'PY'
 import importlib.util, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 spec = importlib.util.spec_from_file_location('tracked_payload', root / 'iso/tracked-payload.py')
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-module.metadata(root, sys.argv[2], sys.argv[3], sys.argv[4], development=True)
+module.metadata(root, sys.argv[2], int(sys.argv[3]), sys.argv[4], sys.argv[5], development=True)
 PY
   suffix=-dirty
 else
-  python3 "$ROOT/iso/tracked-payload.py" "$ROOT" "$WORK/tree/elderbrain" "$version"
+  python3 "$ROOT/iso/tracked-payload.py" "$ROOT" "$WORK/tree/elderbrain" "$version" "$sequence"
   suffix=
 fi
 if [[ -n ${UPDATE_SOURCE_CONFIG:-} ]]; then
@@ -74,7 +77,7 @@ for cfg in "$WORK/tree/boot/grub/grub.cfg" "$WORK/tree/boot/grub/loopback.cfg"; 
   ' "$cfg" > "$WORK/grub.cfg"
   mv "$WORK/grub.cfg" "$cfg"
 done
-xorriso -as mkisofs -r -V 'MINDFLAYER' -o "$OUT/mindflayer-elderbrain-${version}-${commit:0:12}${suffix}.iso" \
+xorriso -as mkisofs -r -V 'MINDFLAYER' -o "$OUT/mindflayer-elderbrain-${version}-r${sequence}-${commit:0:12}${suffix}.iso" \
   --grub2-mbr "--interval:local_fs:0s-15s:zero_mbrpt,zero_gpt:$CACHE/$ISO_NAME" \
   --protective-msdos-label -partition_cyl_align off -partition_offset 16 \
   --mbr-force-bootable -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b \
@@ -82,4 +85,4 @@ xorriso -as mkisofs -r -V 'MINDFLAYER' -o "$OUT/mindflayer-elderbrain-${version}
   -appended_part_as_gpt -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 \
   -c '/boot.catalog' -b '/boot/grub/i386-pc/eltorito.img' -no-emul-boot -boot-load-size 4 -boot-info-table \
   --grub2-boot-info -eltorito-alt-boot -e '--interval:appended_partition_2_start_1426880s_size_10296d:all::' -no-emul-boot "$WORK/tree"
-echo "$OUT/mindflayer-elderbrain-${version}-${commit:0:12}${suffix}.iso"
+echo "$OUT/mindflayer-elderbrain-${version}-r${sequence}-${commit:0:12}${suffix}.iso"

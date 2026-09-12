@@ -3,7 +3,8 @@ Description=Elderbrain native Wayland kiosk
 After=network-online.target elderbrain-stack.service systemd-user-sessions.service getty@tty1.service
 Conflicts=getty@tty1.service
 Wants=network-online.target
-Requires=elderbrain-stack.service
+Requires=elderbrain-stack.service elderbrain-baseline.service
+After=elderbrain-baseline.service
 Requires=elderbrain-display-watchdog.service
 After=elderbrain-display-watchdog.service
 

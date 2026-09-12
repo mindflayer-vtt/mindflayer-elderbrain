@@ -145,7 +145,8 @@ class MaintenanceTests(unittest.TestCase):
             (runtime / name).write_text("test")
         for name in ("etc/systemd/system", "etc/ssh", "root/.ssh", "home/elderbrain-installer/.ssh"):
             (host / name).mkdir(parents=True)
-        for name in ("elderbrain-stack.service", "elderbrain-management.service",
+        for name in ("elderbrain-stack.service", "elderbrain-baseline.service",
+                     "elderbrain-management.service",
                      "elderbrain-graphics.service", "elderbrain-backup.service",
                      "elderbrain-backup-retry.service"):
             (host / "etc/systemd/system" / name).write_text("unit")

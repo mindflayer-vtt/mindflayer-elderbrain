@@ -48,13 +48,16 @@ def extract_tracked(repository, destination, commit):
             source.extractall(destination, members=members, filter='data')
 
 
-def metadata(destination, version, commit, tree, *, development=False):
+def metadata(destination, version, sequence, commit, tree, *, development=False):
     if not isinstance(version, str) or not re.fullmatch(VERSION, version):
         raise ValueError('APPLIANCE_VERSION must be a stable semantic version')
     for value in (commit, tree):
         if not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{40}', value):
             raise ValueError('Invalid Git source identity')
-    core = {'format': 1, 'version': version, 'sourceCommit': commit, 'sourceTree': tree,
+    if type(sequence) is not int or not 1 <= sequence <= 2 ** 63 - 1:
+        raise ValueError('APPLIANCE_RELEASE_SEQUENCE must be a positive 63-bit integer')
+    core = {'format': 1, 'version': version, 'releaseSequence': sequence,
+            'sourceCommit': commit, 'sourceTree': tree,
             'inputMode': 'development-worktree' if development else 'tracked-commit'}
     encoded = json.dumps(core, sort_keys=True, separators=(',', ':')).encode()
     value = {**core, 'sourceIdentity': hashlib.sha256(encoded).hexdigest()}
@@ -65,10 +68,10 @@ def metadata(destination, version, commit, tree, *, development=False):
     return value
 
 
-def stage(repository, destination, version):
+def stage(repository, destination, version, sequence):
     commit, tree = identity(repository)
     extract_tracked(repository, destination, commit)
-    return metadata(destination, version, commit, tree)
+    return metadata(destination, version, sequence, commit, tree)
 
 
 if __name__ == '__main__':
@@ -76,5 +79,6 @@ if __name__ == '__main__':
     parser.add_argument('repository', type=Path)
     parser.add_argument('destination', type=Path)
     parser.add_argument('version')
+    parser.add_argument('sequence', type=int)
     args = parser.parse_args()
-    print(json.dumps(stage(args.repository, args.destination, args.version), sort_keys=True))
+    print(json.dumps(stage(args.repository, args.destination, args.version, args.sequence), sort_keys=True))

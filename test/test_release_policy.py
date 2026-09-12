@@ -56,6 +56,14 @@ class ReleasePolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.policy.current()
 
+    def test_explicit_install_baseline_can_reset_a_preserved_newer_sequence(self):
+        self.policy.commit(self.record(9))
+        baseline = self.policy.install_baseline(self.record(2, version='1.0.0'))
+        self.assertEqual(baseline['highestSequence'], 2)
+        self.assertEqual(self.policy.current(), baseline)
+        with self.assertRaisesRegex(ValueError, 'not newer'):
+            self.policy.require_new(self.release(2))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1829,3 +1829,21 @@ platform skips), 39 Setup tests, typechecking, static checks, Compose validation
 the production Nuxt build and all 40 browser scenarios. Installed VM
 power/interruption qualification remains pending; no VM or physical appliance was
 changed for this milestone.
+
+Integrated the clean-install immutable release baseline. Production ISO builds now
+require an explicit positive 63-bit `APPLIANCE_RELEASE_SEQUENCE`; generated source
+metadata and artifact names bind that sequence alongside semantic version and Git
+identity. Provisioning retains the authenticated metadata and a trusted copy of the
+initial stack unit. After the initial online stack has fetched/built its images, the
+new baseline boot service resolves their exact local SHA-256 IDs, transactionally
+switches Compose to offline `pull_policy: never` operation through the existing
+recoverable migration, and records the installed sequence only after that switch
+commits. Management, graphics and pending-backup retry require this finalizer, so a
+partial baseline fails closed. Its OS-local completion receipt makes later boots
+idempotent and accepts a policy advanced by a successful online update. An explicit
+preserve-data reinstall replaces that receipt and is therefore authorized to reset
+retained anti-replay state to the selected ISO baseline; normal online updates retain
+strict greater-than ordering. Focused baseline, recovery-bundle, release-policy,
+payload, target and backup tests pass, and the installed systemd graph verifies
+outside the restricted sandbox. Full local suites and clean-ISO/VM qualification
+remain pending; no VM or physical appliance was changed for this milestone.

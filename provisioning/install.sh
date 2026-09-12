@@ -34,7 +34,7 @@ if [[ -e /etc/elderbrain/storage.json || -L /etc/elderbrain/storage.json ]]; the
   python3 "$PAYLOAD_DIR/appliance/lib/storage_guard.py"
   install -d -m 0755 "$RUNTIME"
   install -m 0644 "$PAYLOAD_DIR/appliance/lib/storage_guard.py" "$RUNTIME/storage_guard.py"
-  for storage_writer in docker elderbrain-stack elderbrain-management elderbrain-graphics elderbrain-admin-console elderbrain-backup elderbrain-backup-retry elderbrain-display-watchdog elderbrain-network-recovery elderbrain-network-watchdog elderbrain-network-confirmation; do
+  for storage_writer in docker elderbrain-stack elderbrain-baseline elderbrain-management elderbrain-graphics elderbrain-admin-console elderbrain-backup elderbrain-backup-retry elderbrain-display-watchdog elderbrain-network-recovery elderbrain-network-watchdog elderbrain-network-confirmation; do
     install -d -m 0755 "/etc/systemd/system/$storage_writer.service.d"
     install -m 0644 "$PAYLOAD_DIR/provisioning/systemd/storage-required.conf" "/etc/systemd/system/$storage_writer.service.d/10-storage-required.conf"
   done
@@ -82,6 +82,9 @@ else
   python3 "$PAYLOAD_DIR/provisioning/initialize-default.py" "$RUNTIME/appliance.env" "$PAYLOAD_DIR/config/defaults/appliance.env"
 fi
 cp "$PAYLOAD_DIR/VERSION" "$RUNTIME/VERSION"
+install -d -m 0755 /etc/elderbrain
+install -m 0644 "$PAYLOAD_DIR/build-metadata.json" /etc/elderbrain/install-baseline.json
+install -m 0644 "$PAYLOAD_DIR/release/elderbrain-stack.service" "$RUNTIME/baseline-stack.service"
 if [[ -f "$PAYLOAD_DIR/config/private/smtp.json" && ! -e "$STATE/elderbrain/secrets/default-smtp.json" ]]; then
   install -d -m 0700 -o 1000 -g 1000 "$STATE/elderbrain/secrets"
   install -m 0600 -o 1000 -g 1000 "$PAYLOAD_DIR/config/private/smtp.json" "$STATE/elderbrain/secrets/default-smtp.json"
@@ -198,7 +201,7 @@ if [[ -f /etc/elderbrain/storage.json ]]; then
 fi
 systemctl daemon-reload
 systemctl mask getty@tty2.service autovt@tty2.service
-systemctl enable ssh docker elderbrain-management elderbrain-stack elderbrain-graphics elderbrain-admin-console elderbrain-display-watchdog elderbrain-network-recovery elderbrain-network-watchdog elderbrain-network-confirmation elderbrain-backup-retry
+systemctl enable ssh docker elderbrain-stack elderbrain-baseline elderbrain-management elderbrain-graphics elderbrain-admin-console elderbrain-display-watchdog elderbrain-network-recovery elderbrain-network-watchdog elderbrain-network-confirmation elderbrain-backup-retry
 
 ufw --force reset
 ufw default deny incoming
