@@ -89,6 +89,8 @@ def install(tree, allowed_paths, *, state, host_root=Path('/')):
     """Internal installer API: tree and inventory must already be authenticated."""
     root, tree, state = Path(host_root).absolute(), Path(tree).absolute(), Path(state)
     identity = persistent_identity(state, root)  # Before creating any directories.
+    if identity is None:
+        raise ValueError('Recovery bootstrap requires verified persistent storage')
     if tree.resolve() != tree or not tree.is_dir():
         raise ValueError('Bootstrap source must be canonical')
     paths = inventory(allowed_paths)

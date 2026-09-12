@@ -168,6 +168,9 @@ if [[ -f /etc/elderbrain/storage.json ]]; then
   if [[ -n ${ELDERBRAIN_STORAGE_RECEIPT:-} ]]; then host_storage_args+=(--receipt "$ELDERBRAIN_STORAGE_RECEIPT"); fi
   (cd "$PAYLOAD_DIR" && python3 -m provisioning.host_persistence "${host_storage_args[@]}")
   sshd -t
+  # The ISO payload is trusted installer code. Publish independent recovery
+  # before enabling writers; online releases require separate signature checks.
+  python3 -I -B "$PAYLOAD_DIR/provisioning/recovery_bootstrap.py"
 fi
 systemctl daemon-reload
 systemctl mask getty@tty2.service autovt@tty2.service

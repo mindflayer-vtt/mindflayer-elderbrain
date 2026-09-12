@@ -510,3 +510,11 @@ Even a completed bootstrap receipt has `activationReady: false`: this internal
 installer does not migrate the previous runtime, reload/start services or authorize
 updates. It is not yet wired into provisioning. Installed-VM boot and complete
 activation/recovery qualification remain required before exposing updates.
+
+Provisioning now invokes `provisioning/recovery_bootstrap.py` after persistent
+host settings are bound and before daemon reload/writer enablement. This uses the
+trusted ISO payload and the reviewed host inventory, not unauthenticated downloaded
+archives. Legacy installations without persistent-storage metadata skip this hook;
+the bootstrap API itself rejects a missing storage identity. The staging directory
+is temporary and the independent recovery bundle survives its removal. This does
+not migrate the legacy stack startup to prebuilt/offline release operation.

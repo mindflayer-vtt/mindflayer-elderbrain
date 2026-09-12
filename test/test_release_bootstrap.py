@@ -86,6 +86,22 @@ class BootstrapTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'missing storage'):
                 self.install()
         self.assertFalse((self.root / 'usr').exists())
+        with patch.object(bootstrap, 'persistent_identity', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'requires verified persistent storage'):
+                self.install()
+        self.assertFalse((self.root / 'usr').exists())
+
+    def test_trusted_provisioning_payload_installs_before_writer_enablement(self):
+        from provisioning.recovery_bootstrap import provision
+        result = provision(host_root=self.root)
+        self.assertEqual(result['state'], 'installed')
+        self.assertFalse(result['activationReady'])
+        source = Path(__file__).resolve().parents[1] / 'provisioning/install.sh'
+        script = source.read_text()
+        self.assertLess(script.index('python3 -m provisioning.host_persistence'),
+                        script.index('provisioning/recovery_bootstrap.py'))
+        self.assertLess(script.index('provisioning/recovery_bootstrap.py'),
+                        script.index('systemctl daemon-reload'))
 
     def test_maintenance_remains_locked_through_file_publication(self):
         original = bootstrap.publish

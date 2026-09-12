@@ -1288,3 +1288,32 @@ history, interrupted publication/retry, locked maintenance, unsafe targets/sourc
 conflicting enablement and missing storage. Storage identity is mocked; no live
 host or VM boot files were modified. Provisioning wiring, previous-runtime
 migration, daemon reload and real VM boot/update qualification remain pending.
+
+Wired trusted ISO provisioning into the recovery bootstrap installer after host
+settings persistence and before daemon reload/writer enablement. The payload is
+staged from the same reviewed inventory used by releases; no downloaded archive
+is implicitly trusted. Fixed a discovered admission gap: absent persistent
+identity returned None, which bootstrap now explicitly rejects. Added provisioning
+and absent-identity tests. Full regression suite: 502 tests, five skipped, passing;
+shell syntax and diff whitespace checks pass.
+
+Installed the bootstrap on the identified disposable QEMU VM using
+test/qemu/recovery-bootstrap.py. First transfer correctly rejected non-root source
+ownership before installation; root-owned extraction succeeded. The real systemd
+graph verifies with generators enabled (required for fstab mounts), the stable
+storage guard passes, and both recovery phases report no-update-recovery-needed.
+Previous managed files remain under recovery history
+installation-7dbe4ccefed84da29b4e8e372ed82704; active bundle is
+53e0cffe4581e7cc86f29d50d2f195be28b63761e5a1059b45c978b4d740c73c.
+This installation retains activationReady false; complete update activation and
+interrupted-update boot recovery are not yet qualified.
+
+Rebooted only the disposable VM; boot ID changed from
+8d6da1c5-c4ad-4454-8d1d-3caf885b7689 to 0ace5305-4483-4ae6-a57a-caef48324b28.
+Storage/early recovery completed at monotonic 3.57/3.85 seconds, management at
+8.81 seconds, legacy stack at 43.46 seconds, graphics at 43.61 seconds and finish
+recovery at 43.77 seconds. All reported success, no failed units or pending jobs
+remained, and CA-verified HTTPS Setup health returned exactly {"ok":true}.
+This qualifies normal reboot with the installed gates and no pending update;
+it does not qualify offline stack migration, Foundry workload, interrupted-update
+rollback or a newly built ISO installation. Physical Lenovo remained off.
