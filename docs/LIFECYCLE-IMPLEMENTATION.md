@@ -1990,3 +1990,16 @@ retained production disk. The emergency shell's `systemctl poweroff` and a later
 ACPI power event did not terminate within their observation windows, so the
 disposable broken-storage VM was hard-stopped; bounded recovery shutdown and an
 appliance-specific recovery message remain open usability work.
+
+Wrong-storage-identity boot refusal was qualified with another clean overlay of
+the untouched production disk. Before mutation, the mounted volume marker exactly
+matched `/etc/elderbrain/storage.json`; only the overlay marker's disk serial was
+changed, retaining its root ownership and mode 0600, then synced before reboot.
+The volume still mounted from `/dev/vda4` as Btrfs, but stable recovery's storage
+guard reported that its marker did not match the installed identity. Boot entered
+visible emergency mode before update recovery, and Docker, stack, management and
+graphics were all inactive. This isolates and qualifies the identity-mismatch
+guard independently from missing-device handling. Emergency-shell poweroff again
+failed to terminate within 30 seconds, confirming the bounded recovery-shutdown
+defect rather than a one-off missing-device effect; only the disposable overlay
+was hard-stopped.
