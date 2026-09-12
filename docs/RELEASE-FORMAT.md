@@ -401,3 +401,25 @@ parents require explicit installation/migration work, not silent creation during
 activation. Chrome's managed policy is now included in the signed host inventory.
 Checkpoint integration and stable worker/boot recovery remain required before
 this map is used by a live update entry point.
+
+## Update checkpoint adapter
+
+`release_checkpoints.UpdateCheckpoints` supplies the activation engine's capture,
+restore and release hooks. Capture uses the existing read-only Btrfs checkpoint
+store with `before-update` and an operation-owned `update` pin, under the caller's
+stopped-writer/settings/maintenance window. Terminal cleanup releases only that
+operation's pins, including a pin created just before its ID reached the outer
+journal; it does not delete snapshots.
+
+Data rollback requires the previous runtime version/Compose bytes, a completed
+read-only pre-update checkpoint and unchanged persistent storage identity. It
+restores fixed application-data roots, keypad installation state, persistent
+runtime settings and host SSH/Netplan trees. Snapshot, backup, job and maintenance
+control directories remain untouched. Replaced host bind aliases are refreshed
+before committing the data transaction. An interrupted data switch is rolled back
+to its starting state, its journal retained, then retried from the pinned snapshot.
+The completed data journal allows repeat recovery without replacing data again.
+
+This adapter is tested with real directory transactions and mocked Btrfs/storage
+hooks; actual whole-appliance update rollback still requires VM qualification.
+Stable worker/boot recovery and the live update entry point remain unconnected.

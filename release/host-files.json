@@ -285,6 +285,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_checkpoints.py",
+    "path": "runtime/release_checkpoints.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_activation.py",
     "path": "runtime/release_activation.py",
     "mode": 420

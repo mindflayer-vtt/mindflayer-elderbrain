@@ -1182,3 +1182,17 @@ policy to the signed host inventory. Six tests cover inventory completeness,
 real temporary-directory multi-target switch/rollback, preserved settings and
 user overrides, rejected aliased targets, missing/writable parents and unsafe sources.
 No live appliance changes; checkpoint and stable worker/boot integration remain.
+
+Added UpdateCheckpoints capture/restore/release hooks. Capture creates a read-only
+before-update snapshot pinned to the update operation. Release requires terminal
+state and unpins by owner even when capture finished before its ID was journaled.
+Data rollback checks storage, checkpoint reason/completion and previous runtime
+version/Compose hash, then journal-switches fixed application/host settings scopes
+without replacing snapshots/jobs/maintenance/backups. Host bind aliases refresh
+before commit. Partial restore attempts are themselves reversed and retained,
+then retried from the same checkpoint; committed retries only refresh aliases.
+Five tests cover owned pins, preserved control-plane files, repeated restore,
+interruption after data switching, incompatible/missing source and changed storage.
+Btrfs/storage hooks are mocked in these tests; directory replacement is real.
+No live appliance changes. Actual combined VM update/data rollback qualification
+and stable worker/boot admission remain pending.
