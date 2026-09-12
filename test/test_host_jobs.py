@@ -14,6 +14,29 @@ from backup_service import save_record
 
 
 class JobTests(unittest.TestCase):
+    def test_power_submission_requires_exact_explicit_confirmation(self):
+        for selected in ({'action': 'reboot', 'confirmPower': 1}, {'action': 'restart', 'confirmPower': True},
+                         {'action': 'shutdown', 'confirmPower': True, 'command': 'arbitrary'}):
+            with self.assertRaises(ValueError):
+                self.store.submit('power', selected)
+        with patch('host_jobs.subprocess.Popen') as process, patch('host_jobs.threading.Thread'):
+            result = self.store.submit('power', {'action': 'reboot', 'confirmPower': True})
+        self.assertEqual(result['kind'], 'power')
+        self.assertIn('--scope', process.call_args.args[0])
+
+    def test_power_worker_records_only_request_acceptance(self):
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        record.update(kind='power', request={'action': 'reboot', 'confirmPower': True})
+        save_record(path, record)
+        with patch('power_service.run_job', return_value={'state': 'requested', 'action': 'reboot', 'bootId': 'private'}) as power:
+            worker(self.store.directory, self.identity, fd)
+        power.assert_called_once_with(self.store.directory.parent, self.identity, record['request'])
+        saved = self.store.read(self.identity)
+        self.assertEqual(saved['state'], 'completed')
+        self.assertEqual(saved['result'], {'state': 'requested', 'action': 'reboot'})
+
     def test_update_recovery_reconciles_only_exact_terminal_outcome(self):
         path = self.store.path(self.identity)
         original = {'id': self.identity, 'kind': 'update', 'state': 'interrupted', 'createdAt': 1,

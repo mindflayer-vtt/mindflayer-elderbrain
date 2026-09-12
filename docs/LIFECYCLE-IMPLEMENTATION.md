@@ -1635,3 +1635,16 @@ pending settings, subsequent admission exclusion, failure and boot scoping. Shel
 syntax and whitespace checks pass. This is the CLI safety foundation, not the
 persistent power-job/UI or shutdown checkpoint/remote-backup workflow, which remain
 pending. No VM, Lenovo or development-PC power operation was sent.
+
+Added confirmed persistent `power` host jobs. Requests contain exactly action
+(reboot or shutdown) and confirmPower true, and launch in the existing independent
+systemd scope with the inherited live-worker lock. Execution uses the fixed
+appliance state directory. The power coordinator admits only its own matching
+confirmed live power job; it still rejects all other live jobs and preserves the
+maintenance/settings gates. The durable power request now includes jobId.
+The worker's completed result means the systemd request was accepted, not that
+physical power transition was observed. Tests mock power commands and verify
+confirmation rejection, scope launch, matching-owner exemption and redacted
+request-acceptance results. Thirty-one focused tests and diff checks pass.
+Authenticated UI/API, boot outcome reporting and shutdown backups remain pending.
+No machine was rebooted or shut down, and no live appliance was changed.

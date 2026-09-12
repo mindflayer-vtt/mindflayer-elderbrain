@@ -27,6 +27,7 @@ COMMANDS["snapshot-recover"] = ["snapshot-recover"]
 COMMANDS["snapshot-restore"] = ["snapshot-restore"]
 COMMANDS['network-snapshot-restore'] = []
 COMMANDS['update'] = []
+COMMANDS['power'] = []
 
 
 class JobStore:
@@ -136,7 +137,10 @@ class JobStore:
             validate_passphrase(passphrase)
         elif passphrase is not None:
             raise ValueError("Unexpected passphrase")
-        if kind == 'update':
+        if kind == 'power':
+            from power_service import request
+            details['request'] = request(source)
+        elif kind == 'update':
             from update_request import request
             details['request'] = request(source)
         elif kind == "keypad-install":
@@ -230,6 +234,14 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
     record.update(state="running", startedAt=time.time())
     save_record(path, record)
     try:
+        if record['kind'] == 'power':
+            from power_service import run_job
+            record['stage'] = 'requesting-power'
+            save_record(path, record)
+            result = run_job(store.directory.parent, identity, record['request'])
+            record['result'] = {key: result[key] for key in ('state', 'action')}
+            record['state'] = 'completed'  # Request accepted, not proof of physical shutdown.
+            return
         if record['kind'] == 'update':
             from update_job import run_update
             def progress(stage):

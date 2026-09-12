@@ -16,7 +16,21 @@ def pending(state):
     return value.get('state') == 'requested' and value.get('bootId') == Path('/proc/sys/kernel/random/boot_id').read_text().strip()
 
 
-def operate(action, *, host_root=Path('/'), run=subprocess.run):
+def request(value):
+    if (not isinstance(value, dict) or set(value) != {'action', 'confirmPower'}
+            or value['action'] not in ('reboot', 'shutdown') or value['confirmPower'] is not True):
+        raise ValueError('Power request requires an allowed action and explicit confirmation')
+    return dict(value)
+
+
+def run_job(state, identity, selected, *, host_root=Path('/')):
+    selected = request(selected)
+    if Path(state).absolute() != Path(host_root).absolute() / 'var/lib/mindflayer-elderbrain':
+        raise ValueError('Power worker requires the fixed appliance state directory')
+    return operate(selected['action'], owner=identity, host_root=host_root)
+
+
+def operate(action, *, host_root=Path('/'), run=subprocess.run, owner=None):
     from host_jobs import JobStore, ACTIVE
     from restore_service import persistent_identity
     from snapshot_service import stable_settings
@@ -33,7 +47,14 @@ def operate(action, *, host_root=Path('/'), run=subprocess.run):
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise RuntimeError('Host job admission is in progress') from error
-        if pending(state) or any(job['state'] in ACTIVE for job in jobs.list()):
+        active = [job for job in jobs.list() if job['state'] in ACTIVE]
+        if owner is not None:
+            jobs.path(owner)
+            own = [job for job in active if job['id'] == owner and job.get('kind') == 'power'
+                   and job.get('request') == {'action': action, 'confirmPower': True}]
+            if len(own) != 1:
+                raise ValueError('Power worker must own the matching live confirmed job')
+        if pending(state) or any(job['id'] != owner for job in active):
             raise RuntimeError('A host job or power operation is active')
         maintenance = Maintenance(state / 'maintenance', None)
         with maintenance.locked(), stable_settings(state):
@@ -41,6 +62,8 @@ def operate(action, *, host_root=Path('/'), run=subprocess.run):
                 raise RuntimeError('Recover interrupted maintenance before changing power state')
             record = {'state': 'requested', 'action': action,
                       'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
+            if owner is not None:
+                record['jobId'] = owner
             save_record(state / 'power.json', record)
             try:
                 run(['systemctl', '--no-block', 'reboot' if action == 'reboot' else 'poweroff'], check=True,

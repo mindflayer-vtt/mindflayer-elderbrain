@@ -79,6 +79,22 @@ class PowerTests(unittest.TestCase):
             with settings_admission(self.state):
                 self.fail('Power-pending settings admission must not succeed')
 
+    def test_only_matching_live_power_job_may_exempt_itself(self):
+        jobs = JobStore(self.state / 'jobs')
+        path = jobs.path('a' * 32)
+        save_record(path, {'id': 'a' * 32, 'kind': 'power', 'state': 'running', 'createdAt': 1,
+                           'request': {'action': 'reboot', 'confirmPower': True}})
+        fd = os.open(path.with_suffix('.lock'), os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            with self.assertRaisesRegex(ValueError, 'matching live'):
+                operate('shutdown', host_root=self.root, owner='a' * 32, run=self.run)
+            self.run.assert_not_called()
+            result = operate('reboot', host_root=self.root, owner='a' * 32, run=self.run)
+            self.assertEqual(result['jobId'], 'a' * 32)
+        finally:
+            os.close(fd)
+
 
 if __name__ == '__main__':
     unittest.main()
