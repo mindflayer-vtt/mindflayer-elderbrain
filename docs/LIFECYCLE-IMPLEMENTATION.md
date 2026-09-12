@@ -960,3 +960,16 @@ no overwrite and a full 84-file real signature/staging round trip. A local
 unsigned 0.0.0 test artifact exists at `/tmp/elderbrain-host.tar.zst`; it is not a
 production release and was not deployed or published. Prebuilt Setup/dependency
 packaging, release signing/publication and actual installation remain pending.
+
+Local release assembly now joins the reviewed host builder, manifest validation,
+detached signing and independent-pin/package-staging verification in one command.
+Artifact size/hash are computed, not accepted as metadata overrides. Private key
+ownership/mode checks precede signing; no key is generated or copied into output.
+Exclusive output directories preserve existing releases, files are fsynced, and
+the manifest is made visible last only after successful end-to-end verification.
+Five tests pass using temporary real keys: reproducible complete artifacts,
+wrong independent pin with no manifest publication, existing-output preservation,
+unpinned images/metadata overrides, and insecure private-key permissions.
+Only temporary test-key releases were assembled. No production key, publication,
+registry write, installation or host hardware change occurred. Image existence/
+import, complete offline host dependencies and activation remain unimplemented.
