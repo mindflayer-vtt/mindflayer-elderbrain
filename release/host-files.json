@@ -320,6 +320,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_recovery_bundle.py",
+    "path": "runtime/release_recovery_bundle.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_recovery.py",
     "path": "runtime/release_recovery.py",
     "mode": 420

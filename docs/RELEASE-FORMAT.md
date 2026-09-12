@@ -454,3 +454,19 @@ using the appliance CA, strict response validation and no redirect following.
 Only components recorded as active are probed. These probes passed against the
 running disposable VM without invoking recovery or changing services. The script
 is not yet installed as an independent stable bundle or enabled in boot units.
+
+## Stable recovery bundle publication
+
+`release_recovery_bundle.install` copies the reviewed top-level Python modules
+from a caller-authenticated host tree into a separate private, content-addressed
+directory. It records bounded file sizes/hashes, checks the complete import closure
+with isolated Python and bytecode writes disabled, verifies the staged bytes again,
+fsyncs and publishes under an installation lock. An existing matching bundle is
+verified before reuse; modified, unexpected or missing files are never overwritten.
+
+The bundle contains no live settings, secrets, containers or Python environments.
+Recovery imports remain usable after the original source staging is gone. Its
+parent must be private and separate from the source tree. This helper does not
+select the active bundle or install boot units. The update coordinator must retain
+a known recovery implementation outside its deployment targets before admission;
+the active selector/launcher and boot integration still need implementation.

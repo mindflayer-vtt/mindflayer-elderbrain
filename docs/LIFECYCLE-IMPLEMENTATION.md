@@ -1231,3 +1231,14 @@ peer/redirect/oversize/nonboolean replies, inactive components, fixed coordinato
 wiring/redaction and missing storage. Both actual probes passed in the running
 QEMU VM from a private source copy under isolated Python; no recovery or service
 change was invoked. Independent stable-bundle installation and boot units remain.
+
+Added stable recovery-bundle publication from a caller-authenticated host tree and
+reviewed module inventory. Bounded hashes define a content-addressed private tree;
+isolated Python imports the complete recovery closure without invoking recovery,
+then bytes/permissions are rechecked and fsynced before atomic publication. Reuse
+verifies exact content and refuses damaged/extra files; no active selector or live
+runtime is changed. Five tests include real signed host staging, real isolated
+imports both before publication and after source staging is gone, repeat reuse,
+tampering, failed import, unexpected files and parent permissions. No VM or host
+appliance mutation occurred. Active bundle selection/launcher and boot integration
+remain pending, as does complete combined update/rollback qualification.
