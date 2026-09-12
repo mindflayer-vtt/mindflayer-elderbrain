@@ -670,3 +670,16 @@ launcher service preserved the worker, inherited lock and memory-only input.
 Only uniquely named test units were stopped; provisioning and target data were
 untouched. This closes the root-vs-user scope mechanism check, not the remaining
 installed management-service restart test. No new ISO was built or deployed.
+
+`test/qemu/checkpoint-restore.py` passed in the live VM with current modules,
+inside a private mount namespace and a fresh 1 GiB sparse loopback Btrfs image.
+Evidence directory: `/tmp/elderbrain-checkpoint-restore-8oyj9e14` (unmounted and
+loop device detached afterward). Real Btrfs snapshots/pins, private staging,
+archive validation, transaction replacement and recovery passed: preferences
+restore preserved current onboarding/unselected Foundry data; automatic rollback
+checkpoint retained old preferences read-only; simulated Foundry health failure
+and process loss restored the previous whole data directory and released pins.
+The fixture simulates service health/runtime metadata and host alias refresh;
+it does not qualify actual Foundry containers or OS mount aliases. Production
+storage guards remain unchanged; the fixture checks its own mounted UUID.
+The installation disk, preserve baseline and running installer were untouched.
