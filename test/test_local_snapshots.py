@@ -11,6 +11,40 @@ from local_snapshots import Snapshots, validate_nested, retention_candidates, va
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_owner_release_keeps_other_operations_and_checkpoint_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Snapshots(directory, guard=lambda: None, quiesce=None)
+            store.root.mkdir(mode=0o700)
+            owner = 'b' * 32
+            pins = [
+                {'id': 'a' * 32, 'owner': owner, 'purpose': 'restore'},
+                {'id': 'c' * 32, 'owner': 'd' * 32, 'purpose': 'restore'},
+                {'id': 'e' * 32, 'owner': owner, 'purpose': 'pending-backup'},
+            ]
+            for pin in pins:
+                (store.root / (pin['id'] + '.' + pin['owner'] + '.pin')).touch()
+                (store.root / pin['id']).mkdir()
+            # Private ownership/format checking belongs to pins(); exercise the
+            # release boundary and filesystem effects without requiring root.
+            with patch.object(store, 'prepare'), patch.object(store, 'pins', return_value=pins):
+                store.unpin_owner(owner, 'restore')
+            self.assertFalse((store.root / ('a' * 32 + '.' + owner + '.pin')).exists())
+            self.assertEqual(len(list(store.root.glob('*.pin'))), 2)
+            self.assertTrue(all((store.root / pin['id']).is_dir() for pin in pins))
+            with patch.object(store, 'prepare'), patch.object(store, 'pins', return_value=pins[1:]):
+                store.unpin_owner(owner, 'restore')  # Recovery may repeat.
+
+    def test_corrupt_pins_block_owner_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Snapshots(directory, guard=lambda: None, quiesce=None)
+            store.root.mkdir(mode=0o700)
+            pin = store.root / ('a' * 32 + '.' + 'b' * 32 + '.pin')
+            pin.touch()
+            with patch.object(store, 'prepare'), patch.object(store, 'pins', side_effect=ValueError('unsafe')):
+                with self.assertRaises(ValueError):
+                    store.unpin_owner('b' * 32, 'restore')
+            self.assertTrue(pin.exists())
+
     def test_retention_settings_validation(self):
         self.assertEqual(validate_retention({'enabled': True, 'keep': 3}), {'enabled': True, 'keep': 3})
         for value in (None, {}, {'enabled': 1, 'keep': 3}, {'enabled': True, 'keep': True},

@@ -162,8 +162,11 @@ def checkpoint_hooks(state, runtime, host_root, identity):
     def before(record):
         record['rollbackCheckpoint'] = snapshots.create('before-restore', owner=record['id'], purpose='restore')['id']
     def release(record):
-        if record.get('rollbackCheckpoint'):
-            snapshots.unpin(record['rollbackCheckpoint'], record['id'], 'restore')
+        if record.get('state') not in ('completed', 'rolled-back'):
+            raise ValueError('Cannot release checkpoints for an unfinished restore')
+        # Capture may have finished before rollbackCheckpoint reached the outer
+        # journal. The durable operation ID still identifies exactly its pins.
+        snapshots.unpin_owner(record['id'], 'restore')
     return {'before_restore': before, 'release_checkpoint': release,
             'exclusive': lambda: stable_settings(state)}
 

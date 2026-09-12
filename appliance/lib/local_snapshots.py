@@ -207,6 +207,22 @@ class Snapshots:
                     self.sync_directory()
                     return
 
+    def unpin_owner(self, owner, purpose):
+        """Release a terminal operation's pins, including unjournaled captures.
+
+        The caller must hold its operation lock and have durably completed or
+        rolled back. Checkpoints themselves remain untouched, including orphans.
+        """
+        validate_pin('0' * 32, owner, purpose)
+        self.prepare()
+        with open(self.root / '.lock', 'a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            pins = self.pins()  # Validate everything before changing protection.
+            for value in pins:
+                if value['owner'] == owner and value['purpose'] == purpose:
+                    (self.root / (value['id'] + '.' + owner + '.pin')).unlink()
+            self.sync_directory()
+
     def finish_deletions(self):
         """Caller holds exclusive lock; only durable, validated intents are resumed."""
         protected = {value['id'] for value in self.pins()}

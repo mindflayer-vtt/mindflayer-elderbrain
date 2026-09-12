@@ -581,3 +581,28 @@ a new test with preserve-baseline.sh. Persistent private evidence directory:
 Use that exact directory for verification after the next OS reinstall. The old
 /tmp-baseline run remains unqualified; this is a new test. Current guest software
 is the old ISO payload; newer restore hooks are not deployed there.
+
+New preserve-test ISO built successfully from 4d07fc3008ac (working-tree dirty
+marker reflects the user's unrelated .gitignore edit):
+`/mnt/local-hdd-Stores2/elderbrain-preserve-current-CLRYutzI/mindflayer-elderbrain-4d07fc3008ac.iso`
+SHA256 `fb2d327f223a4b7101464430ea49593cc5430e40c61a9517b34db15b4eb2e805`.
+Verified the persistent baseline checksum, inserted the ISO into the empty
+virtual CD, gracefully rebooted VM2232, selected the Elderbrain installer and
+reset subsequent boot order to disk. Preserve console selection is next; no
+formatting has been confirmed yet. Verify afterward using the existing
+`test/.qemu/preserve-20260912` baseline, never reseed that directory.
+
+The preserve selection was subsequently confirmed on the live VM after matching
+disk serial elderbrain-vm-test and data UUID
+84f7219a-b5db-4127-8ea8-2e6850746cf8 against the checksum-verified baseline.
+The installer completed its storage configuration and reached OS image extraction.
+Post-install baseline comparison remains pending; this is not yet a preservation
+pass. No physical appliance or Ventoy changes were made.
+
+Restore recovery now releases pins by the terminal operation's durable ID and
+restore purpose, even if a crash prevented rollbackCheckpoint from reaching the
+outer maintenance journal. Other owners/purposes remain protected, corrupt pins
+block cleanup, and checkpoint data is never deleted by this operation. Release
+requires completed/rolled-back state and tolerates repeated recovery. Twenty
+focused restore/snapshot tests pass, including the missing-journal-ID crash
+window. This newer fix is not included in the ISO currently installing.

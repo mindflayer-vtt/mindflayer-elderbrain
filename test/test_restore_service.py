@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "appliance/lib"))
 import backup_archive
 from backup_service import Maintenance
-from restore_service import RestoreCoordinator
+from restore_service import RestoreCoordinator, checkpoint_hooks
 from restore_transaction import RestoreTransaction
 
 
@@ -37,6 +37,30 @@ class Services:
 
 
 class RestoreServiceTests(unittest.TestCase):
+    def test_crash_before_checkpoint_id_journal_releases_pin_after_recovery(self):
+        with patch('local_snapshots.Snapshots') as factory:
+            hooks = checkpoint_hooks(self.root, self.root, self.root, {'data_uuid': 'fixture'})
+            store = factory.return_value
+            def crash(record):
+                # Simulate durable capture/pin followed by process loss before
+                # the checkpoint ID can be saved in the maintenance journal.
+                raise SystemExit('power loss after capture')
+            self.coordinator.before_restore = crash
+            self.coordinator.release_checkpoint = hooks['release_checkpoint']
+            with self.assertRaises(SystemExit):
+                self.coordinator.restore({'elderbrain': self.staged})
+            saved = self.maintenance.previous()
+            self.assertNotIn('rollbackCheckpoint', saved)
+            store.unpin_owner.assert_not_called()
+            with self.assertRaisesRegex(ValueError, 'unfinished'):
+                hooks['release_checkpoint'](saved)
+            result = self.coordinator.recover()
+            self.assertEqual(result['state'], 'rolled-back')
+            self.assertEqual((self.live / 'data').read_text(), 'old')
+            store.unpin_owner.assert_called_once_with(saved['id'], 'restore')
+            self.coordinator.recover()
+            self.assertEqual(store.unpin_owner.call_count, 2)
+
     def test_checkpoint_precedes_replacement_and_pin_release_follows_health(self):
         def checkpoint(record):
             self.assertEqual(self.services.events[-1], 'stop')
