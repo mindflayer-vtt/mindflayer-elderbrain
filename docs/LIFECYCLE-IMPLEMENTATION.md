@@ -1556,3 +1556,21 @@ and host package inclusion. Ten focused Python tests, Nuxt typecheck/build, two
 production-server browser/API tests, shell syntax and diff checks pass. Browser
 coverage proves auth/CSRF, custom-source rejection and literal release-note text.
 Artifact preparation/download and final update/power controls remain pending.
+
+Connected confirmed online preparation to the stable update worker and enabled
+the System page's Update now flow. Absent prepared versions trigger pinned-source
+metadata revalidation before any artifact fetch, signed size/hash-checked HTTPS
+downloads into private temporary storage, then existing offline dependency and
+immutable image preparation. Existing prepared versions retain their offline path.
+The owned job admission and maintenance locks exclude competing operations during
+preparation; final activation retains its own independent gates/checkpoint flow.
+The GUI requires both confirmations and known idle host-job status, displays
+durable progress and resumes it after reload without automatic submit retries.
+Focused tests cover transport corruption/redirect/length failures, stale confirmed
+metadata, preparation wiring, owned job admission and offline-path regressions.
+Nuxt typecheck/build and three production-server browser/API tests pass. Real
+HTTPS download through activation, production ISO trust configuration, recovery
+job reconciliation, power/backup controls and other goal requirements remain open.
+No physical appliance, production key, registry or external repository was changed.
+Full Python regression suite: 542 tests passed with five skipped; whitespace check
+also passes. This does not replace the pending real HTTPS end-to-end qualification.

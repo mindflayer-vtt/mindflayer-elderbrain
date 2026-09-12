@@ -80,6 +80,25 @@ class UpdateWorkerTests(unittest.TestCase):
             self.run_update()
         self.install.assert_not_called()
 
+    def test_missing_prepared_release_downloads_under_owned_admission_then_reverifies(self):
+        import shutil
+        shutil.rmtree(self.prepared)
+        @contextmanager
+        def admission(*args, **options):
+            self.assertEqual(options['owner'], 'a' * 32)
+            yield
+        def download(*args, **options):
+            self.prepared.mkdir(mode=0o700)
+            (self.prepared / 'manifest.json').write_bytes(b'manifest')
+            (self.prepared / 'manifest.sig').write_bytes(b'signature')
+            self.assertEqual(args[0], self.request)
+        with patch('update_job.update_admission', side_effect=admission), \
+                patch('update_job.download_prepare', side_effect=download) as prepare:
+            self.run_update()
+        prepare.assert_called_once()
+        self.verify.assert_called_once()
+        self.apply.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()

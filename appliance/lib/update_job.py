@@ -1,4 +1,4 @@
-"""Persistent update worker for an explicitly confirmed, already prepared release."""
+"""Persistent confirmed release download, preparation and activation worker."""
 import hashlib
 import json
 import os
@@ -13,6 +13,9 @@ from release_runtime import private_directory, read_regular
 from release_staging import inventory, stage
 from restore_service import persistent_identity
 from update_request import request
+from release_download import download_prepare
+from release_interlocks import update_admission
+from backup_service import Maintenance
 
 
 def trusted_file(path, limit):
@@ -32,17 +35,26 @@ def run_update(state, identity, selected, *, progress, host_root=Path('/')):
                                  object_pairs_hook=unique))
     key = trusted_file(root / 'etc/elderbrain/release-public.pem', 65536)
     releases = private_directory(root / 'var/lib/elderbrain-releases')
-    prepared = private_directory(private_directory(releases / 'prepared') / selected['version'])
+    prepared = private_directory(releases / 'prepared') / selected['version']
     staging = private_directory(releases / 'staging')
     dependencies = private_directory(root / 'usr/lib/elderbrain-dependencies')
+    target = platform.freedesktop_os_release()
+    current = {'os': target.get('ID'), 'release': target.get('VERSION_ID'),
+               'architecture': 'amd64' if platform.machine() == 'x86_64' else platform.machine()}
+    if not prepared.exists() and not prepared.is_symlink():
+        with update_admission(state, owner=identity):
+            maintenance = Maintenance(state / 'maintenance', None)
+            with maintenance.locked():
+                if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
+                    raise RuntimeError('Recover maintenance before preparing an update')
+                download_prepare(selected, key, paths, root=root, releases=releases,
+                                 dependencies=dependencies, current=current, progress=progress)
+    prepared = private_directory(prepared)
     manifest = read_regular(prepared / 'manifest.json', 65536)
     if hashlib.sha256(manifest).hexdigest() != selected['manifestSha256']:
         raise ValueError('Release changed after user confirmation')
     signature = read_regular(prepared / 'manifest.sig', 1024)
     release = verify(manifest, signature, key)
-    target = platform.freedesktop_os_release()
-    current = {'os': target.get('ID'), 'release': target.get('VERSION_ID'),
-               'architecture': 'amd64' if platform.machine() == 'x86_64' else platform.machine()}
     require_compatible(release, platform=current, configuration_schema=1)
     if release['format'] != 2 or release['version'] != selected['version']:
         raise ValueError('Update requires the confirmed complete release')

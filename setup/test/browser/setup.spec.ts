@@ -52,6 +52,30 @@ test('update API requires authentication, CSRF and exact confirmed release ident
   expect(jobs).toContainEqual(job);
 });
 
+test('System update requires both confirmations and remains visible after reload', async ({ page }) => {
+  const jobs: Record<string, unknown>[] = [];
+  await page.route('**/api/jobs', route => route.fulfill({ json: jobs }));
+  let submitted: unknown;
+  await page.route('**/api/system/update', route => {
+    submitted = route.request().postDataJSON();
+    const job = { id: 'b'.repeat(32), kind: 'update', state: 'running', stage: 'downloading-host' };
+    jobs.push(job);
+    return route.fulfill({ status: 202, json: job });
+  });
+  await page.goto('/elderbrain/system');
+  await page.getByRole('button', { name: 'Check for updates' }).click();
+  const button = page.getByRole('button', { name: 'Update now', exact: true });
+  await expect(button).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Download and install this signed Elderbrain release.' }).check();
+  await expect(button).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Allow Foundry, Setup and display browsers to stop temporarily.' }).check();
+  await button.click();
+  expect(submitted).toEqual({ version: '1.2.3', manifestSha256: 'a'.repeat(64), confirmUpdate: true, confirmDowntime: true });
+  await expect(button).toBeDisabled();
+  await page.reload();
+  await expect(page.getByText('Update: running — downloading-host', { exact: true })).toBeVisible();
+});
+
 test('network restore keeps queued capability and confirms known job ID after disconnection', async ({ page }) => {
   let disconnected = false;
   await page.route('**/api/network/change', async route => {

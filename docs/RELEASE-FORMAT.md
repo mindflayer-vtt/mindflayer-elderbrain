@@ -660,3 +660,29 @@ Artifact download/preparation controls, installed Setup-version reporting and
 power controls remain pending. Previously prepared releases still use the
 separate confirmed update API; a successful metadata check is not evidence that
 those artifacts or their dependencies are installed.
+
+### Confirmed online preparation
+
+The System page now submits its verified version/digest through **Update now**
+after separate update and downtime confirmations. The persistent worker reuses an
+existing prepared version without contacting the network. If that version is
+absent, it re-reads the installer-owned source and fetches the announcement again;
+a changed digest, signature, version, platform or schema prevents downloading any
+artifacts. The source directory must additionally serve the two exact signed
+filenames `elderbrain-host.tar.zst` and `elderbrain-dependencies.tar.zst`.
+
+Downloads use private temporary storage, HTTPS without redirects, bounded reads,
+signed lengths/checksums and a per-artifact deadline. Space is checked before
+downloads. Only after both archives are verified does existing release preparation
+stage the host, verify offline dependency inputs, install stable dependency
+prefixes and pull missing digest-pinned images. It never builds images or starts
+services. Preparation holds owned job admission and maintenance exclusion; final
+activation repeats its independent verification and recovery prerequisites.
+
+The GUI polls durable host jobs and resumes displaying them after reload. An
+uncertain submission is not automatically retried. Closing the page does not
+cancel the worker. Installed source/key/inventory, private release/dependency
+directories and the current stable bootstrap are still prerequisites; production
+ISO trust provisioning and a real HTTPS-download-to-activation VM qualification
+remain pending. Failed dependency preparation may retain diagnostic prefixes;
+the worker does not overwrite these on retry. Power controls remain pending.
