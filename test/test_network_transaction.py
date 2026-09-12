@@ -13,6 +13,17 @@ spec.loader.exec_module(module)
 
 
 class NetworkTransactionTests(unittest.TestCase):
+    def test_job_identity_is_known_before_activation_and_cannot_be_reused(self):
+        changes = {'50-network.yaml': {'before': self.before, 'after': self.after}}
+        for identifier in ('../state', '', 123):
+            with self.assertRaises(ValueError):
+                self.store.stage(changes, 'ens3', identifier=identifier)
+        result = self.store.stage(changes, 'ens3', identifier='d' * 32)
+        self.assertEqual(result['id'], 'd' * 32)
+        self.store.cancel(result['id'])
+        with self.assertRaisesRegex(ValueError, 'already used'):
+            self.store.stage(changes, 'ens3', identifier='d' * 32)
+
     def test_restore_owner_is_private_and_terminal_cleanup_is_retryable(self):
         owner = 'a' * 32
         public = self.store.stage({'50-network.yaml': {'before': self.before, 'after': self.after}},

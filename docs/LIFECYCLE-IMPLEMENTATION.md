@@ -867,3 +867,25 @@ test pass, including anonymous 401, CSRF 403, missing consent/invalid selection,
 no-store response and verification that job history contains only the token hash.
 The host bridge is syntax-checked; real systemd job/network restore and UI flows
 remain to qualify. No network-restore UI control has been added yet.
+
+The Network page now offers a separate Nuxt UI checkpoint selector and explicit
+network replacement/downtime consent, using the selected active interface and
+existing direct-address confirmation panel. Selection changes reset consent;
+submission focuses the address field. Queued restore polling does not erase the
+capability on an older idle/terminal network response. Failed/interrupted jobs
+without their own network transaction direct users to maintenance recovery.
+
+The host job ID is now the preallocated network transaction ID, validated through
+coordinator/staging and protected against reuse of the current journal ID. Thus
+the browser has its ID/token before services stop and can confirm at a manually
+entered new IPv4 even if the old address becomes unreachable before job-result
+polling. Only network activation starts the host's confirmation deadline. A
+missing browser-side deadline does not prevent a direct attempt; the host still
+enforces its real deadline, token binding and connection destination.
+
+All five selected network browser tests pass, including queued-token retention,
+disconnection/direct confirmation with the preallocated ID, API auth/CSRF,
+ordinary static settings, lost responses and reload/token loss. Fifty-nine
+focused host tests pass; Setup typecheck/build and diff checks pass. Actual VM
+network checkpoint restore remains unqualified, and the physical Lenovo stays
+untouched. The Backups page now points to Network for this separate restore.

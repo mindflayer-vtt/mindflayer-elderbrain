@@ -124,7 +124,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer); });
         <UCheckbox v-model="restorePreferences" label="Elderbrain preferences: domain, displays, browser tabs and checkpoint retention" />
         <UCheckbox v-model="restoreKeypads" label="Keypad settings: Wi-Fi and preferences; keep current device identities" />
         <UCheckbox v-model="restoreFoundry" label="Foundry: replace the whole instance's data" />
-        <p class="text-sm text-muted">The host checks runtime compatibility and creates rollback state before replacement. Network, security and device-identity restore are not available yet.</p>
+        <p class="text-sm text-muted">The host checks runtime compatibility and creates rollback state before replacement. Restore networking separately on the Network page with timed confirmation. Security and device-identity restore are not available yet.</p>
         <UAlert v-if="restoreKeypads" color="warning" title="Physical keypads are not changed by this restore. Their applied state becomes unknown; reapply or reprovision them separately after reviewing the restored settings." />
         <UCheckbox v-model="restoreConfirmed" label="Replace the selected configuration with this checkpoint. Changes since the checkpoint will be rolled back." />
         <UButton color="warning" :disabled="!available || active || !confirmed || !restoreConfirmed || !restoreCheckpoint || !restoreComponents.length" :loading="submitting" @click="restore">Restore selected configuration</UButton>

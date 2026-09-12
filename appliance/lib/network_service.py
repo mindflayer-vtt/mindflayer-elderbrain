@@ -38,7 +38,7 @@ def start(values):
     return {**result, 'token': token, 'warnings': candidate['warnings']}
 
 
-def restore_files(archived, interface, *, restore_owner=None, confirmation_digest=None):
+def restore_files(archived, interface, *, restore_owner=None, confirmation_digest=None, transaction_id=None):
     """Private entry point for a verified checkpoint coordinator, not a raw API.
 
     Caller owns source pin/compatibility, rollback checkpoint and maintenance
@@ -60,7 +60,7 @@ def restore_files(archived, interface, *, restore_owner=None, confirmation_diges
     if confirmation_digest is not None:
         binding['digest'] = confirmation_digest
     result = transaction().stage(candidate['changes'], interface,
-        fingerprint=candidate['fingerprint'], confirmation=binding, restore_owner=restore_owner)
+        fingerprint=candidate['fingerprint'], confirmation=binding, restore_owner=restore_owner, identifier=transaction_id)
     return {**result, **({'token': token} if confirmation_digest is None else {}), 'warnings': [
         'The complete archived Netplan configuration will replace current network settings.',
         'Confirm through the selected interface before the deadline or all network changes will roll back.']}

@@ -114,7 +114,9 @@ class NetworkTransaction:
     def expired(self, record):
         return record['boot'] != self.boot or self.clock() >= record['deadline'] or self.monotonic() >= record['expires']
 
-    def stage(self, changes, interface, seconds=120, fingerprint=None, confirmation=None, restore_owner=None):
+    def stage(self, changes, interface, seconds=120, fingerprint=None, confirmation=None, restore_owner=None, identifier=None):
+        if identifier is not None and (not isinstance(identifier, str) or not re.fullmatch(r'[a-f0-9]{32}', identifier)):
+            raise ValueError('Invalid network transaction identity')
         if restore_owner is not None and (not isinstance(restore_owner, str) or not re.fullmatch(r'[a-f0-9]{32}', restore_owner)):
             raise ValueError('Invalid network restore owner')
         if not isinstance(interface, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,15}', interface):
@@ -136,6 +138,8 @@ class NetworkTransaction:
             if fingerprint is not None and (not isinstance(fingerprint, str) or not re.fullmatch(r'[a-f0-9]{64}', fingerprint) or not self.verify_sources(fingerprint)):
                 raise ValueError('Netplan hierarchy changed before staging')
             current = self.read()
+            if identifier is not None and current and current['id'] == identifier:
+                raise ValueError('Network transaction identity already used')
             if current and current['phase'] not in ('confirmed', 'rolled-back'):
                 raise ValueError('Network transaction already in progress')
             if current and current.get('restoreOwner') and not current.get('cleanupComplete'):
@@ -153,7 +157,7 @@ class NetworkTransaction:
                     raise ValueError('Network change has neither an existing nor a candidate file')
                 files[name] = {'before': original, 'after':
                                base64.b64encode(change['after']).decode() if change['after'] is not None else None}
-            record = {'id': secrets.token_hex(16), 'phase': 'staged', 'interface': interface,
+            record = {'id': identifier or secrets.token_hex(16), 'phase': 'staged', 'interface': interface,
                       'deadline': self.clock() + seconds, 'expires': self.monotonic() + seconds, 'boot': self.boot, 'files': files,
                       'fingerprint': fingerprint, 'confirmation': confirmation}
             if restore_owner is not None:

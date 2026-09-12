@@ -1,6 +1,7 @@
 <script setup lang="ts">
 interface Change { phase: string; id?: string; deadline?: number; confirmation?: string | null; token?: string; warnings?: string[] }
 interface Link { name: string; state: string; internal: boolean }
+interface RestoreJob { id: string; state: string; error?: string }
 const { session } = useAdmin();
 const form = reactive({ interface: '', mode: 'dhcp', address: '', prefix: 24, gateway: '', dns: '' });
 const saved = useUnsavedChanges(() => form);
@@ -8,6 +9,14 @@ const change = useState<Change>('network-change', () => ({ phase: 'loading' }));
 const token = useState('network-change-token', () => '');
 const target = useState('network-change-target', () => '');
 const confirmedAddress = useState('network-confirmed-address', () => '');
+const restoreJob = useState('network-restore-job', () => '');
+const checkpoints = ref<{ id: string; createdAt: number; reason: string }[]>([]);
+const checkpoint = ref('');
+const restoreConsent = ref(false);
+const downtimeConsent = ref(false);
+const checkpointOptions = computed(() => checkpoints.value.map(item => ({ value: item.id,
+  label: `${new Date(item.createdAt * 1000).toLocaleString()} — ${item.reason} — ${item.id.slice(0, 8)}` })));
+watch([checkpoint, () => form.interface], () => { restoreConsent.value = false; downtimeConsent.value = false; });
 const links = ref<Link[]>([]);
 const busy = ref(false);
 const unavailable = ref(true);
@@ -30,17 +39,53 @@ async function refresh() {
   polling = true;
   const current = generation;
   try {
+    let job: RestoreJob | undefined;
+    if (restoreJob.value) {
+      const jobs = await $fetch<RestoreJob[]>('/elderbrain/api/jobs', { timeout: 5000, retry: 0 });
+      job = jobs.find(item => item.id === restoreJob.value);
+    }
     const next = await $fetch<Change>('/elderbrain/api/network/change', { timeout: 5000, retry: 0 });
     if (stopped || current !== generation) return;
+    if (restoreJob.value && next.id !== restoreJob.value) {
+      if (job && ['failed', 'interrupted'].includes(job.state)) {
+        restoreJob.value = ''; token.value = '';
+        message.value = 'Restore did not reach an active network transaction. Review the host job and recover interrupted maintenance on the Backups page before retrying.';
+      } else {
+        unavailable.value = false;
+        return; // Old idle/terminal status must not erase the queued restore token.
+      }
+    }
     change.value = { ...next, warnings: next.warnings || change.value.warnings };
     unavailable.value = false;
     if (next.confirmation) {
       const url = new URL(next.confirmation);
       if (!target.value && document.activeElement?.id !== 'network-confirm-address' && url.protocol === 'https:' && url.port === '10444' && url.pathname === '/confirm' && !url.username && !url.password && ipv4(url.hostname)) target.value = url.hostname;
     }
-    if (['confirmed', 'rolled-back', 'idle'].includes(next.phase)) token.value = '';
+    if (['confirmed', 'rolled-back', 'idle'].includes(next.phase)) { token.value = ''; restoreJob.value = ''; }
   } catch { if (!stopped && current === generation) unavailable.value = true; }
   finally { polling = false; }
+}
+async function restoreNetwork() {
+  if (locked.value || !checkpoint.value || !form.interface || !restoreConsent.value || !downtimeConsent.value) return;
+  busy.value = true; generation++; message.value = ''; target.value = ''; confirmedAddress.value = '';
+  try {
+    const result = await $fetch<{ job: RestoreJob; token: string }>('/elderbrain/api/snapshots/restore-network', {
+      method: 'POST', headers: headers(), retry: 0, timeout: 15000,
+      body: { checkpoint: checkpoint.value, interface: form.interface, confirmRestore: true, confirmDowntime: true },
+    });
+    restoreJob.value = result.job.id;
+    token.value = result.token;
+    change.value = { phase: 'preparing checkpoint restore', id: result.job.id };
+    message.value = 'Restore is preparing a recovery checkpoint. Setup and display browsers may pause. Keep this tab open; confirm through the restored address when networking becomes available.';
+    saved();
+  } catch {
+    change.value = { phase: 'unknown' }; unavailable.value = true;
+    message.value = 'Restore request status is unknown. Do not submit a duplicate. Check host jobs after reconnecting; any unconfirmed network activation will roll back.';
+  } finally {
+    busy.value = false; restoreConsent.value = false; downtimeConsent.value = false;
+    await nextTick();
+    if (token.value) document.getElementById('network-confirm-address')?.focus();
+  }
 }
 async function start() {
   busy.value = true; generation++; message.value = '';
@@ -77,6 +122,7 @@ async function confirm() {
     if (result.phase !== 'confirmed') throw new Error();
     confirmedAddress.value = new URL(destination).hostname;
     change.value = { ...change.value, phase: 'confirmed' }; token.value = '';
+    restoreJob.value = '';
     message.value = 'Network change confirmed. Reconnect to setup at the new appliance address; you may need to log in again.';
   } catch { message.value = 'Confirmation could not be verified. Check the address and certificate connection. Unless confirmation reached the host, it will roll back automatically.'; }
   finally {
@@ -97,7 +143,7 @@ async function cancel() {
   } catch { message.value = 'Revert could not be verified. Automatic rollback remains active; reconnect at the original address.'; }
   finally { busy.value = false; }
 }
-watch(() => session.value.csrf, () => { token.value = ''; confirmedAddress.value = ''; });
+watch(() => session.value.csrf, () => { token.value = ''; confirmedAddress.value = ''; restoreJob.value = ''; });
 onMounted(async () => {
   void refresh();
   timer = setInterval(() => { now.value = Date.now() / 1000; void refresh(); }, 2000);
@@ -105,6 +151,10 @@ onMounted(async () => {
     const data = await $fetch<{ interfaces: Link[] }>('/elderbrain/api/network', { timeout: 5000, retry: 0 });
     if (!stopped) links.value = data.interfaces;
   } catch { message.value = 'Interface discovery unavailable. Reload after connectivity is restored.'; }
+  try {
+    const data = await $fetch<typeof checkpoints.value>('/elderbrain/api/snapshots', { timeout: 5000, retry: 0 });
+    if (!stopped) checkpoints.value = data;
+  } catch { /* Ordinary network configuration remains usable without checkpoints. */ }
 });
 onBeforeUnmount(() => { stopped = true; clearInterval(timer); });
 </script>
@@ -135,6 +185,15 @@ onBeforeUnmount(() => { stopped = true; clearInterval(timer); });
           <UButton type="submit" :disabled="!form.interface || (form.mode === 'static' && !ipv4(form.address))" :loading="busy">Apply with timed rollback</UButton>
         </fieldset>
       </form>
+      <section class="border-t border-default pt-4 space-y-3" aria-label="Restore network checkpoint">
+        <h3 class="font-semibold">Restore network from a checkpoint</h3>
+        <p class="text-sm text-muted">Replaces the complete archived network configuration, separately from other settings. Choose the active interface above for confirmation. Foundry, Setup and display browsers pause while a recovery checkpoint is captured. Physical keypads are not changed.</p>
+        <p v-if="!checkpoints.length" class="text-sm text-muted">No checkpoints available. Create one on the Backups page; persistent Btrfs storage is required.</p>
+        <UFormField label="Network checkpoint"><USelect v-model="checkpoint" :items="checkpointOptions" :disabled="locked" placeholder="Choose a checkpoint" aria-label="Network checkpoint" class="w-full" /></UFormField>
+        <UCheckbox v-model="restoreConsent" :disabled="locked" label="Replace all network settings with this checkpoint and require timed confirmation." />
+        <UCheckbox v-model="downtimeConsent" :disabled="locked" label="Pause Foundry, Setup and display browsers for the recovery checkpoint." />
+        <UButton color="warning" :disabled="locked || !checkpoint || !form.interface || !restoreConsent || !downtimeConsent" @click="restoreNetwork">Restore network with timed rollback</UButton>
+      </section>
       <section v-if="active" class="border border-warning rounded p-4 space-y-3" aria-label="Pending network change">
         <h3 class="font-semibold">Network change: {{ change.phase }}</h3>
         <p v-if="change.deadline" role="status">{{ remaining > 0 ? `${remaining} seconds until rollback deadline` : 'Deadline reached; waiting for verified host status' }}</p>
@@ -144,7 +203,7 @@ onBeforeUnmount(() => { stopped = true; clearInterval(timer); });
         <a v-if="confirmationURL" :href="confirmationURL.replace('/confirm', '/')" target="_blank" rel="noopener noreferrer" class="underline">Check secure connection at the new address</a>
         <p class="text-sm text-muted">The new endpoint uses this appliance's existing CA. Trust that CA before confirming; do not bypass an unexpected certificate identity.</p>
         <div class="flex flex-wrap gap-2">
-          <UButton id="network-confirm-action" :disabled="busy || !token || !confirmationURL || !change.id || remaining === 0" @click="confirm">Confirm through new address</UButton>
+          <UButton id="network-confirm-action" :disabled="busy || !token || !confirmationURL || !change.id || (!!change.deadline && remaining === 0)" @click="confirm">Confirm through new address</UButton>
           <UButton variant="outline" :disabled="busy || !change.id" @click="cancel">Revert now</UButton>
         </div>
       </section>

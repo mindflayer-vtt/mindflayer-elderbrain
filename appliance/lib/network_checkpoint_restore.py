@@ -101,8 +101,10 @@ class NetworkCheckpointRestore:
         validate_pin('0' * 32, owner, 'restore')
         return self.maintenance.directory / f'network-restore-{owner}.json'
 
-    def start(self, identifier, interface, *, confirmation_digest=None):
+    def start(self, identifier, interface, *, confirmation_digest=None, transaction_id=None):
         validate_pin(identifier, '0' * 32, 'restore')
+        if transaction_id is not None:
+            validate_pin(transaction_id, '0' * 32, 'restore')
         from network_config import request
         request({'interface': interface, 'mode': 'dhcp'})
         if confirmation_digest is not None and (not isinstance(confirmation_digest, str)
@@ -134,6 +136,8 @@ class NetworkCheckpointRestore:
                 options = {'restore_owner': record['id']}
                 if confirmation_digest is not None:
                     options['confirmation_digest'] = confirmation_digest
+                if transaction_id is not None:
+                    options['transaction_id'] = transaction_id
                 return self.stage(archived, interface, **options)
             except Exception:
                 # A stage error can follow a durable handoff. Never release its

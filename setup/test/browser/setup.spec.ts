@@ -13,6 +13,41 @@ test.beforeAll(async ({ playwright, baseURL }) => {
 });
 test.use({ storageState: async ({}, use) => { await use({ cookies, origins: [] }); } });
 
+test('network restore keeps queued capability and confirms known job ID after disconnection', async ({ page }) => {
+  let disconnected = false;
+  await page.route('**/api/network/change', async route => {
+    if (disconnected) return route.abort();
+    await route.fulfill({ json: { phase: 'idle' } });
+  });
+  await page.goto('/elderbrain/network');
+  const button = page.getByRole('button', { name: 'Restore network with timed rollback' });
+  await expect(button).toBeDisabled();
+  await page.getByRole('combobox', { name: 'Network interface', exact: true }).click();
+  await page.getByRole('option', { name: 'eno1', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Network checkpoint', exact: true }).click();
+  await page.getByRole('option', { name: /eeeeeeee/ }).click();
+  await page.getByRole('checkbox', { name: 'Replace all network settings with this checkpoint and require timed confirmation.' }).check();
+  await expect(button).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Pause Foundry, Setup and display browsers for the recovery checkpoint.' }).check();
+  const response = page.waitForResponse('**/api/snapshots/restore-network');
+  await button.click();
+  const result = await (await response).json();
+  await expect(page.getByRole('textbox', { name: 'New appliance IPv4' })).toBeFocused();
+  // A queued job has not replaced the old idle status yet. Polling that status
+  // must retain the token and the preallocated transaction ID.
+  await page.waitForResponse(response => response.url().endsWith('/api/network/change'));
+  disconnected = true;
+  await page.getByRole('textbox', { name: 'New appliance IPv4' }).fill('10.0.2.25');
+  let proof: unknown;
+  await page.route('https://10.0.2.25:10444/confirm', async route => {
+    proof = route.request().postDataJSON();
+    await route.fulfill({ json: { phase: 'confirmed' }, headers: { 'access-control-allow-origin': '*' } });
+  });
+  await page.getByRole('button', { name: 'Confirm through new address' }).click();
+  await expect(page.getByText('Network configuration confirmed', { exact: true })).toBeVisible();
+  expect(proof).toEqual({ id: result.job.id, token: result.token });
+});
+
 test('network checkpoint restore requires authentication and consent and persists only token hash', async ({ request, playwright, baseURL }) => {
   const url = '/elderbrain/api/snapshots/restore-network';
   const data = { checkpoint: 'e'.repeat(32), interface: 'ens3', confirmRestore: true, confirmDowntime: true };

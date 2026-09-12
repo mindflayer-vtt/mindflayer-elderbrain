@@ -183,7 +183,7 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             selected = request(record['request'])
             runtime = Path(os.environ.get('ELDERBRAIN_COMPOSE_DIR', '/opt/mindflayer-elderbrain'))
             result = coordinator(store.directory.parent, runtime).start(
-                selected['checkpoint'], selected['interface'], confirmation_digest=selected['confirmationDigest'])
+                selected['checkpoint'], selected['interface'], confirmation_digest=selected['confirmationDigest'], transaction_id=identity)
             record['result'] = {key: result[key] for key in ('id', 'phase', 'deadline', 'interface')}
             record['state'] = 'completed'
             return

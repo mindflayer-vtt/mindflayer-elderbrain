@@ -35,7 +35,7 @@ class JobTests(unittest.TestCase):
             coordinator.return_value.start.return_value = {'id': 'c' * 32, 'phase': 'staged',
                 'deadline': 1234, 'interface': 'ens3', 'token': 'never-expose', 'files': 'private'}
             worker(self.store.directory, self.identity, fd)
-            coordinator.return_value.start.assert_called_once_with('b' * 32, 'ens3', confirmation_digest='a' * 64)
+            coordinator.return_value.start.assert_called_once_with('b' * 32, 'ens3', confirmation_digest='a' * 64, transaction_id=self.identity)
         saved = self.store.read(self.identity)
         self.assertEqual(saved['state'], 'completed')
         self.assertEqual(set(saved['result']), {'id', 'phase', 'deadline', 'interface'})
