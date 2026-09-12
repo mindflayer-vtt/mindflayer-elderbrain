@@ -52,6 +52,9 @@ class RestoreCoordinator:
             try:
                 with self.exclusive():
                     self.services.stop(record["services"])
+                    if callable(staged_sources):
+                        self.write(record, 'staging-restore')
+                        staged_sources = staged_sources(record)
                     self.write(record, "creating-rollback")
                     self.before_restore(record)
                     self.write(record, "creating-rollback")
@@ -111,6 +114,7 @@ def host_targets(state, runtime, host_root, *, persistent=False):
     targets = {name: state / name for name in DATA_ROOTS}
     targets["keypad-installations"] = state / "keypad-installations"
     targets['checkpoint-retention'] = state / 'snapshots/.retention'
+    targets.update(checkpoint_targets(state))
     targets.update({"ssh-server": host_root / "etc/ssh", "ssh-root": host_root / "root/.ssh",
                     "ssh-admin": host_root / "home/elderbrain-installer/.ssh"})
     if persistent:
@@ -125,6 +129,16 @@ def host_targets(state, runtime, host_root, *, persistent=False):
     return targets
 
 
+def checkpoint_targets(state):
+    """Fixed logical file targets also used to recover selective transactions."""
+    return {'preferences': state / 'elderbrain/config.json',
+            'keypad-settings': state / 'elderbrain/secrets/keypad-settings.json',
+            'keypad-records': state / 'elderbrain/keypads.json',
+            'keypad-expectations': state / 'elderbrain/secrets/keypad-expectations.json',
+            'checkpoint-retention': state / 'snapshots/.retention',
+            'foundry': state / 'foundry'}
+
+
 def persistent_identity(state, host_root):
     marker = host_root / 'etc/elderbrain/storage.json'
     if not marker.exists() and not marker.is_symlink():
@@ -135,16 +149,20 @@ def persistent_identity(state, host_root):
 
 
 def alias_refresher(state, host_root, keys, identity):
-    if identity is None:
+    if identity is None and 'preferences' not in keys:
         return None
     from host_bindings import refresh
     names = set(keys) & {'ssh-server', 'ssh-root', 'ssh-admin'}
     def refresh_verified():
         # Recheck the actual volume on every activation and rollback, not just
         # when the request started. A replaced/missing disk must stop recovery.
-        if persistent_identity(state, host_root) != identity:
-            raise ValueError('Persistent storage identity changed during restore')
-        refresh(state, identity['data_uuid'], names, host_root=host_root)
+        if identity is not None:
+            if persistent_identity(state, host_root) != identity:
+                raise ValueError('Persistent storage identity changed during restore')
+            refresh(state, identity['data_uuid'], names, host_root=host_root)
+        if 'preferences' in keys:
+            from domain_routes import reconcile
+            reconcile(state)
     return refresh_verified
 
 

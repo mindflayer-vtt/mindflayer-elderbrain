@@ -606,3 +606,19 @@ block cleanup, and checkpoint data is never deleted by this operation. Release
 requires completed/rolled-back state and tolerates repeated recovery. Twenty
 focused restore/snapshot tests pass, including the missing-journal-ID crash
 window. This newer fix is not included in the ISO currently installing.
+
+Selective checkpoint activation now has a root CLI path for preferences, keypad
+settings and whole Foundry data. Example (after inspecting snapshot list):
+`sudo python3 /opt/mindflayer-elderbrain/snapshot_service.py restore --checkpoint ID --component preferences --confirm-restore`.
+Repeat --component to combine supported components. Network, security and device
+identities still require their dedicated coordinators and remain unavailable.
+The host flow verifies compatibility before downtime, pins/rechecks the source
+under maintenance, stages after writers stop, captures rollback state, activates
+using the existing durable transaction, checks health and rolls back on failure.
+Preference activation and recovery also regenerate the domain's Traefik routes.
+Snapshot recover dispatches interrupted restores through fixed-target recovery.
+These modules are now installed by provisioning; API/UI integration and real
+Btrfs/Foundry activation tests remain pending. The current VM ISO predates this.
+Full host suite passed 315 tests with 5 optional skips before the route-refresh
+addition; all 29 checkpoint/restore tests passed afterward, including route
+activation/rollback. VM2232 remains in kernel installation, not yet verified.

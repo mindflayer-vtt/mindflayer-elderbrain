@@ -60,7 +60,10 @@ def retention_settings(value=None, state='/var/lib/mindflayer-elderbrain', runti
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('create', 'list', 'recover'))
+    parser.add_argument('operation', choices=('create', 'list', 'recover', 'restore'))
+    parser.add_argument('--checkpoint')
+    parser.add_argument('--component', action='append', default=[])
+    parser.add_argument('--confirm-restore', action='store_true')
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise SystemExit('Requires root')
@@ -69,8 +72,21 @@ def main():
         result = {'state': 'completed', 'checkpoint': snapshots.create('manual')}
     elif args.operation == 'list':
         result = {'state': 'ready', 'checkpoints': snapshots.list()}
+    elif args.operation == 'restore':
+        if not args.checkpoint or not args.component or not args.confirm_restore:
+            parser.error('restore requires --checkpoint ID --component NAME --confirm-restore')
+        from checkpoint_restore import restore
+        runtime = Path('/opt/mindflayer-elderbrain')
+        maintenance = Maintenance(snapshots.state / 'maintenance', HostServices(runtime))
+        result = restore(args.checkpoint, args.component, snapshots.state, runtime, maintenance)
     else:
-        Maintenance(snapshots.state / 'maintenance', HostServices(Path('/opt/mindflayer-elderbrain'))).recover()
+        runtime = Path('/opt/mindflayer-elderbrain')
+        maintenance = Maintenance(snapshots.state / 'maintenance', HostServices(runtime))
+        if maintenance.previous().get('operation') == 'restore':
+            from restore_service import recover_host
+            recover_host(snapshots.state, runtime, maintenance)
+        else:
+            maintenance.recover()
         snapshots.recover()
         result = {'state': 'recovered'}
     print(json.dumps(result))
