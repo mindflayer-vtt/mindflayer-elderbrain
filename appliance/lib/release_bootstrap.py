@@ -136,7 +136,7 @@ def verify_installed(tree, allowed_paths, *, host_root=Path('/')):
     return {'bundle': identity}
 
 
-def install(tree, allowed_paths, *, state, host_root=Path('/')):
+def install(tree, allowed_paths, *, state, host_root=Path('/'), job_owner=None):
     """Internal installer API: tree and inventory must already be authenticated."""
     root, tree, state = Path(host_root).absolute(), Path(tree).absolute(), Path(state)
     identity = persistent_identity(state, root)  # Before creating any directories.
@@ -156,7 +156,7 @@ def install(tree, allowed_paths, *, state, host_root=Path('/')):
         contents[target] = value
     links = {'etc/systemd/system/multi-user.target.wants/' + name: '../' + name for name in UNITS}
     bundle_root = root / 'usr/lib/elderbrain-recovery'
-    with update_admission(state):
+    with update_admission(state, owner=job_owner):
         maintenance = Maintenance(state / 'maintenance', None)
         # No bootstrap files change before all target types are checked. The
         # content-addressed bundle publication below cannot alter active code.

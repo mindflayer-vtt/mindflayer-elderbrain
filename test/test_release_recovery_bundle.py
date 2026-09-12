@@ -1,4 +1,5 @@
 import json
+import os
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -16,6 +17,29 @@ spec.loader.exec_module(launcher)
 
 
 class RecoveryBundleTests(unittest.TestCase):
+    def test_job_launcher_uses_verified_worker_and_matching_inherited_descriptor(self):
+        result = self.install()
+        select(result['id'], directory=self.directory, maintenance=Maintenance(self.root / 'maintenance', None))
+        jobs = self.root / 'jobs'
+        jobs.mkdir(mode=0o700)
+        identity = 'c' * 32
+        save_record(jobs / (identity + '.json'), {'id': identity, 'kind': 'update', 'state': 'queued'})
+        fd = os.open(jobs / (identity + '.lock'), os.O_CREAT | os.O_RDWR, 0o600)
+        self.addCleanup(os.close, fd)
+        with patch.object(launcher, 'JOBS', jobs), patch.object(launcher.os, 'execve') as execute:
+            launcher.launch('job', self.directory, job=identity, lock_fd=fd)
+            args = execute.call_args.args[1]
+            self.assertEqual(args[3:], [str(Path(result['directory']) / 'host_jobs.py'),
+                'worker', str(jobs), identity, str(fd), '-1'])
+            execute.reset_mock()
+            other = os.open(jobs / 'other.lock', os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                with self.assertRaisesRegex(ValueError, 'does not own'):
+                    launcher.launch('job', self.directory, job=identity, lock_fd=other)
+            finally:
+                os.close(other)
+            execute.assert_not_called()
+
     @classmethod
     def setUpClass(cls):
         preparation_fixture.ReleasePrepareTests.setUpClass()

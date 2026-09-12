@@ -1489,3 +1489,28 @@ graceful reboot; it is not a physical abrupt-power-loss test or a licensed Found
 schema-migration test. Focused activation/recovery suite: 21 tests passing; diff
 whitespace check passes. PC remains on; no physical Lenovo contact or publication.
 Persistent update-job/API/UI integration and the remaining goal items are pending.
+
+Added persistent `update` host jobs with exact version/manifest-digest and explicit
+update/downtime confirmation. Only update jobs launch through the independently
+verified bootstrap job entry; it verifies the queued kind/identity and inherited
+lock-file inode before isolated host_jobs execution in the existing separate
+systemd scope. The worker uses fixed OS release/dependency paths and installer-owned
+public key/reviewed inventory, checks actual platform compatibility, installs
+authenticated recovery and invokes release_apply with its live job owner. The
+confirmed digest is checked again at activation. Other jobs remain excluded by
+the existing lock-proven admission. Job progress/results are durable and redacted;
+failures retain private diagnostics and update maintenance records include jobId.
+
+Tests cover request rejection, stable scope arguments, verified worker launch and
+wrong inherited descriptor, durable progress, private failures, fixed trust paths,
+digest changes and key permissions, plus existing activation/boot regressions.
+No VM or physical appliance changes this turn. Trust/preparation provisioning,
+real scoped-worker VM qualification, boot outcome reconciliation and the public
+System-page API/UI remain pending; no update-ready claim is made.
+
+Review caught the legacy management runtime's limited module inventory: importing
+the full update worker merely to validate a request would fail there. Moved request
+validation into a small shared module and explicitly provisioned it plus its
+stdlib-only release-metadata dependency. Actual execution still uses retained
+recovery code; the management runtime never imports the activation closure during
+submission. Shell syntax, request/worker/package tests and whitespace checks pass.

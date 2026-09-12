@@ -591,3 +591,27 @@ Actual early recovery restores the previous code and fixture data before Docker
 starts; final health verification marks rollback complete and releases its pin.
 This adds interrupted-update boot evidence but does not simulate sudden loss of
 physical power or implement the still-pending public update job/API.
+
+The host job store now accepts an `update` request with exactly `version`,
+`manifestSha256`, `confirmUpdate: true` and `confirmDowntime: true`. It launches
+the verified bootstrap's `job` entry in an independent systemd scope, retaining
+the inherited worker lock across launcher exec. Only queued update jobs with a
+matching lock-file inode are accepted; other job kinds retain their existing
+launch path. The isolated worker imports only its retained module directory.
+
+The update worker reads installer-owned `/etc/elderbrain/release-public.pem` and
+`release-inventory.json` (the reviewed path-to-mode dictionary). Prepared releases
+reside under private `/var/lib/elderbrain-releases/prepared/VERSION`, staging under
+its sibling `staging`, and stable dependencies under
+`/usr/lib/elderbrain-dependencies`. These prerequisites must already exist; the
+worker never fetches URLs, trusts a request-supplied key, or creates substitute
+storage. It rechecks the confirmed digest before verification and activation,
+installs authenticated recovery prerequisites, then invokes coordinated activation.
+Its own live job may be exempted from admission; other active jobs remain excluded.
+Progress and redacted results are durable, failures retain root-private diagnostics,
+and maintenance records carry jobId for later recovery/status correlation.
+
+Installer trust/preparation configuration, real VM scoped-worker qualification,
+boot-time job outcome reconciliation, release discovery/download and authenticated
+System-page API/UI integration remain pending. This job path is not yet a complete
+end-user update workflow.

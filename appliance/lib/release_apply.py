@@ -4,11 +4,13 @@ Internal host-worker API, not a network endpoint. Call from independently retain
 code, with an independently pinned public key and authenticated bootstrap tree.
 """
 from contextlib import ExitStack
+import hashlib
 from pathlib import Path
 import subprocess
 
 from backup_service import Maintenance
 from release_activation import Activation
+from release_interlocks import update_admission
 from release_bootstrap import verify_installed
 from release_checkpoints import UpdateCheckpoints
 from release_recovery import health
@@ -19,7 +21,8 @@ from restore_service import persistent_identity
 
 
 def activate(prepared, public_key, allowed_paths, *, dependency_directory, bootstrap_tree,
-             platform, configuration_schema, parent, host_root=Path('/'), run=subprocess.run):
+             platform, configuration_schema, parent, host_root=Path('/'), run=subprocess.run, job_owner=None,
+             expected_manifest_sha256=None):
     root = Path(host_root).absolute()
     state, runtime = root / 'var/lib/mindflayer-elderbrain', root / 'opt/mindflayer-elderbrain'
     if Path(__file__).resolve().is_relative_to(runtime.resolve()):
@@ -29,6 +32,8 @@ def activate(prepared, public_key, allowed_paths, *, dependency_directory, boots
         raise ValueError('Release activation requires verified persistent storage')
     prepared = private_directory(prepared)
     manifest = read_regular(prepared / 'manifest.json', 65536)
+    if expected_manifest_sha256 is not None and hashlib.sha256(manifest).hexdigest() != expected_manifest_sha256:
+        raise ValueError('Release changed after update confirmation')
     signature = read_regular(prepared / 'manifest.sig', 1024)
     services = UpdateServices(runtime, health_check=lambda saved: health(
         saved, state, management_socket=root / 'run/elderbrain/management.sock'))
@@ -50,6 +55,6 @@ def activate(prepared, public_key, allowed_paths, *, dependency_directory, boots
             return sources(tree, root)
         activation = Activation(maintenance, targets(root), checkpoint=checkpoints.checkpoint,
             restore_checkpoint=checkpoints.restore, release_checkpoint=checkpoints.release,
-            refresh=checkpoints.guard)
+            refresh=checkpoints.guard, admission=lambda: update_admission(state, owner=job_owner), job_owner=job_owner)
         record = activation.activate(manifest, signature, public_key, prepare_sources)
     return {key: record[key] for key in ('id', 'state', 'version')}

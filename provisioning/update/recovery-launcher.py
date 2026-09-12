@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import stat
 
+JOBS = Path('/var/lib/mindflayer-elderbrain/jobs')
 
 def unique(pairs):
     result = {}
@@ -76,11 +77,28 @@ def selected(directory):
     return bundle / 'release_recovery.py'
 
 
-def launch(phase, directory=Path('/usr/lib/elderbrain-recovery')):
-    if phase not in ('storage', 'files', 'finish'):
+def launch(phase, directory=Path('/usr/lib/elderbrain-recovery'), *, job=None, lock_fd=None):
+    if phase not in ('storage', 'files', 'finish', 'job'):
         raise ValueError('Invalid recovery phase')
+    if phase != 'job' and (job is not None or lock_fd is not None):
+        raise ValueError('Unexpected worker arguments')
     entrypoint = selected(directory)
     arguments = [str(entrypoint), phase]
+    if phase == 'job':
+        if not isinstance(job, str) or not re.fullmatch('[a-f0-9]{32}', job) or type(lock_fd) is not int or lock_fd < 3:
+            raise ValueError('Invalid update worker identity or descriptor')
+        jobs = JOBS
+        private(jobs, directory=True)
+        record = json.loads(read(jobs / (job + '.json'), 65536), object_pairs_hook=unique)
+        descriptor, expected = os.fstat(lock_fd), (jobs / (job + '.lock')).lstat()
+        if (record.get('id') != job or record.get('kind') != 'update' or record.get('state') != 'queued'
+                or not stat.S_ISREG(descriptor.st_mode) or descriptor.st_uid != os.geteuid()
+                or (descriptor.st_dev, descriptor.st_ino) != (expected.st_dev, expected.st_ino)):
+            raise ValueError('Update worker does not own its admitted job descriptor')
+        worker = entrypoint.parent / 'host_jobs.py'
+        if not worker.is_file():
+            raise ValueError('Verified bundle has no host worker')
+        arguments = [str(worker), 'worker', str(jobs), job, str(lock_fd), '-1']
     if phase == 'storage':
         guard = entrypoint.parent / 'storage_guard.py'
         if not guard.is_file():
@@ -92,8 +110,10 @@ def launch(phase, directory=Path('/usr/lib/elderbrain-recovery')):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('phase', choices=('storage', 'files', 'finish'))
+    parser.add_argument('phase', choices=('storage', 'files', 'finish', 'job'))
+    parser.add_argument('job', nargs='?')
+    parser.add_argument('lock_fd', nargs='?', type=int)
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise SystemExit('Update recovery requires root')
-    launch(args.phase)
+    launch(args.phase, job=args.job, lock_fd=args.lock_fd)

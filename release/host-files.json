@@ -340,6 +340,16 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/update_request.py",
+    "path": "runtime/update_request.py",
+    "mode": 420
+  },
+  {
+    "source": "appliance/lib/update_job.py",
+    "path": "runtime/update_job.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_apply.py",
     "path": "runtime/release_apply.py",
     "mode": 420

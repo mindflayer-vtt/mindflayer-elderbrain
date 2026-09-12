@@ -14,6 +14,50 @@ from backup_service import save_record
 
 
 class JobTests(unittest.TestCase):
+    def test_update_request_requires_exact_digest_and_confirmation(self):
+        valid = {'version': '1.2.3', 'manifestSha256': 'b' * 64, 'confirmUpdate': True, 'confirmDowntime': True}
+        for change in ({'version': '../other'}, {'manifestSha256': 'latest'}, {'confirmUpdate': False},
+                       {'confirmDowntime': False}, {'path': '/tmp/release'}):
+            with self.assertRaises(ValueError):
+                self.store.submit('update', {**valid, **change})
+        with patch('host_jobs.subprocess.Popen') as process, patch('host_jobs.threading.Thread'):
+            record = self.store.submit('update', valid)
+        args = process.call_args.args[0]
+        self.assertIn('/usr/libexec/elderbrain-recovery.py', args)
+        self.assertIn('--scope', args)
+        self.assertEqual(args[-3:-1], ['job', record['id']])
+        self.assertNotIn(str(Path(__file__).resolve().parents[1] / 'appliance/lib/host_jobs.py'), args)
+
+    def test_update_worker_saves_progress_and_redacts_internal_result(self):
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        record.update(kind='update', request={'version': '1.2.3'})
+        save_record(path, record)
+        def update(state, identity, selected, *, progress):
+            progress('activating')
+            self.assertEqual(json.loads(path.read_text())['stage'], 'activating')
+            return {'id': 'b' * 32, 'state': 'completed', 'version': '1.2.3', 'private': 'omit'}
+        with patch('update_job.run_update', side_effect=update):
+            worker(self.store.directory, self.identity, fd)
+        saved = self.store.read(self.identity)
+        self.assertEqual(saved['state'], 'completed')
+        self.assertEqual(set(saved['result']), {'id', 'state', 'version'})
+
+    def test_update_failure_keeps_diagnostics_private(self):
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        record.update(kind='update', request={'version': '1.2.3'})
+        save_record(path, record)
+        with patch('update_job.run_update', side_effect=ValueError('private diagnostic fixture')):
+            worker(self.store.directory, self.identity, fd)
+        saved = self.store.read(self.identity)
+        self.assertEqual(saved['state'], 'failed')
+        self.assertNotIn('private diagnostic fixture', saved['error'])
+        self.assertIn('private diagnostic fixture', path.with_suffix('.stderr').read_text())
+        self.assertEqual(path.with_suffix('.stderr').stat().st_mode & 0o777, 0o600)
+
     def test_network_restore_admission_requires_consent_and_digest(self):
         valid = {'checkpoint': 'b' * 32, 'interface': 'ens3', 'confirmationDigest': 'a' * 64,
                  'confirmRestore': True, 'confirmDowntime': True}

@@ -16,7 +16,7 @@ from snapshot_service import stable_settings
 
 class Activation:
     def __init__(self, maintenance, targets, *, checkpoint, restore_checkpoint,
-                 release_checkpoint, refresh, exclusive=None, admission=None):
+                 release_checkpoint, refresh, exclusive=None, admission=None, job_owner=None):
         self.maintenance = maintenance
         self.services = maintenance.services
         self.targets = targets
@@ -24,6 +24,7 @@ class Activation:
         self.restore_checkpoint = restore_checkpoint
         self.release_checkpoint = release_checkpoint
         self.refresh = refresh
+        self.job_owner = job_owner
         state = maintenance.directory.parent
         self.exclusive = exclusive or (lambda: stable_settings(state))
         self.admission = admission or (lambda: update_admission(state))
@@ -57,6 +58,8 @@ class Activation:
                     candidate = {'operation': 'update', 'id': uuid.uuid4().hex, 'version': release['version'],
                                  'startedAt': time.time(), 'services': self.services.snapshot(),
                                  'dataMayHaveChanged': False, 'dataRolledBack': False}
+                    if self.job_owner is not None:
+                        candidate['jobId'] = self.job_owner
                     transaction = self.transaction(candidate)
                     self.write(candidate, 'stopping')
                     record = candidate

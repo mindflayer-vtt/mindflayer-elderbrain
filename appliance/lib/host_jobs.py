@@ -11,6 +11,7 @@ import threading
 import uuid
 import stat
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backup_service import save_record
 from backup_uploads import UploadStore
 
@@ -25,6 +26,7 @@ COMMANDS["snapshot-create"] = ["snapshot-create"]
 COMMANDS["snapshot-recover"] = ["snapshot-recover"]
 COMMANDS["snapshot-restore"] = ["snapshot-restore"]
 COMMANDS['network-snapshot-restore'] = []
+COMMANDS['update'] = []
 
 
 class JobStore:
@@ -94,7 +96,10 @@ class JobStore:
             validate_passphrase(passphrase)
         elif passphrase is not None:
             raise ValueError("Unexpected passphrase")
-        if kind == "keypad-install":
+        if kind == 'update':
+            from update_request import request
+            details['request'] = request(source)
+        elif kind == "keypad-install":
             from installation_job import admission
             request, installation_settings = admission(source, self.directory.parent)
             details = {"request": request, "revision": installation_settings["revision"]}
@@ -146,11 +151,15 @@ class JobStore:
                     # A separate scope preserves inherited lock/secret FDs while
                     # surviving a bridge restart. No credentials enter unit
                     # properties, argv, the journal, or temporary disk files.
+                    worker_command = [sys.executable, str(Path(__file__).resolve()),
+                        'worker', str(self.directory), identity, str(fd), str(secret_fd if secret_fd is not None else -1)]
+                    if kind == 'update':
+                        worker_command = ['/usr/bin/python3', '-I', '-B', '/usr/libexec/elderbrain-recovery.py',
+                                          'job', identity, str(fd)]
                     process = subprocess.Popen(['systemd-run', '--scope', '--quiet', '--collect',
                                                 '--unit=elderbrain-job-' + identity,
                                                 '--expand-environment=no', '--',
-                                                sys.executable, str(Path(__file__).resolve()),
-                                                "worker", str(self.directory), identity, str(fd), str(secret_fd if secret_fd is not None else -1)],
+                                                *worker_command],
                                                pass_fds=inherited, stdin=subprocess.DEVNULL,
                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                                start_new_session=True)
@@ -178,6 +187,15 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
     record.update(state="running", startedAt=time.time())
     save_record(path, record)
     try:
+        if record['kind'] == 'update':
+            from update_job import run_update
+            def progress(stage):
+                record['stage'] = stage
+                save_record(path, record)
+            result = run_update(store.directory.parent, identity, record['request'], progress=progress)
+            record['result'] = {key: result[key] for key in ('id', 'state', 'version')}
+            record['state'] = 'completed'
+            return
         if record['kind'] == 'network-snapshot-restore':
             from network_checkpoint_restore import request, coordinator
             selected = request(record['request'])
@@ -282,6 +300,13 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             record["result"] = {"state": result["state"]}
         record["state"] = "completed"
     except Exception:
+        if record['kind'] == 'update':
+            import traceback
+            diagnostic = os.open(path.with_suffix('.stderr'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(diagnostic, 'w') as output:
+                output.write(traceback.format_exc()[-65536:])
+                output.flush()
+                os.fsync(output.fileno())
         record.update(state="failed", error="Host operation failed. Inspect the root-private job diagnostics and maintenance state before retrying.")
         if record["kind"] == "keypad-install":
             record["error"] = "Installation stopped at " + record.get("stage", "preflight") + "; retain this job's keypad provisioning backups and private recovery journal before retrying."
