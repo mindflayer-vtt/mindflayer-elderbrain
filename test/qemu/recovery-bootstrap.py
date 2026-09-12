@@ -38,4 +38,4 @@ for phase in ('files', 'finish'):
 command('systemctl', 'daemon-reload')
 assert persistent_identity(state, Path('/')) == identity
 print(json.dumps({'state': 'bootstrap-installed-and-verified', 'bundle': result['bundle'],
-                  'history': result['history'], 'activationReady': False}), flush=True)
+                  'generation': result['generation'], 'activationReady': False}), flush=True)

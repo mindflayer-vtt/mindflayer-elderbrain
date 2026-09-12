@@ -43,7 +43,20 @@ def read(path, limit):
 def selected(directory):
     directory = Path(directory).absolute()
     private(directory, directory=True)
-    selection = json.loads(read(directory / 'active.json', 1024), object_pairs_hook=unique)
+    current = directory / 'bootstrap-active'
+    selector = directory / 'active.json'
+    if current.exists() or current.is_symlink():
+        info = current.lstat()
+        target = os.readlink(current) if stat.S_ISLNK(info.st_mode) else ''
+        match = re.fullmatch(r'bootstrap-generations/([a-f0-9]{64})', target)
+        if info.st_uid != os.geteuid() or match is None:
+            raise ValueError('Invalid active bootstrap generation')
+        generation = directory / 'bootstrap-generations' / match.group(1)
+        if current.resolve() != generation or generation.parent.resolve() != generation.parent:
+            raise ValueError('Active bootstrap generation escapes its store')
+        private(generation, directory=True)
+        selector = generation / 'active.json'
+    selection = json.loads(read(selector, 1024), object_pairs_hook=unique)
     if (not isinstance(selection, dict) or set(selection) != {'format', 'bundle'}
             or type(selection['format']) is not int or selection['format'] != 1
             or not isinstance(selection['bundle'], str) or not re.fullmatch(r'[a-f0-9]{64}', selection['bundle'])):

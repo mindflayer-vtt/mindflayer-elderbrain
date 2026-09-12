@@ -118,7 +118,7 @@ class RecoveryEntryTests(unittest.TestCase):
             patches.enter_context(patch('release_recovery.persistent_identity', return_value='fixture'))
             maintenance = patches.enter_context(patch('release_recovery.Maintenance')).return_value
             outcome = {'operation': 'update', 'id': 'a' * 32, 'state': 'completed',
-                       'recoveryApi': 1, 'candidateRecovery': 'c' * 64}
+                       'recoveryApi': 1, 'candidateBootstrap': 'c' * 64}
             maintenance.previous.return_value = outcome
             patches.enter_context(patch('release_recovery.UpdateCheckpoints'))
             activation = patches.enter_context(patch('release_recovery.Activation')).return_value

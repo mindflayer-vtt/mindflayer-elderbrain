@@ -82,11 +82,11 @@ def recover(action, *, host_root=Path('/')):
     activation = Activation(maintenance, targets(host_root), checkpoint=checkpoints.checkpoint,
         restore_checkpoint=checkpoints.restore, release_checkpoint=checkpoints.release,
         refresh=checkpoints.guard, recovery_api=RECOVERY_API,
-        candidate_recovery=previous.get('candidateRecovery'),
+        candidate_bootstrap=previous.get('candidateBootstrap'),
         commit_release=ReleasePolicy(state).commit)
     record = activation.recover_files() if action == 'files' else activation.recover()
-    if action == 'finish' and record.get('state') == 'completed' and record.get('candidateRecovery'):
-        commit_candidate(record['candidateRecovery'], state=state, host_root=host_root,
+    if action == 'finish' and record.get('state') == 'completed' and record.get('candidateBootstrap'):
+        commit_candidate(record['candidateBootstrap'], state=state, host_root=host_root,
                          job_owner=record.get('jobId'))
     if action == 'finish' and record.get('jobId'):
         from host_jobs import JobStore

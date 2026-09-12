@@ -47,7 +47,7 @@ class ApplyTests(unittest.TestCase):
         return activate(self.prepared, b'pinned key', {'trusted': 0o644},
             dependency_directory=self.root / 'dependencies', bootstrap_tree=self.root / 'bootstrap',
             platform={'architecture': 'amd64'}, configuration_schema=1, parent=self.root, host_root=self.root,
-            active_recovery='b' * 64, candidate_recovery='c' * 64, recovery_api=1)
+            active_recovery='b' * 64, candidate_bootstrap='c' * 64, recovery_api=1)
 
     def test_wires_fixed_coordinator_and_retains_candidate_until_activation_finishes(self):
         self.assertEqual(self.activate(), {'id': 'a' * 32, 'version': '1.0.1', 'state': 'completed'})
@@ -62,7 +62,7 @@ class ApplyTests(unittest.TestCase):
         self.assertIs(options['release_checkpoint'], self.checkpoints.release)
         self.assertIs(options['refresh'], self.checkpoints.guard)
         self.assertIs(options['commit_release'], self.policy.commit)
-        self.assertEqual(options['candidate_recovery'], 'c' * 64)
+        self.assertEqual(options['candidate_bootstrap'], 'c' * 64)
 
     def test_missing_storage_prevents_maintenance_creation(self):
         self.guard.return_value = None

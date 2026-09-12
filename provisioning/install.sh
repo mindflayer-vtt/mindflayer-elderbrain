@@ -18,7 +18,6 @@ if [[ -e /etc/elderbrain/storage.json || -L /etc/elderbrain/storage.json ]]; the
   python3 "$PAYLOAD_DIR/appliance/lib/storage_guard.py"
   install -d -m 0755 "$RUNTIME"
   install -m 0644 "$PAYLOAD_DIR/appliance/lib/storage_guard.py" "$RUNTIME/storage_guard.py"
-  install -m 0644 "$PAYLOAD_DIR/provisioning/systemd/elderbrain-storage.service" /etc/systemd/system/elderbrain-storage.service
   for storage_writer in docker elderbrain-stack elderbrain-management elderbrain-graphics elderbrain-admin-console elderbrain-backup elderbrain-display-watchdog elderbrain-network-recovery elderbrain-network-watchdog elderbrain-network-confirmation; do
     install -d -m 0755 "/etc/systemd/system/$storage_writer.service.d"
     install -m 0644 "$PAYLOAD_DIR/provisioning/systemd/storage-required.conf" "/etc/systemd/system/$storage_writer.service.d/10-storage-required.conf"
@@ -159,7 +158,10 @@ chown -R 1000:1000 "$STATE/mindflayer"
 # directory otherwise stays 0755 root:root and fails its write check.
 chown -hR 1000:1000 "$STATE/foundry"
 chmod u+rwx "$STATE/foundry"
-install -m 0644 "$PAYLOAD_DIR/provisioning/systemd/"*.service /etc/systemd/system/
+for service in "$PAYLOAD_DIR/provisioning/systemd/"*.service; do
+  [[ ${service##*/} == elderbrain-storage.service ]] && continue
+  install -m 0644 "$service" /etc/systemd/system/
+done
 python3 "$PAYLOAD_DIR/provisioning/compat/retire-legacy-browser.py" retire
 for network_service in systemd-networkd NetworkManager; do
   install -d -m 0755 "/etc/systemd/system/$network_service.service.d"

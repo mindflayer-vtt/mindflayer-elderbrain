@@ -19,6 +19,24 @@ from backup_service import save_record
 RECOVERY_API = 1
 
 
+def active_selection(directory):
+    """Return the canonical selector for standalone or generated bootstraps."""
+    directory = private_directory(Path(directory))
+    current = directory / 'bootstrap-active'
+    if not current.exists() and not current.is_symlink():
+        return directory / 'active.json'
+    info = current.lstat()
+    target = os.readlink(current) if stat.S_ISLNK(info.st_mode) else ''
+    match = re.fullmatch(r'bootstrap-generations/([a-f0-9]{64})', target)
+    if info.st_uid != os.geteuid() or match is None:
+        raise ValueError('Invalid active bootstrap generation')
+    generation = directory / 'bootstrap-generations' / match.group(1)
+    if current.resolve() != generation or generation.parent.resolve() != generation.parent:
+        raise ValueError('Active bootstrap generation escapes its store')
+    private_directory(generation)
+    return generation / 'active.json'
+
+
 def verify_tree(directory, files, manifest):
     directory = private_directory(directory)
     if {path.name for path in directory.iterdir()} != set(files) | {'bundle.json'}:
@@ -69,7 +87,7 @@ def verify_bundle(identity, *, directory):
 
 def active(*, directory, expected=None):
     directory = private_directory(directory)
-    selection = json.loads(read_regular(directory / 'active.json', 1024), object_pairs_hook=unique)
+    selection = json.loads(read_regular(active_selection(directory), 1024), object_pairs_hook=unique)
     if (not isinstance(selection, dict) or set(selection) != {'format', 'bundle'}
             or type(selection['format']) is not int or selection['format'] != 1
             or not isinstance(selection['bundle'], str)):
@@ -84,6 +102,8 @@ def active(*, directory, expected=None):
 def selection_window(identity, *, directory, maintenance):
     """Caller verified storage; serialized selection cannot change mid-update."""
     directory = private_directory(directory)
+    if (directory / 'bootstrap-active').exists() or (directory / 'bootstrap-active').is_symlink():
+        raise ValueError('Generated bootstrap selection requires an atomic generation switch')
     with maintenance.locked():
         if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
             raise RuntimeError('Cannot change recovery code during unfinished maintenance')

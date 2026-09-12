@@ -19,7 +19,7 @@ from snapshot_service import stable_settings
 class Activation:
     def __init__(self, maintenance, targets, *, checkpoint, restore_checkpoint,
                  release_checkpoint, refresh, exclusive=None, admission=None, job_owner=None,
-                 recovery_api=RECOVERY_API, candidate_recovery=None, commit_release=None):
+                 recovery_api=RECOVERY_API, candidate_bootstrap=None, commit_release=None):
         self.maintenance = maintenance
         self.services = maintenance.services
         self.targets = targets
@@ -31,10 +31,10 @@ class Activation:
         if type(recovery_api) is not int or recovery_api != RECOVERY_API:
             raise ValueError('Unsupported recovery transaction API')
         self.recovery_api = recovery_api
-        if candidate_recovery is not None and (not isinstance(candidate_recovery, str)
-                or len(candidate_recovery) != 64 or any(char not in '0123456789abcdef' for char in candidate_recovery)):
-            raise ValueError('Invalid candidate recovery identity')
-        self.candidate_recovery = candidate_recovery
+        if candidate_bootstrap is not None and (not isinstance(candidate_bootstrap, str)
+                or len(candidate_bootstrap) != 64 or any(char not in '0123456789abcdef' for char in candidate_bootstrap)):
+            raise ValueError('Invalid candidate bootstrap identity')
+        self.candidate_bootstrap = candidate_bootstrap
         self.commit_release = commit_release or (lambda record: None)
         state = maintenance.directory.parent
         self.exclusive = exclusive or (lambda: stable_settings(state))
@@ -72,8 +72,8 @@ class Activation:
                                  'recoveryApi': self.recovery_api,
                                  'releaseSequence': release['releaseSequence'],
                                  'manifestSha256': hashlib.sha256(manifest).hexdigest()}
-                    if self.candidate_recovery is not None:
-                        candidate['candidateRecovery'] = self.candidate_recovery
+                    if self.candidate_bootstrap is not None:
+                        candidate['candidateBootstrap'] = self.candidate_bootstrap
                     if self.job_owner is not None:
                         candidate['jobId'] = self.job_owner
                     transaction = self.transaction(candidate)

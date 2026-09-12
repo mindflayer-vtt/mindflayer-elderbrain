@@ -65,7 +65,7 @@ class UpdateWorkerTests(unittest.TestCase):
             self.assertEqual(options['expected_manifest_sha256'], self.request['manifestSha256'])
             self.assertEqual(options['active_recovery'], 'b' * 64)
             self.assertEqual(options['recovery_api'], 1)
-            self.assertEqual(options['candidate_recovery'], 'c' * 64)
+            self.assertEqual(options['candidate_bootstrap'], 'c' * 64)
             self.prepare_recovery.assert_called_once()
             self.commit_recovery.assert_not_called()
             return {'state': 'completed'}
@@ -118,7 +118,7 @@ class UpdateWorkerTests(unittest.TestCase):
         self.verify.assert_called_once()
         self.apply.assert_called_once()
 
-    def test_candidate_recovery_is_not_selected_before_activation_commits(self):
+    def test_candidate_bootstrap_is_not_selected_before_activation_commits(self):
         self.apply.side_effect = RuntimeError('health failed and rollback completed')
         with self.assertRaisesRegex(RuntimeError, 'health failed'):
             self.run_update()

@@ -23,7 +23,7 @@ from restore_service import persistent_identity
 
 def activate(prepared, public_key, allowed_paths, *, dependency_directory, bootstrap_tree,
              platform, configuration_schema, parent, host_root=Path('/'), run=subprocess.run, job_owner=None,
-             expected_manifest_sha256=None, active_recovery=None, candidate_recovery=None, recovery_api=None):
+             expected_manifest_sha256=None, active_recovery=None, candidate_bootstrap=None, recovery_api=None):
     root = Path(host_root).absolute()
     state, runtime = root / 'var/lib/mindflayer-elderbrain', root / 'opt/mindflayer-elderbrain'
     if Path(__file__).resolve().is_relative_to(runtime.resolve()):
@@ -31,7 +31,7 @@ def activate(prepared, public_key, allowed_paths, *, dependency_directory, boots
     identity = persistent_identity(state, root)
     if identity is None:
         raise ValueError('Release activation requires verified persistent storage')
-    if not isinstance(active_recovery, str) or not isinstance(candidate_recovery, str) or type(recovery_api) is not int:
+    if not isinstance(active_recovery, str) or not isinstance(candidate_bootstrap, str) or type(recovery_api) is not int:
         raise ValueError('Activation requires the admitted recovery authority')
     prepared = private_directory(prepared)
     manifest = read_regular(prepared / 'manifest.json', 65536)
@@ -64,7 +64,7 @@ def activate(prepared, public_key, allowed_paths, *, dependency_directory, boots
         activation = Activation(maintenance, targets(root), checkpoint=checkpoints.checkpoint,
             restore_checkpoint=checkpoints.restore, release_checkpoint=checkpoints.release,
             refresh=checkpoints.guard, admission=lambda: update_admission(state, owner=job_owner),
-            job_owner=job_owner, recovery_api=recovery_api, candidate_recovery=candidate_recovery,
+            job_owner=job_owner, recovery_api=recovery_api, candidate_bootstrap=candidate_bootstrap,
             commit_release=policy.commit)
         record = activation.activate(manifest, signature, public_key, prepare_sources)
     return {key: record[key] for key in ('id', 'state', 'version')}

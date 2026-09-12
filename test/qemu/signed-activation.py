@@ -178,7 +178,7 @@ with staged_payload() as (tree, _), \
     try:
         result = activate(prepared / args.version, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
                           platform=metadata['platform'], configuration_schema=1, parent=evidence,
-                          active_recovery=recovery['active'], candidate_recovery=recovery['candidate'],
+                          active_recovery=recovery['active'], candidate_bootstrap=recovery['candidate'],
                           recovery_api=metadata['recoveryApi'])
         assert result['state'] == 'completed'
         commit_candidate(recovery['candidate'], state=Path('/var/lib/mindflayer-elderbrain'))

@@ -1732,3 +1732,22 @@ additions. Six focused payload/SMTP tests, three update-trust tests, shell synta
 static checks and whitespace checks pass. No ISO was built or copied, and no VM,
 Ventoy device or physical appliance was changed. A signed immutable first-runtime
 baseline still needs integration before production ISO qualification.
+
+Replaced independent recovery-bootstrap file publication with content-addressed,
+atomic generations. A generation binds the candidate recovery bundle/API together
+with the fixed launcher, storage/recovery units and all writer-gate drop-ins.
+Clean installation establishes stable root-owned symlinks for those boot paths;
+every path resolves through one `bootstrap-active` selector. Online preparation
+fully writes, fsyncs and verifies a candidate generation without selecting it.
+Only a completed activation switches the single selector, after which the private
+installation receipt is refreshed idempotently. Boot recovery can repeat that
+switch using the generation identity retained in the update journal. Changed fixed
+bootstrap files are now supported instead of being rejected as byte-different.
+Unit tests inject interruption before and after both the content-addressed generation
+rename and the atomic selector replacement, proving that the old complete generation
+or new complete generation remains selected and reruns converge. The real minimal
+launcher is also tested against the generated selector. The complete 168-test
+release suite, all 39 Setup tests, all 583 host tests and static checks pass; tests
+requiring host systemd sockets were run outside the restricted sandbox.
+No VM or physical appliance was changed, so destructive boot/power-loss qualification
+of this publication mechanism remains pending.

@@ -439,23 +439,22 @@ Compose, start services, release checkpoint pins or declare the update healthy.
 
 Later normal recovery performs service/configuration health checks and reaches
 `completed` or `rolled-back`; repeated early recovery does not repeat completed
-data rollback. The future boot unit must enforce ordering before every writer,
-not merely rely on these point-in-time inactive checks. Stable recovery code
-outside the replaced runtime and boot-unit integration remain pending.
+data rollback. Installed recovery units and writer gates enforce this ordering;
+cold-boot interruption qualification of the complete path remains pending.
 
 `release_recovery.py files|finish` now provides a root-only standalone recovery
 entry point that wires the fixed deployment map, checkpoint hooks and update
 service adapter. It validates persistent storage before opening maintenance state,
 does nothing when there is no update record, and returns only public recovery
 identity/state/version. It supports isolated Python startup with imports from its
-own directory, ready for a separately retained recovery bundle.
+own separately retained recovery bundle.
 
 Finishing recovery checks the root-owned Unix management peer with a read-only
 metrics request and checks Setup through `https://127.0.0.1/elderbrain/health`
 using the appliance CA, strict response validation and no redirect following.
 Only components recorded as active are probed. These probes passed against the
 running disposable VM without invoking recovery or changing services. The script
-is not yet installed as an independent stable bundle or enabled in boot units.
+is installed as part of the independently selected bootstrap generation.
 
 ## Stable recovery bundle publication
 
@@ -469,18 +468,18 @@ verified before reuse; modified, unexpected or missing files are never overwritt
 The bundle contains no live settings, secrets, containers or Python environments.
 Recovery imports remain usable after the original source staging is gone. Its
 parent must be private and separate from the source tree. This helper does not
-select the active bundle or install boot units. The update coordinator must retain
-a known recovery implementation outside its deployment targets before admission;
-the active selector/launcher and boot integration still need implementation.
+select the active bundle or install boot units. `release_bootstrap` composes it with
+the fixed boot files into a complete generation and retains the known-good active
+generation outside deployment targets before update admission.
 
-`release_recovery_bundle.select` now verifies a bundle and atomically selects its
-content hash under the maintenance lock, refusing unfinished operations. Existing
-bundles remain retained. The stdlib-only bootstrap launcher independently validates
-the selector, manifest digest, bounded module inventory, every module's digest and
-private owner/modes before executing the selected entry point with isolated Python,
-bytecode disabled and a clean environment. It imports no bundle code to perform
-these checks. The launcher is packaged under `bootstrap/`, deliberately outside
-the runtime deployment map; installing it and its boot units remains pending.
+`release_recovery_bundle.select` remains the standalone bundle-store primitive used
+by isolated tests. Installed appliances select a complete bootstrap generation as
+described below. Existing bundles remain retained. The stdlib-only bootstrap
+launcher independently validates the generation's selector, manifest digest,
+bounded module inventory, every module's digest and private owner/modes before
+executing the selected entry point with isolated Python, bytecode disabled and a
+clean environment. It imports no bundle code to perform these checks. The launcher
+is packaged under `bootstrap/`, deliberately outside the runtime deployment map.
 
 The bootstrap now carries an early recovery unit, a later health-completion unit,
 a writer gate and a release-specific storage unit. The storage unit uses the
@@ -499,19 +498,21 @@ The proposed unit graph passed `systemd-analyze verify` using actual appliance
 dependency declarations and stand-ins for missing OS mounts/executables. This is
 dependency/syntax verification, not an installed-VM cold-boot test.
 
-`release_bootstrap.install` now installs these prerequisites from an already
+`release_bootstrap.install` installs these prerequisites from an already
 authenticated host tree and reviewed inventory. It verifies persistent storage,
 excludes active host jobs and holds maintenance admission through selection and
-publication. Fixed destinations receive the launcher, complete storage/recovery
-units, writer/alias gates and enablement links; unrelated overrides are untouched.
-Previous managed file bytes and modes are retained in private per-installation
-history under `/usr/lib/elderbrain-recovery`. An interrupted attempt retains an
-`installing` receipt and can be retried without deleting earlier history.
+publication. On a clean installation, fixed destinations receive root-owned stable
+symlinks for the launcher, complete storage/recovery units and writer/alias gates;
+unrelated overrides are untouched. A content-addressed generation is made active
+only after all stable links and enablement links exist. An interruption before that
+single selection exposes no partial generation and a retry converges. Existing
+pre-updater regular-file layouts are not migrated.
 
 Even a completed bootstrap receipt has `activationReady: false`: this internal
-installer does not migrate the previous runtime, reload/start services or authorize
-updates. It is not yet wired into provisioning. Installed-VM boot and complete
-activation/recovery qualification remain required before exposing updates.
+installer does not establish the signed runtime baseline, reload/start services or
+authorize updates. Provisioning invokes it before daemon reload and writer
+enablement. Installed-VM boot and complete activation/recovery qualification remain
+required before exposing updates.
 
 Provisioning now invokes `provisioning/recovery_bootstrap.py` after persistent
 host settings are bound and before daemon reload/writer enablement. This uses the
@@ -738,28 +739,40 @@ rollback; complete fresh-ISO update qualification remains pending.
 
 ## Two-phase recovery authority
 
-Online update preparation now installs and verifies the candidate recovery module
-bundle without changing `active.json`. The current active bundle identity is
-captured at that point and revalidated inside activation admission, so the same
-known-good recovery implementation remains responsible through code replacement,
-data writes, health validation, rollback and activation commit. Only after
-activation returns `completed` does the persistent worker atomically select the
-candidate bundle. A failed guarded selector context does not publish its selection.
+Online update preparation installs and verifies both the candidate recovery-module
+bundle and an immutable bootstrap generation without selecting either. A bootstrap
+generation binds the bundle identity, recovery API, fixed launcher, storage/recovery
+units and every writer-gate drop-in in a content-addressed manifest. Stable paths
+under `/usr/libexec` and `/etc/systemd/system` are root-owned symlinks through
+`/usr/lib/elderbrain-recovery/bootstrap-active`; their individual targets never
+change after clean installation.
 
-Fixed launcher, recovery-unit and writer-gate files remain part of the install ISO
-bootstrap generation. Online candidates must contain byte-identical versions;
-otherwise preparation fails before maintenance begins. This deliberately prevents
-mixed-generation online publication while transactional bootstrap replacement is
-unfinished. Deterministic repair of an interruption after activation commit but
-before selector commit is still required.
+The current active bundle identity is captured during preparation and revalidated
+inside activation admission, so the same known-good generation remains responsible
+through code replacement, data writes, health validation, rollback and activation
+commit. Only after activation returns `completed` does the persistent worker replace
+the single `bootstrap-active` symlink with the fully verified candidate generation.
+The generation contains its own private `active.json`, so fixed boot files and the
+recovery selector change at the same filesystem commit point. A crash before the
+rename leaves the complete old generation active; a crash after it leaves the
+complete new generation active. Final boot recovery repeats the selection
+idempotently from the generation identity retained in `candidateBootstrap`.
+
+Generation directories are written and fsynced before their content-addressed
+rename. Failures before or after that rename cannot select them. Unit tests inject
+loss on both sides of generation publication and both sides of active-selector
+replacement. The one-time stable anchors are created only by the trusted clean
+installer before writer services are enabled; installations predating this layout
+are deliberately not migrated.
 
 The signed manifest declares `recoveryApi`. The value is copied into the content-
 addressed recovery bundle manifest and every update maintenance journal. The active
 recovery bundle, candidate bundle and signed release must all implement the same
 supported API before activation can start. Early and final boot recovery reject a
 journal with a different or missing API instead of interpreting arbitrary adjacent-
-release Python state. Recovery bundle manifests use format 2 for this contract; the
-selector stays a minimal atomic format-1 pointer.
+release Python state. Recovery bundle manifests use format 2 for this contract.
+Each selected bootstrap generation retains a minimal format-1 bundle pointer
+inside the generation.
 
 ## Monotonic release acceptance
 
@@ -778,7 +791,7 @@ or any lower sequence fails closed. The policy advances before maintenance is
 marked completed, so a crash in between is repaired idempotently by boot recovery.
 It never advances for an activation that rolls back.
 
-The candidate recovery bundle identity is also retained in the update journal.
+The candidate bootstrap generation identity is also retained in the update journal.
 Final boot recovery selects it only for a completed activation, closing the crash
 window after activation commit but before the original worker's selector write.
 Rolled-back updates retain the previous recovery authority. A clean install still
