@@ -10,6 +10,7 @@ import tempfile
 from contextlib import nullcontext
 from unittest.mock import patch
 import uuid
+import hashlib
 
 import yaml
 
@@ -20,6 +21,7 @@ from provisioning.recovery_bootstrap import provision, staged_payload
 from release_apply import activate
 from release_prepare import prepare
 from release_recovery import health
+from backup_service import save_record
 
 
 def command(*args):
@@ -29,7 +31,9 @@ def command(*args):
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('dependency_inputs', type=Path)
 parser.add_argument('--version', default='1.0.1')
-parser.add_argument('--fail-health', action='store_true')
+failures = parser.add_mutually_exclusive_group()
+failures.add_argument('--fail-health', action='store_true')
+failures.add_argument('--interrupt', action='store_true')
 args = parser.parse_args()
 assert os.geteuid() == 0
 assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
@@ -78,7 +82,7 @@ provision()
 command('systemctl', 'daemon-reload')
 marker = Path('/var/lib/mindflayer-elderbrain/foundry') / ('.elderbrain-rollback-test-' + uuid.uuid4().hex)
 injected = []
-if args.fail_health:
+if args.fail_health or args.interrupt:
     assert args.version + '\n' != previous_version
     with marker.open('xb') as stream:
         stream.write(b'before-update\n')
@@ -93,12 +97,25 @@ def fail_health(saved, state, **options):
             stream.flush()
             os.fsync(stream.fileno())
         injected.append(True)
+        if args.interrupt:
+            raise SystemExit('Injected post-start process loss')
         raise RuntimeError('Injected post-start update health failure')
 with staged_payload() as (tree, _), \
-        (patch('release_apply.health', side_effect=fail_health) if args.fail_health else nullcontext()):
+        (patch('release_apply.health', side_effect=fail_health) if args.fail_health or args.interrupt else nullcontext()):
     try:
         result = activate(prepared / args.version, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
                           platform=metadata['platform'], configuration_schema=1, parent=evidence)
+    except SystemExit as error:
+        assert args.interrupt and str(error) == 'Injected post-start process loss'
+        assert injected and marker.read_bytes() == b'changed-by-new-release\n'
+        record = json.loads(Path('/var/lib/mindflayer-elderbrain/maintenance/maintenance.json').read_text())
+        assert record['state'] == 'verifying-update' and record['dataMayHaveChanged'] is True
+        saved = {'id': record['id'], 'marker': str(marker), 'version': previous_version,
+                 'composeSha256': hashlib.sha256(previous_compose).hexdigest(),
+                 'boot': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
+        save_record(evidence / 'interruption.json', saved)
+        print(json.dumps({'state': 'signed-update-interrupted', 'id': record['id'],
+                          'evidence': str(evidence / 'interruption.json')}), flush=True)
     except RuntimeError as error:
         assert args.fail_health and str(error) == 'Injected post-start update health failure'
         assert injected and marker.read_bytes() == b'before-update\n'
@@ -109,7 +126,7 @@ with staged_payload() as (tree, _), \
         print(json.dumps({'state': 'signed-update-code-and-data-rollback-passed', 'id': record['id'],
                           'marker': str(marker), 'evidence': str(evidence)}), flush=True)
     else:
-        assert not args.fail_health
+        assert not args.fail_health and not args.interrupt
         assert result['state'] == 'completed' and result['version'] == args.version
         assert (runtime / 'VERSION').read_text() == args.version + '\n'
         print(json.dumps(result), flush=True)

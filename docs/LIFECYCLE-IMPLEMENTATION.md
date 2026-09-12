@@ -1467,3 +1467,25 @@ interrupted signed-update boot recovery or actual licensed Foundry schema migrat
 Public persistent update jobs, production release/ISO integration and remaining
 goal features are still pending. PC stays on; no physical Lenovo or external
 repository/registry publication was involved.
+
+Interrupted signed-update boot recovery now passes on the actual disposable VM.
+The signed activation fixture's --interrupt mode prepared host 1.0.3, passed real
+post-start health, fsynced changed contents to its dedicated data fixture and
+raised SystemExit instead of initiating immediate rollback. The unfinished journal
+remained verifying-update with dataMayHaveChanged true and its checkpoint pinned.
+Evidence: /root/elderbrain-signed-activation-3gjyjmxq/interruption.json; operation
+fabbe6edb6834f63bf66439dfa23de52; source fixture
+/root/elderbrain-signed-boot-source-w5iy5LRJ.
+
+After graceful VM reboot, early recovery restored code/data and reported
+files-recovered at monotonic 73.537 seconds, before Docker at 78.309 seconds and
+stack at 100.115 seconds. Final recovery completed at 127.979 seconds after real
+service health. test/qemu/verify-signed-boot-recovery.py proves changed boot ID,
+restored VERSION 1.0.1, original Compose SHA256, original fixture contents,
+rolled-back/dataRolledBack state, released checkpoint pin, recovery-before-Docker
+ordering, offline configuration validation and management/CA-verified Setup health.
+No jobs or failed units remained. The fixture models process loss followed by a
+graceful reboot; it is not a physical abrupt-power-loss test or a licensed Foundry
+schema-migration test. Focused activation/recovery suite: 21 tests passing; diff
+whitespace check passes. PC remains on; no physical Lenovo contact or publication.
+Persistent update-job/API/UI integration and the remaining goal items are pending.

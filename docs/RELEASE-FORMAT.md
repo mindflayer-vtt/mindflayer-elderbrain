@@ -584,3 +584,10 @@ data fixture from its Btrfs checkpoint, then passes restored service health.
 Disposable signing keys and cached image digests are used without external
 publication. This does not qualify interrupted signed-update boot recovery,
 licensed Foundry data migration, or the still-pending public update job/API.
+
+The fixture's `--interrupt` mode and `test/qemu/verify-signed-boot-recovery.py` also
+qualify process loss after new services have written data, followed by reboot.
+Actual early recovery restores the previous code and fixture data before Docker
+starts; final health verification marks rollback complete and releases its pin.
+This adds interrupted-update boot evidence but does not simulate sudden loss of
+physical power or implement the still-pending public update job/API.
