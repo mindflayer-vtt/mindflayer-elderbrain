@@ -1274,3 +1274,17 @@ confirmed by systemd-analyze. The complete release storage unit replaces that
 dependency set instead; the expanded graph with all four gated alias mounts now
 verifies successfully. The legacy provisioning storage unit remains unchanged
 until the bootstrap installer can install the complete recovery prerequisites.
+
+Added the internal release_bootstrap installer for caller-authenticated staged
+trees. It checks storage before creating directories, checks fixed target types,
+publishes/verifies a stable bundle and holds job/maintenance admission through
+selection and installation. It installs the launcher, complete storage and
+recovery units, all writer/alias gates and enablement links without starting
+services. Replaced managed file bytes/modes are retained in private per-attempt
+history; unrelated overrides remain untouched. Durable installing/installed
+receipts always keep activationReady false. Seven tests use real signed staging,
+bundle imports and temporary host file installation, covering repeat installation,
+history, interrupted publication/retry, locked maintenance, unsafe targets/sources,
+conflicting enablement and missing storage. Storage identity is mocked; no live
+host or VM boot files were modified. Provisioning wiring, previous-runtime
+migration, daemon reload and real VM boot/update qualification remain pending.

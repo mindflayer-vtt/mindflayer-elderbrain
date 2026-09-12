@@ -1,5 +1,6 @@
 """Retain trusted recovery modules outside the replaceable runtime directory."""
 import fcntl
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -33,6 +34,12 @@ def verify_tree(directory, files, manifest):
 
 
 def select(identity, *, directory, maintenance):
+    with selection_window(identity, directory=directory, maintenance=maintenance) as result:
+        return result
+
+
+@contextmanager
+def selection_window(identity, *, directory, maintenance):
     """Caller verified storage; serialized selection cannot change mid-update."""
     if not isinstance(identity, str) or not re.fullmatch(r'[a-f0-9]{64}', identity):
         raise ValueError('Invalid recovery bundle identity')
@@ -60,7 +67,7 @@ def select(identity, *, directory, maintenance):
             raise ValueError('Recovery bundle exceeds limit')
         verify_tree(bundle, value['files'], manifest)
         save_record(directory / 'active.json', {'format': 1, 'bundle': identity})
-    return {'bundle': identity}
+        yield {'bundle': identity}
 
 
 def install(tree, allowed_paths, *, directory, run=subprocess.run):

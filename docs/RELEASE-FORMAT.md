@@ -496,3 +496,17 @@ as one prerequisite to update admission; they are not enabled by packaging alone
 The proposed unit graph passed `systemd-analyze verify` using actual appliance
 dependency declarations and stand-ins for missing OS mounts/executables. This is
 dependency/syntax verification, not an installed-VM cold-boot test.
+
+`release_bootstrap.install` now installs these prerequisites from an already
+authenticated host tree and reviewed inventory. It verifies persistent storage,
+excludes active host jobs and holds maintenance admission through selection and
+publication. Fixed destinations receive the launcher, complete storage/recovery
+units, writer/alias gates and enablement links; unrelated overrides are untouched.
+Previous managed file bytes and modes are retained in private per-installation
+history under `/usr/lib/elderbrain-recovery`. An interrupted attempt retains an
+`installing` receipt and can be retried without deleting earlier history.
+
+Even a completed bootstrap receipt has `activationReady: false`: this internal
+installer does not migrate the previous runtime, reload/start services or authorize
+updates. It is not yet wired into provisioning. Installed-VM boot and complete
+activation/recovery qualification remain required before exposing updates.
