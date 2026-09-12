@@ -1779,3 +1779,16 @@ client trust survives a valid restore. Focused TLS, backup, restore and route te
 Compose validation, all 39 Setup tests, all 584 host tests and static checks pass.
 No VM or physical appliance was changed; live renewal, reinstall and restore
 qualification remain pending.
+
+Decoupled the privileged management bridge from generic UID 1000. Clean
+installation now reserves `elderbrain-management` at fixed GID 31338 and fails
+closed if either the name or numeric identity conflicts. The Setup image retains
+its unprivileged Node UID for persistent-file compatibility but uses the dedicated
+group as its primary group. The root bridge makes only its runtime directory and
+0660 allowlisted socket group-accessible, resolves the installed group rather than
+trusting a caller-controlled setting, and authorizes non-root peers by that group.
+Regression tests reject UID 1000 with an ordinary group and accept a different
+unprivileged UID carrying the capability. A production Setup container build
+confirmed `uid=1000(node) gid=31338(elderbrain-management)`. Focused host tests,
+installer syntax and whitespace checks pass. Fresh-install and signed-image VM
+qualification remain pending; no VM or physical appliance was changed.

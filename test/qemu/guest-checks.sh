@@ -60,7 +60,11 @@ curl --noproxy '*' -fsS -H 'Host: mindflayer.elderbrain.local' http://127.0.0.1/
 # Device TLS uses a separately pinned key, not the administration CA.
 [[ $(curl --noproxy '*' -ksS -o /dev/null -w '%{http_code}' https://127.0.0.1:10443/) == 404 ]]
 ! dpkg -s ubuntu-desktop >/dev/null 2>&1
-# Prove the actual setup container UID can access the scoped host bridge.
+# Prove that the actual Setup container has the dedicated capability and can use
+# the scoped host bridge; UID 1000 alone is not the authority.
+[[ $(getent group elderbrain-management | cut -d: -f3) == 31338 ]]
+[[ $(stat -c '%U:%G:%a' /run/elderbrain/management.sock) == root:elderbrain-management:660 ]]
+[[ $("${compose[@]}" exec -T elderbrain-setup id -g) == 31338 ]]
 "${compose[@]}" exec -T elderbrain-setup node --input-type=module -e '
 import net from "node:net";
 const socket = net.createConnection("/run/elderbrain/management.sock");

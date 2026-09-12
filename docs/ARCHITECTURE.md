@@ -21,4 +21,10 @@ The setup application registers as a receiver on the existing Mindflayer `/ws` p
 
 The ISO carries appliance-owned definitions but no Mindflayer server source. Compose pulls the exact tag-and-digest reference in `config/defaults/appliance.env`; the target needs public Internet access but no repository or registry credentials.
 
-The small `elderbrain` management command owns operations. A root Unix-socket bridge exposes an allowlist to the unprivileged setup container, preserving a future console UI path.
+The small `elderbrain` management command owns operations. A root Unix-socket
+bridge exposes an allowlist to the unprivileged Setup container, preserving a
+future console UI path. Access is a dedicated appliance capability: installation
+reserves GID 31338 for `elderbrain-management`, the Setup image runs with that
+primary group, and the socket is `root:elderbrain-management` mode 0660 inside a
+group-traversable runtime directory. The bridge accepts root or that peer group;
+the broadly reused container UID 1000 grants no management authority by itself.

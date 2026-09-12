@@ -5,8 +5,24 @@ exec > >(tee -a /var/log/elderbrain-provisioning.log) 2>&1
 PAYLOAD_DIR=${PAYLOAD_DIR:-/opt/elderbrain-payload}
 RUNTIME=/opt/mindflayer-elderbrain
 STATE=/var/lib/mindflayer-elderbrain
+MANAGEMENT_GROUP=elderbrain-management
+MANAGEMENT_GID=31338
 export DEBIAN_FRONTEND=noninteractive
 python3 "$PAYLOAD_DIR/provisioning/compat/retire-legacy-browser.py" check
+
+management_group_entry=$(getent group "$MANAGEMENT_GROUP" || true)
+management_gid_entry=$(getent group "$MANAGEMENT_GID" || true)
+if [[ -n $management_group_entry ]]; then
+  [[ ${management_group_entry%%:*} == "$MANAGEMENT_GROUP" && $(cut -d: -f3 <<<"$management_group_entry") == "$MANAGEMENT_GID" ]] || {
+    echo "$MANAGEMENT_GROUP must use reserved GID $MANAGEMENT_GID" >&2
+    exit 1
+  }
+elif [[ -n $management_gid_entry ]]; then
+  echo "reserved management GID $MANAGEMENT_GID is already assigned" >&2
+  exit 1
+else
+  groupadd --system --gid "$MANAGEMENT_GID" "$MANAGEMENT_GROUP"
+fi
 
 if [[ -n ${ELDERBRAIN_STORAGE_RECEIPT:-} ]]; then
   (cd "$PAYLOAD_DIR" && python3 -m provisioning.storage_initialize --receipt "$ELDERBRAIN_STORAGE_RECEIPT")

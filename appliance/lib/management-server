@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, socket, socketserver, subprocess, struct, shutil
+import grp, json, os, socket, socketserver, subprocess, struct, shutil
 from host_jobs import JobStore
 from backup_uploads import UploadStore
 from keypad_inventory import registered_keypads, usb_serial_devices, installation_receipts
@@ -8,14 +8,19 @@ from host_metrics import Metrics
 METRICS = Metrics()
 
 SOCKET = os.environ.get("ELDERBRAIN_MANAGEMENT_SOCKET", "/run/elderbrain/management.sock")
+MANAGEMENT_GROUP = "elderbrain-management"
+try:
+    MANAGEMENT_GID = grp.getgrnam(MANAGEMENT_GROUP).gr_gid
+except KeyError as error:
+    raise SystemExit(f"required group {MANAGEMENT_GROUP!r} is missing") from error
 ALLOWED = {"status", "start-foundry", "restart-foundry", "restart-mindflayer", "restart-browser-session", "foundry-logs", "borg-settings"}
 JOBS = JobStore(os.path.join(os.environ.get("ELDERBRAIN_STATE_DIR", "/var/lib/mindflayer-elderbrain"), "jobs"))
 
 class Handler(socketserver.StreamRequestHandler):
     def handle(self):
         self.request.settimeout(30)
-        _, uid, _ = struct.unpack("3i", self.request.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
-        if uid not in (0, 1000):
+        _, uid, gid = struct.unpack("3i", self.request.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+        if uid != 0 and gid != MANAGEMENT_GID:
             self.wfile.write(b'{"ok":false,"error":"unauthorized peer"}\n')
             return
         action = self.rfile.readline(1024).decode("ascii", "strict").strip()
@@ -204,12 +209,13 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     allow_reuse_address = True
 
 os.makedirs(os.path.dirname(SOCKET), mode=0o750, exist_ok=True)
-os.chown(os.path.dirname(SOCKET), 0, 1000)
+os.chown(os.path.dirname(SOCKET), 0, MANAGEMENT_GID)
 try: os.unlink(SOCKET)
 except FileNotFoundError: pass
 with Server(SOCKET, Handler) as server:
     METRICS.start()
-    # Only root and the setup container's mapped UID can use this scoped bridge.
-    os.chown(SOCKET, 0, 1000)
+    # Only root and members of the dedicated Setup capability group can use the
+    # scoped bridge. UID 1000 is deliberately not an authorization primitive.
+    os.chown(SOCKET, 0, MANAGEMENT_GID)
     os.chmod(SOCKET, 0o660)
     server.serve_forever()

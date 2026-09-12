@@ -22,12 +22,12 @@ class ManagementRuntimeTests(unittest.TestCase):
         jobs = Mock()
         jobs.submit.return_value = {'id': 'a' * 32, 'state': 'queued'}
         namespace = dict(socketserver=socketserver, socket=socket, struct=struct, json=json,
-                         subprocess=subprocess, JOBS=jobs)
+                         subprocess=subprocess, JOBS=jobs, MANAGEMENT_GID=31338)
         exec(compile(ast.Module(body=[handler], type_ignores=[]), str(source), 'exec'), namespace)
-        def send(data, uid=1000):
+        def send(data, uid=1000, gid=31338):
             instance = object.__new__(namespace['Handler'])
             instance.request = Mock()
-            instance.request.getsockopt.return_value = struct.pack('3i', 1, uid, uid)
+            instance.request.getsockopt.return_value = struct.pack('3i', 1, uid, gid)
             instance.rfile, instance.wfile = io.BytesIO(data), io.BytesIO()
             instance.handle()
             return json.loads(instance.wfile.getvalue())
@@ -40,8 +40,11 @@ class ManagementRuntimeTests(unittest.TestCase):
         jobs.submit.reset_mock()
         for invalid in (b'update-start 2049\n', b'update-start 0\n', b'update-start 10\n{}'):
             self.assertFalse(send(invalid)['ok'])
-        self.assertFalse(send(data, uid=999)['ok'])
+        self.assertFalse(send(data, gid=1000)['ok'])
         jobs.submit.assert_not_called()
+        self.assertTrue(send(data, uid=999, gid=31338)['ok'])
+        jobs.submit.assert_called_once_with('update', selected)
+        jobs.submit.reset_mock()
 
         selected = {'action': 'shutdown', 'confirmPower': True}
         payload = json.dumps(selected).encode()
@@ -61,3 +64,16 @@ class ManagementRuntimeTests(unittest.TestCase):
         self.assertIn('RuntimeDirectory=elderbrain\n', unit)
         self.assertIn('RuntimeDirectoryPreserve=yes\n', unit)
         self.assertIn('- /run/elderbrain:/run/elderbrain', (root / 'compose/compose.yaml').read_text())
+
+    def test_management_capability_uses_dedicated_group(self):
+        root = Path(__file__).resolve().parents[1]
+        server = (root / 'appliance/lib/management-server').read_text()
+        dockerfile = (root / 'setup/Dockerfile').read_text()
+        installer = (root / 'provisioning/install.sh').read_text()
+        self.assertNotIn('uid not in (0, 1000)', server)
+        self.assertIn('gid != MANAGEMENT_GID', server)
+        self.assertIn('os.chown(SOCKET, 0, MANAGEMENT_GID)', server)
+        self.assertIn('addgroup -S -g 31338 elderbrain-management', dockerfile)
+        self.assertIn('USER node:elderbrain-management', dockerfile)
+        self.assertIn('MANAGEMENT_GID=31338', installer)
+        self.assertIn('groupadd --system --gid "$MANAGEMENT_GID" "$MANAGEMENT_GROUP"', installer)
