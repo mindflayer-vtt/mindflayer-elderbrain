@@ -1751,3 +1751,16 @@ release suite, all 39 Setup tests, all 583 host tests and static checks pass; te
 requiring host systemd sockets were run outside the restricted sandbox.
 No VM or physical appliance was changed, so destructive boot/power-loss qualification
 of this publication mechanism remains pending.
+
+Removed Traefik's Docker-daemon authority. Compose no longer enables the Docker
+provider, carries routing labels or mounts `/var/run/docker.sock`. The existing
+committed-domain projection now emits the complete file-provider configuration:
+HTTP/HTTPS routers, redirect/strip middleware and fixed Compose-network URLs for
+Setup, Mindflayer and Foundry. `prepare-admin` creates the projection before stack
+startup, while the display watchdog continues to reconcile confirmed domain
+changes and restore recovery. Static checks prevent the socket/provider/labels
+from returning. Unit tests, Compose validation and the real Traefik 3.7.5 parser
+all accepted the generated configuration; its API showed all five file routers,
+three file services and two middleware definitions enabled. The parser test used
+a disposable local container, which was stopped and auto-removed. No VM or physical
+appliance was changed; signed-update and disconnected-boot qualification remain.

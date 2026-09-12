@@ -4,6 +4,7 @@ runtime=/opt/mindflayer-elderbrain
 state=/var/lib/mindflayer-elderbrain
 . "$runtime/appliance.env"
 install -d -m 0700 "$state/elderbrain/secrets"
+python3 "$runtime/domain_routes.py" "$state"
 if [[ ! -e "$state/elderbrain/secrets/admin.json" && ! -s "$state/elderbrain/secrets/initial-password" ]]; then
   (umask 077; python3 "$runtime/generate-admin-password.py" "$runtime/bootstrap-words.json" > "$state/elderbrain/secrets/initial-password")
   chown 1000:1000 "$state/elderbrain/secrets/initial-password"

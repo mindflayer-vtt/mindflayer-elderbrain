@@ -43,6 +43,10 @@ image=$(sed -n 's/^MINDFLAYER_SERVER_IMAGE=//p' "$root/config/defaults/appliance
 ! rg -n --glob '!test/static.sh' --glob '!docs/**' --glob '!out/**' --glob '!cache/**' 'MINDFLAYER_(ARCHIVE|SHA256|COMMIT|CONTEXT)|vendor/source|UPSTREAM_COMMIT' "$root"
 grep -q 'image: ${MINDFLAYER_SERVER_IMAGE:' "$root/compose/compose.yaml"
 ! grep -A3 '^  mindflayer-server:' "$root/compose/compose.yaml" | grep -q 'build:'
+grep -q -- '--providers.file.directory=' "$root/compose/compose.yaml"
+! grep -q -- '--providers.docker' "$root/compose/compose.yaml"
+! grep -q '/var/run/docker.sock' "$root/compose/compose.yaml"
+! grep -q 'traefik.http' "$root/compose/compose.yaml"
 grep -q 'pull --ignore-buildable' "$root/provisioning/systemd/elderbrain-stack.service"
 grep -q 'up -d --no-build.*--wait' "$root/provisioning/systemd/elderbrain-stack.service"
 ! rg -n --glob '!test/static.sh' 'BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|FOUNDRY_PASSWORD=.+' "$root"

@@ -18,15 +18,26 @@ def validate_domain(value):
 def document(domain):
     domain = validate_domain(domain)
     routers = {}
-    for name, service in [('foundry', 'foundry'), ('mindflayer', 'mindflayer'), ('elderbrain', 'elderbrain')]:
+    for name in ('foundry', 'mindflayer', 'elderbrain'):
         router = {'rule': f'Host(`{name}.{domain}`)', 'entryPoints': ['web'],
-                  'service': service + '@docker', 'priority': 100}
+                  'service': name, 'priority': 100}
         if name == 'elderbrain':
-            router['middlewares'] = ['elderbrain-https@docker']
-            routers['lan-elderbrain-tls'] = {**router, 'entryPoints': ['websecure'], 'tls': {},
-                                             'middlewares': ['elderbrain-strip@docker']}
+            router['rule'] += ' || PathPrefix(`/elderbrain`)'
+            router['middlewares'] = ['elderbrain-https']
+            routers['lan-elderbrain-tls'] = {
+                **router, 'entryPoints': ['websecure'], 'tls': {},
+                'middlewares': ['elderbrain-strip']}
         routers['lan-' + name] = router
-    return {'http': {'routers': routers}}
+    services = {
+        'elderbrain': {'loadBalancer': {'servers': [{'url': 'http://elderbrain-setup:8080'}]}},
+        'mindflayer': {'loadBalancer': {'servers': [{'url': 'http://mindflayer-server:8080'}]}},
+        'foundry': {'loadBalancer': {'servers': [{'url': 'http://foundry:30000'}]}},
+    }
+    middlewares = {
+        'elderbrain-https': {'redirectScheme': {'scheme': 'https'}},
+        'elderbrain-strip': {'stripPrefix': {'prefixes': ['/elderbrain']}},
+    }
+    return {'http': {'routers': routers, 'services': services, 'middlewares': middlewares}}
 
 
 def reconcile(state):
@@ -55,3 +66,10 @@ def reconcile(state):
             os.close(descriptor)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+if __name__ == '__main__':
+    import sys
+    if os.geteuid() != 0 or len(sys.argv) != 2:
+        raise SystemExit('Route projection requires root and the appliance state directory')
+    reconcile(sys.argv[1])

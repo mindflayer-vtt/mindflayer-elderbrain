@@ -13,13 +13,27 @@ class DomainRoutesTests(unittest.TestCase):
     def test_routes_and_injection_rejection(self):
         routes = document('home.viromania.com')['http']['routers']
         self.assertEqual(routes['lan-foundry']['rule'], 'Host(`foundry.home.viromania.com`)')
-        self.assertEqual(routes['lan-foundry']['service'], 'foundry@docker')
-        self.assertEqual(routes['lan-mindflayer']['service'], 'mindflayer@docker')
+        self.assertEqual(routes['lan-foundry']['service'], 'foundry')
+        self.assertEqual(routes['lan-mindflayer']['service'], 'mindflayer')
         self.assertEqual(routes['lan-elderbrain-tls']['tls'], {})
-        self.assertEqual(routes['lan-elderbrain']['middlewares'], ['elderbrain-https@docker'])
+        self.assertEqual(routes['lan-elderbrain']['middlewares'], ['elderbrain-https'])
+        self.assertIn('PathPrefix(`/elderbrain`)', routes['lan-elderbrain']['rule'])
+        services = document('home.viromania.com')['http']['services']
+        self.assertEqual(services['elderbrain']['loadBalancer']['servers'],
+                         [{'url': 'http://elderbrain-setup:8080'}])
+        self.assertEqual(services['mindflayer']['loadBalancer']['servers'],
+                         [{'url': 'http://mindflayer-server:8080'}])
+        self.assertEqual(services['foundry']['loadBalancer']['servers'],
+                         [{'url': 'http://foundry:30000'}])
         for value in ['', 'a..b', '-a.test', 'a-.test', 'a`)', 'a\nb', 'a/b', 'a' * 64, None]:
             with self.assertRaises(ValueError):
                 validate_domain(value)
+        compose = (Path(__file__).resolve().parents[1] / 'compose/compose.yaml').read_text()
+        self.assertNotIn('providers.docker', compose)
+        self.assertNotIn('/var/run/docker.sock', compose)
+        self.assertNotIn('traefik.http.', compose)
+        prepare = (Path(__file__).resolve().parents[1] / 'provisioning/prepare-admin').read_text()
+        self.assertIn('python3 "$runtime/domain_routes.py" "$state"', prepare)
 
     def test_confirmation_recovery_and_idempotence(self):
         with tempfile.TemporaryDirectory() as directory:
