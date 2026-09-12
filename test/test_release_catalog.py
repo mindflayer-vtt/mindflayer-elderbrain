@@ -27,6 +27,8 @@ class CatalogTests(unittest.TestCase):
         self.fixture.setUp()
         self.enterContext(patch('release_catalog.platform.freedesktop_os_release', return_value={'ID': 'ubuntu', 'VERSION_ID': '26.04'}))
         self.enterContext(patch('release_catalog.platform.machine', return_value='x86_64'))
+        self.active = self.enterContext(patch('release_catalog.active_recovery', return_value={
+            'bundle': 'a' * 64, 'recoveryApi': 1}))
 
     def configure(self):
         (self.config / 'release-source.json').write_text(json.dumps({'baseUrl': 'https://updates.example.test/stable/'}))
@@ -37,10 +39,11 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(check(host_root=self.root, download=download)['state'], 'not-configured')
         download.assert_not_called()
 
-    def test_source_built_iso_version_is_reported_without_semver_assumption(self):
+    def test_old_source_built_iso_version_is_not_an_update_baseline(self):
         version = 'a' * 40 + '-dirty'
         (self.root / 'opt/mindflayer-elderbrain/VERSION').write_text(version + '\n')
-        self.assertEqual(check(host_root=self.root)['installedHostVersion'], version)
+        with self.assertRaisesRegex(ValueError, 'installed host version'):
+            check(host_root=self.root)
 
     def test_signature_verified_before_public_notes_and_incomplete_release_not_eligible(self):
         self.configure()
@@ -77,6 +80,9 @@ class CatalogTests(unittest.TestCase):
         manifest = json.dumps(self.fixture.value).encode()
         signature = self.fixture.sign(manifest)
         self.assertTrue(check(host_root=self.root, download=Mock(side_effect=[manifest, signature]))['release']['compatible'])
+        self.active.return_value['recoveryApi'] = 2
+        self.assertFalse(check(host_root=self.root, download=Mock(side_effect=[manifest, signature]))['release']['compatible'])
+        self.active.return_value['recoveryApi'] = 1
         with patch('release_catalog.platform.machine', return_value='aarch64'):
             self.assertFalse(check(host_root=self.root, download=Mock(side_effect=[manifest, signature]))['release']['compatible'])
 

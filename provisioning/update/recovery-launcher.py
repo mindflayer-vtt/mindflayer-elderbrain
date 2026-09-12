@@ -54,8 +54,9 @@ def selected(directory):
     if hashlib.sha256(raw).hexdigest() != selection['bundle']:
         raise ValueError('Recovery manifest hash differs from active selection')
     manifest = json.loads(raw, object_pairs_hook=unique)
-    if (not isinstance(manifest, dict) or set(manifest) != {'format', 'entrypoint', 'files'}
-            or type(manifest['format']) is not int or manifest['format'] != 1
+    if (not isinstance(manifest, dict) or set(manifest) != {'format', 'recoveryApi', 'entrypoint', 'files'}
+            or type(manifest['format']) is not int or manifest['format'] != 2
+            or type(manifest['recoveryApi']) is not int or not 1 <= manifest['recoveryApi'] <= 65535
             or manifest['entrypoint'] != 'release_recovery.py' or not isinstance(manifest['files'], dict)
             or not 1 <= len(manifest['files']) <= 256 or 'release_recovery.py' not in manifest['files']):
         raise ValueError('Invalid recovery bundle manifest')

@@ -16,6 +16,8 @@ from release_staging import inventory
 from appliance_release import unique
 from backup_service import save_record
 
+RECOVERY_API = 1
+
 
 def verify_tree(directory, files, manifest):
     directory = private_directory(directory)
@@ -47,8 +49,9 @@ def verify_bundle(identity, *, directory):
     if hashlib.sha256(manifest).hexdigest() != identity:
         raise ValueError('Recovery manifest identity differs')
     value = json.loads(manifest, object_pairs_hook=unique)
-    if (not isinstance(value, dict) or set(value) != {'format', 'entrypoint', 'files'}
-            or type(value['format']) is not int or value['format'] != 1
+    if (not isinstance(value, dict) or set(value) != {'format', 'recoveryApi', 'entrypoint', 'files'}
+            or type(value['format']) is not int or value['format'] != 2
+            or type(value['recoveryApi']) is not int or value['recoveryApi'] != RECOVERY_API
             or value['entrypoint'] != 'release_recovery.py' or not isinstance(value['files'], dict)
             or not 1 <= len(value['files']) <= 256 or 'release_recovery.py' not in value['files']):
         raise ValueError('Invalid recovery bundle manifest')
@@ -73,8 +76,8 @@ def active(*, directory, expected=None):
         raise ValueError('Invalid active recovery selection')
     if expected is not None and selection['bundle'] != expected:
         raise ValueError('Running recovery bundle is no longer active')
-    verify_bundle(selection['bundle'], directory=directory)
-    return {'bundle': selection['bundle']}
+    manifest = verify_bundle(selection['bundle'], directory=directory)
+    return {'bundle': selection['bundle'], 'recoveryApi': manifest['recoveryApi']}
 
 
 @contextmanager
@@ -91,13 +94,15 @@ def selection_window(identity, *, directory, maintenance):
         save_record(directory / 'active.json', {'format': 1, 'bundle': identity})
 
 
-def install(tree, allowed_paths, *, directory, run=subprocess.run):
+def install(tree, allowed_paths, *, directory, recovery_api=RECOVERY_API, run=subprocess.run):
     """Caller supplies a trusted authenticated host tree and reviewed inventory.
 
 This is not an archive verifier or trust-key installer. The caller must stage the
 known recovery implementation before any update is admitted. No active selector
 or boot unit is changed here; existing bundles are verified, never overwritten.
 """
+    if type(recovery_api) is not int or recovery_api != RECOVERY_API:
+        raise ValueError('Unsupported recovery transaction API')
     tree = Path(tree).absolute()
     if tree.resolve() != tree or not tree.is_dir():
         raise ValueError('Recovery source must be a canonical authenticated tree')
@@ -121,7 +126,8 @@ or boot unit is changed here; existing bundles are verified, never overwritten.
             raise ValueError('Recovery module set exceeds size limit')
         contents[name] = data
         files[name] = {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
-    manifest = json.dumps({'format': 1, 'entrypoint': 'release_recovery.py', 'files': files},
+    manifest = json.dumps({'format': 2, 'recoveryApi': recovery_api,
+                          'entrypoint': 'release_recovery.py', 'files': files},
                           sort_keys=True, separators=(',', ':')).encode()
     if len(manifest) > 65536:
         raise ValueError('Recovery manifest exceeds limit')

@@ -1616,11 +1616,12 @@ The normal private-payload exclusion is preserved; only explicitly selected publ
 update inputs are copied into the build. Provisioning requires verified persistent
 storage, installs the reviewed payload inventory/source/key and creates private
 release/dependency directories. Identical re-provisioning is allowed; changed
-existing trust is refused rather than silently rotated. Release discovery now
-accepts the Git/dirty version labels produced by source-built ISOs as well as
-semantic host release versions. Eleven focused tests, shell syntax and whitespace
-checks pass. No ISO rebuild or live appliance mutation occurred; complete initial
-offline-baseline/release integration and fresh-ISO update testing remain pending.
+existing trust is refused rather than silently rotated. Release discovery
+temporarily accepted Git/dirty version labels from source-built ISOs; the later
+clean-baseline policy below removes that compatibility. Eleven focused tests, shell
+syntax and whitespace checks pass. No ISO rebuild or live appliance mutation
+occurred; complete initial offline-baseline/release integration and fresh-ISO
+update testing remain pending.
 
 Replaced the CLI's unguarded reboot/shutdown calls with a host power coordinator.
 It requires verified persistent storage and holds job-admission, maintenance and
@@ -1684,3 +1685,17 @@ the systemd unit-graph verifier required its normal host socket permissions and
 passed separately outside the sandbox. No VM or physical appliance was changed.
 Signed recovery API compatibility and post-activation/pre-selector interruption
 reconciliation remain pending before this priority is complete.
+
+Added an explicit signed recovery transaction/API contract. Release manifests now
+carry bounded `recoveryApi`; content-addressed recovery manifests use format 2 and
+bind the same API to the verified module bytes. Candidate preparation requires the
+signed API to match both the active authority and the locally supported
+implementation. Activation writes that API into its durable journal before
+stopping services, and both early and final boot recovery reject missing or
+different APIs. Release discovery reports the API and marks a signed release
+incompatible when it differs from the installed active bundle. Old Git/dirty host
+version labels are no longer accepted as an update baseline; new installations
+must establish a semantic version, with no migration path for pre-updater installs.
+All 157 release tests pass, including API mismatch/tampering and systemd unit-graph
+coverage. The monotonic release sequence and post-commit selector reconciliation
+remain separate pending work. No VM or physical appliance was changed.

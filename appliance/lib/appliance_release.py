@@ -44,13 +44,14 @@ def unique(pairs):
 
 
 def validate(value):
-    fields = 'format kind version platform host setup images configurationSchema notes downtimeSeconds'
+    fields = 'format kind version recoveryApi platform host setup images configurationSchema notes downtimeSeconds'
     if isinstance(value, dict) and value.get('format') == 2:
         fields += ' dependencies'
     keys(value, fields)
     if type(value['format']) is not int or value['format'] not in (1, 2) or value['kind'] != 'mindflayer-elderbrain-release':
         raise ValueError('Unsupported appliance release format')
     pattern(value['version'], VERSION)
+    number(value['recoveryApi'], 1, 65535)
     keys(value['platform'], 'os release architecture')
     if value['platform'] != {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'}:
         raise ValueError('Unsupported appliance platform')

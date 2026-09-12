@@ -17,6 +17,7 @@ The format-1 manifest has these exact fields:
 | --- | --- |
 | `format`, `kind` | `1`, `mindflayer-elderbrain-release` |
 | `version` | Stable coordinated release version (`major.minor.patch`) |
+| `recoveryApi` | Positive recovery transaction/API version implemented by the bundled recovery code |
 | `platform` | `{os: "ubuntu", release: "26.04", architecture: "amd64"}` |
 | `host` | Independent `version`, integer `apiVersion`, and `artifact` |
 | `host.artifact` | Fixed `file` name, positive byte `size`, lowercase `sha256` |
@@ -728,8 +729,9 @@ After verified persistent storage and recovery bootstrap provisioning, the
 installer copies source/key plus the reviewed payload inventory into
 `/etc/elderbrain` and creates private prepared/staging/dependency directories.
 Re-running with identical inputs is allowed; replacing an existing key, source
-or inventory requires an explicit migration and is refused here. Source-built
-ISO Git version labels are supported by release discovery. This provisions trust,
+or inventory requires an explicit migration and is refused here. The installed
+baseline must use a semantic host version; old Git/dirty labels are deliberately
+not accepted by release discovery. This provisions trust,
 not a production signed release or the offline baseline needed for first-update
 rollback; complete fresh-ISO update qualification remains pending.
 
@@ -747,5 +749,13 @@ Fixed launcher, recovery-unit and writer-gate files remain part of the install I
 bootstrap generation. Online candidates must contain byte-identical versions;
 otherwise preparation fails before maintenance begins. This deliberately prevents
 mixed-generation online publication while transactional bootstrap replacement is
-unfinished. A signed recovery transaction/API field and deterministic repair of an
-interruption after activation commit but before selector commit are still required.
+unfinished. Deterministic repair of an interruption after activation commit but
+before selector commit is still required.
+
+The signed manifest declares `recoveryApi`. The value is copied into the content-
+addressed recovery bundle manifest and every update maintenance journal. The active
+recovery bundle, candidate bundle and signed release must all implement the same
+supported API before activation can start. Early and final boot recovery reject a
+journal with a different or missing API instead of interpreting arbitrary adjacent-
+release Python state. Recovery bundle manifests use format 2 for this contract; the
+selector stays a minimal atomic format-1 pointer.

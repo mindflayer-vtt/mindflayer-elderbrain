@@ -60,7 +60,7 @@ class RecoveryEntryTests(unittest.TestCase):
             root = Path(temporary)
             patches.enter_context(patch('release_recovery.persistent_identity', return_value={'data_uuid': 'fixture'}))
             maintenance = patches.enter_context(patch('release_recovery.Maintenance')).return_value
-            maintenance.previous.return_value = {'operation': 'update'}
+            maintenance.previous.return_value = {'operation': 'update', 'recoveryApi': 1}
             checkpoints = patches.enter_context(patch('release_recovery.UpdateCheckpoints')).return_value
             activation = patches.enter_context(patch('release_recovery.Activation'))
             activation.return_value.recover_files.return_value = {'id': 'a' * 32, 'state': 'files-recovered',
@@ -71,6 +71,7 @@ class RecoveryEntryTests(unittest.TestCase):
             activation.return_value.recover.assert_not_called()
             options = activation.call_args.kwargs
             self.assertIs(options['restore_checkpoint'], checkpoints.restore)
+            self.assertEqual(options['recovery_api'], 1)
             targets = activation.call_args.args[1]
             self.assertEqual(targets['opt/mindflayer-elderbrain'], root / 'opt/mindflayer-elderbrain')
 
@@ -80,12 +81,22 @@ class RecoveryEntryTests(unittest.TestCase):
                 recover('files')
             maintenance.assert_not_called()
 
+    def test_recovery_rejects_a_journal_from_another_api(self):
+        with patch('release_recovery.persistent_identity', return_value='fixture'), \
+                patch('release_recovery.Maintenance') as maintenance, \
+                patch('release_recovery.Activation') as activation:
+            maintenance.return_value.previous.return_value = {'operation': 'update', 'recoveryApi': 2}
+            with self.assertRaisesRegex(ValueError, 'different recovery transaction API'):
+                recover('files')
+            activation.assert_not_called()
+
     def test_only_final_recovery_reconciles_matching_maintenance_job(self):
         with tempfile.TemporaryDirectory() as temporary, ExitStack() as patches:
             root = Path(temporary)
             patches.enter_context(patch('release_recovery.persistent_identity', return_value='fixture'))
             maintenance = patches.enter_context(patch('release_recovery.Maintenance')).return_value
-            outcome = {'operation': 'update', 'id': 'a' * 32, 'jobId': 'b' * 32, 'state': 'rolled-back'}
+            outcome = {'operation': 'update', 'id': 'a' * 32, 'jobId': 'b' * 32,
+                       'state': 'rolled-back', 'recoveryApi': 1}
             maintenance.previous.return_value = outcome
             patches.enter_context(patch('release_recovery.UpdateCheckpoints'))
             activation = patches.enter_context(patch('release_recovery.Activation')).return_value

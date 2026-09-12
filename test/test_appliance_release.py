@@ -26,7 +26,7 @@ class ApplianceReleaseTests(unittest.TestCase):
 
     def setUp(self):
         image = 'example.test/appliance/image@sha256:' + 'a' * 64
-        self.value = {'format': 1, 'kind': 'mindflayer-elderbrain-release', 'version': '1.2.3',
+        self.value = {'format': 1, 'kind': 'mindflayer-elderbrain-release', 'version': '1.2.3', 'recoveryApi': 1,
             'platform': {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'},
             'host': {'version': '1.1.0', 'apiVersion': 2, 'artifact': {'file': 'elderbrain-host.tar.zst',
                 'size': 7, 'sha256': hashlib.sha256(b'fixture').hexdigest()}},
@@ -77,6 +77,13 @@ class ApplianceReleaseTests(unittest.TestCase):
         self.value['setup']['hostApi']['max'] = 1
         with self.assertRaisesRegex(ValueError, 'coordinated host'):
             validate(self.value)
+
+    def test_recovery_api_is_signed_bounded_and_not_boolean(self):
+        for value in (0, True, 65536):
+            release = deepcopy(self.value)
+            release['recoveryApi'] = value
+            with self.assertRaises(ValueError):
+                validate(release)
 
     def test_platform_schema_and_independent_setup_compatibility(self):
         options = {'platform': self.value['platform'], 'configuration_schema': 1}

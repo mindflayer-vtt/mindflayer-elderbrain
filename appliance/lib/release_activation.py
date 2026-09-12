@@ -12,12 +12,14 @@ from appliance_release import verify
 from backup_service import save_record
 from restore_transaction import RestoreTransaction
 from release_interlocks import update_admission
+from release_recovery_bundle import RECOVERY_API
 from snapshot_service import stable_settings
 
 
 class Activation:
     def __init__(self, maintenance, targets, *, checkpoint, restore_checkpoint,
-                 release_checkpoint, refresh, exclusive=None, admission=None, job_owner=None):
+                 release_checkpoint, refresh, exclusive=None, admission=None, job_owner=None,
+                 recovery_api=RECOVERY_API):
         self.maintenance = maintenance
         self.services = maintenance.services
         self.targets = targets
@@ -26,6 +28,9 @@ class Activation:
         self.release_checkpoint = release_checkpoint
         self.refresh = refresh
         self.job_owner = job_owner
+        if type(recovery_api) is not int or recovery_api != RECOVERY_API:
+            raise ValueError('Unsupported recovery transaction API')
+        self.recovery_api = recovery_api
         state = maintenance.directory.parent
         self.exclusive = exclusive or (lambda: stable_settings(state))
         self.admission = admission or (lambda: update_admission(state))
@@ -58,7 +63,8 @@ class Activation:
                         raise ValueError('Update sources do not match fixed host targets')
                     candidate = {'operation': 'update', 'id': uuid.uuid4().hex, 'version': release['version'],
                                  'startedAt': time.time(), 'services': self.services.snapshot(),
-                                 'dataMayHaveChanged': False, 'dataRolledBack': False}
+                                 'dataMayHaveChanged': False, 'dataRolledBack': False,
+                                 'recoveryApi': self.recovery_api}
                     if self.job_owner is not None:
                         candidate['jobId'] = self.job_owner
                         candidate['manifestSha256'] = hashlib.sha256(manifest).hexdigest()

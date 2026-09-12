@@ -15,7 +15,7 @@ import uuid
 from backup_service import Maintenance, save_record
 from release_interlocks import update_admission
 from release_prepare import sync_directory
-from release_recovery_bundle import active as active_bundle, install as install_bundle, selection_window, verify_tree
+from release_recovery_bundle import RECOVERY_API, active as active_bundle, install as install_bundle, selection_window, verify_tree
 from release_runtime import private_directory, read_regular
 from release_staging import inventory
 from restore_service import persistent_identity
@@ -104,7 +104,8 @@ def verify_installed(tree, allowed_paths, *, host_root=Path('/')):
             descriptors[source.name] = {'size': len(value), 'sha256': hashlib.sha256(value).hexdigest()}
     if not {'release_recovery.py', 'release_baseline_install.py'} <= set(descriptors):
         raise ValueError('Recovery proof lacks migration entry points')
-    manifest = json.dumps({'format': 1, 'entrypoint': 'release_recovery.py', 'files': descriptors},
+    manifest = json.dumps({'format': 2, 'recoveryApi': RECOVERY_API,
+                          'entrypoint': 'release_recovery.py', 'files': descriptors},
                           sort_keys=True, separators=(',', ':')).encode()
     identity = hashlib.sha256(manifest).hexdigest()
     for name in ('active.json', 'installation.json'):
@@ -136,7 +137,7 @@ def verify_installed(tree, allowed_paths, *, host_root=Path('/')):
     return {'bundle': identity}
 
 
-def prepare_candidate(tree, allowed_paths, *, state, host_root=Path('/'), job_owner=None):
+def prepare_candidate(tree, allowed_paths, *, recovery_api, state, host_root=Path('/'), job_owner=None):
     """Install authenticated candidate recovery bytes without selecting them."""
     root, tree, state = Path(host_root).absolute(), Path(tree).absolute(), Path(state)
     identity = persistent_identity(state, root)
@@ -163,7 +164,9 @@ def prepare_candidate(tree, allowed_paths, *, state, host_root=Path('/'), job_ow
             if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
                 raise RuntimeError('Recover maintenance before preparing recovery code')
             selected = active_bundle(directory=bundle_root)
-            bundle = install_bundle(tree, paths, directory=bundle_root)
+            if selected['recoveryApi'] != recovery_api:
+                raise ValueError('Release recovery API differs from the active transaction API')
+            bundle = install_bundle(tree, paths, directory=bundle_root, recovery_api=recovery_api)
             if persistent_identity(state, root) != identity:
                 raise ValueError('Persistent storage changed during recovery preparation')
             return {'active': selected['bundle'], 'candidate': bundle['id']}
@@ -183,10 +186,13 @@ def commit_candidate(identity, *, state, host_root=Path('/'), job_owner=None):
             return {'bundle': identity}
 
 
-def verify_active(identity, *, host_root=Path('/')):
+def verify_active(identity, recovery_api, *, host_root=Path('/')):
     """Prove the executing known-good bundle remains the active authority."""
     root = Path(host_root).absolute()
-    return active_bundle(directory=root / 'usr/lib/elderbrain-recovery', expected=identity)
+    selected = active_bundle(directory=root / 'usr/lib/elderbrain-recovery', expected=identity)
+    if selected['recoveryApi'] != recovery_api:
+        raise ValueError('Active recovery transaction API changed')
+    return selected
 
 
 def install(tree, allowed_paths, *, state, host_root=Path('/'), job_owner=None):
@@ -222,7 +228,7 @@ def install(tree, allowed_paths, *, state, host_root=Path('/'), job_owner=None):
                 if not target.is_symlink() or os.readlink(target) != links[name]:
                     raise ValueError('Unexpected bootstrap enablement target')
         directory(bundle_root, root, create=True, mode=0o700)
-        bundle = install_bundle(tree, paths, directory=bundle_root)
+        bundle = install_bundle(tree, paths, directory=bundle_root, recovery_api=RECOVERY_API)
         with selection_window(bundle['id'], directory=bundle_root, maintenance=maintenance):
             if persistent_identity(state, root) != identity:
                 raise ValueError('Persistent storage changed during bootstrap')

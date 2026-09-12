@@ -91,6 +91,11 @@ class RecoveryBundleTests(unittest.TestCase):
             self.install(run=fail)
         self.assertEqual([file.name for file in self.directory.iterdir()], ['.install.lock'])
 
+    def test_bundle_cannot_claim_an_unsupported_recovery_api(self):
+        with self.assertRaisesRegex(ValueError, 'Unsupported recovery transaction API'):
+            self.install(recovery_api=2)
+        self.assertEqual([file.name for file in self.directory.iterdir()], [])
+
     def test_extra_files_rejected_on_reuse(self):
         result = self.install()
         (Path(result['directory']) / 'unexpected').write_text('extra')
@@ -106,7 +111,8 @@ class RecoveryBundleTests(unittest.TestCase):
         result = self.install()
         maintenance = Maintenance(self.root / 'maintenance', None)
         select(result['id'], directory=self.directory, maintenance=maintenance)
-        self.assertEqual(active(directory=self.directory, expected=result['id']), {'bundle': result['id']})
+        self.assertEqual(active(directory=self.directory, expected=result['id']),
+                         {'bundle': result['id'], 'recoveryApi': 1})
         with self.assertRaisesRegex(ValueError, 'no longer active'):
             active(directory=self.directory, expected='a' * 64)
         expected = Path(result['directory']) / 'release_recovery.py'

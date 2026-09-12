@@ -46,13 +46,13 @@ class ApplyTests(unittest.TestCase):
         return activate(self.prepared, b'pinned key', {'trusted': 0o644},
             dependency_directory=self.root / 'dependencies', bootstrap_tree=self.root / 'bootstrap',
             platform={'architecture': 'amd64'}, configuration_schema=1, parent=self.root, host_root=self.root,
-            active_recovery='b' * 64)
+            active_recovery='b' * 64, recovery_api=1)
 
     def test_wires_fixed_coordinator_and_retains_candidate_until_activation_finishes(self):
         self.assertEqual(self.activate(), {'id': 'a' * 32, 'version': '1.0.1', 'state': 'completed'})
         self.assertFalse(self.open)
         self.proof.assert_called_once()
-        self.proof.assert_called_once_with('b' * 64, host_root=self.root)
+        self.proof.assert_called_once_with('b' * 64, 1, host_root=self.root)
         self.services.validate.assert_called_once()
         options = self.coordinator.call_args.kwargs
         self.assertIs(options['checkpoint'], self.checkpoints.checkpoint)

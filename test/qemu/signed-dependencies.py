@@ -30,7 +30,7 @@ def main():
                    check=True, capture_output=True)
     # These images are deliberately not fetched or qualified in this test.
     image = 'example.test/offline-test@sha256:' + 'a' * 64
-    metadata = {'format': 2, 'kind': 'mindflayer-elderbrain-release', 'version': '0.0.0',
+    metadata = {'format': 2, 'kind': 'mindflayer-elderbrain-release', 'version': '0.0.0', 'recoveryApi': 1,
         'platform': {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'},
         'host': {'version': '0.0.0', 'apiVersion': 1},
         'setup': {'version': '0.0.0', 'image': image, 'hostApi': {'min': 1, 'max': 1}},

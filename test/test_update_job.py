@@ -34,7 +34,8 @@ class UpdateWorkerTests(unittest.TestCase):
         self.request = {'version': '1.2.3', 'manifestSha256': hashlib.sha256(b'manifest').hexdigest(),
                         'confirmUpdate': True, 'confirmDowntime': True}
         self.enterContext(patch('update_job.persistent_identity', return_value='fixture'))
-        self.verify = self.enterContext(patch('update_job.verify', return_value={'format': 2, 'version': '1.2.3'}))
+        self.verify = self.enterContext(patch('update_job.verify', return_value={
+            'format': 2, 'version': '1.2.3', 'recoveryApi': 1}))
         self.enterContext(patch('update_job.require_compatible'))
         self.prepare_recovery = self.enterContext(patch('update_job.prepare_candidate', return_value={
             'active': 'b' * 64, 'candidate': 'c' * 64}))
@@ -62,6 +63,7 @@ class UpdateWorkerTests(unittest.TestCase):
             self.assertEqual(options['job_owner'], 'a' * 32)
             self.assertEqual(options['expected_manifest_sha256'], self.request['manifestSha256'])
             self.assertEqual(options['active_recovery'], 'b' * 64)
+            self.assertEqual(options['recovery_api'], 1)
             self.prepare_recovery.assert_called_once()
             self.commit_recovery.assert_not_called()
             return {'state': 'completed'}
@@ -69,6 +71,7 @@ class UpdateWorkerTests(unittest.TestCase):
         self.assertEqual(self.run_update(), {'state': 'completed'})
         self.assertFalse(self.open)
         self.assertEqual(self.prepare_recovery.call_args.kwargs['job_owner'], 'a' * 32)
+        self.assertEqual(self.prepare_recovery.call_args.kwargs['recovery_api'], 1)
         self.commit_recovery.assert_called_once_with('c' * 64, state=self.state,
             host_root=self.root, job_owner='a' * 32)
         self.assertEqual(self.progress, ['verifying-release', 'preparing-recovery', 'activating', 'committing-recovery'])

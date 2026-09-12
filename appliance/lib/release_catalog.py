@@ -11,6 +11,7 @@ import stat
 from urllib.parse import urlsplit
 
 from appliance_release import VERSION, unique, verify, require_compatible
+from release_recovery_bundle import active as active_recovery
 
 
 def trusted(path, limit):
@@ -66,7 +67,7 @@ def fetch(base, filename, limit):
 def check(*, host_root=Path('/'), download=fetch):
     root = Path(host_root).absolute()
     installed = trusted(root / 'opt/mindflayer-elderbrain/VERSION', 129).decode().strip()
-    if not re.fullmatch('(?:' + VERSION + r'|[a-f0-9]{40}(?:-dirty)?)', installed):
+    if not re.fullmatch(VERSION, installed):
         raise ValueError('Invalid installed host version')
     result = {'installedHostVersion': installed, 'state': 'not-configured', 'release': None}
     config = root / 'etc/elderbrain/release-source.json'
@@ -86,11 +87,14 @@ def check(*, host_root=Path('/'), download=fetch):
     compatible = release['format'] == 2
     try:
         require_compatible(release, platform=current, configuration_schema=1)
+        if active_recovery(directory=root / 'usr/lib/elderbrain-recovery')['recoveryApi'] != release['recoveryApi']:
+            compatible = False
     except ValueError:
         compatible = False
     result.update(state='checked', release={
         'version': release['version'], 'hostVersion': release['host']['version'],
         'setupVersion': release['setup']['version'], 'notes': release['notes'],
+        'recoveryApi': release['recoveryApi'],
         'downtimeSeconds': release['downtimeSeconds'], 'compatible': compatible,
         'manifestSha256': hashlib.sha256(manifest).hexdigest(),
     })
