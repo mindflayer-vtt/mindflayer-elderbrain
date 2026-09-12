@@ -1940,3 +1940,18 @@ units. Password-only SSH was rejected. This qualifies fresh BIOS and UEFI instal
 and additionally demonstrates recovery from an abrupt interruption during UEFI
 first boot; populated preserve reinstall and signed-update interruption matrices
 remain separate acceptance gates.
+
+The populated BIOS disk from that production qualification was then seeded with
+the private `preserve-baseline.sh` fixture and reinstalled from the same `4c53d74`
+ISO using the guarded preserve flow. The selector accepted only the exact disk
+serial, retained data UUID `f5ed1b49-83f3-495c-8870-91581fff0489` and explicit
+`REINSTALL OS elderbrain-vm-test` confirmation. The sealed host-side manifest
+checksum passed after reinstall; its verifier proved a new OS filesystem UUID
+while preserving the data identity, fixture bytes and metadata, SSH host identity,
+and runtime settings. The full guest, storage, HTTPS/authentication and admin-UI
+suites passed afterward. Release policy was re-established at version 1.0.0,
+sequence 1; storage, baseline, stack, management and graphics were active with no
+failed units, and password-only SSH remained rejected. This qualifies the current
+production baseline's populated BIOS preserve reinstall. Populated UEFI preserve,
+missing-data boot refusal and interrupted reinstall recovery remain outstanding
+destructive-storage gates.
