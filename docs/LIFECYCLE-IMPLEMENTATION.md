@@ -1648,3 +1648,21 @@ confirmation rejection, scope launch, matching-owner exemption and redacted
 request-acceptance results. Thirty-one focused tests and diff checks pass.
 Authenticated UI/API, boot outcome reporting and shutdown backups remain pending.
 No machine was rebooted or shut down, and no live appliance was changed.
+
+Wired the persistent power jobs into the authenticated System page and Setup API.
+Reboot and shutdown now require a deliberate action choice followed by a separate
+confirmation checkbox; the API requires the authenticated admin session, normal
+same-origin/CSRF protections and an exact confirmed request. The page submits with
+automatic retries disabled, reports acceptance without claiming that power state
+was physically observed, and polls both durable jobs and the current-boot pending
+marker. A pending marker or any queued/running host job disables update and power
+submission. The management bridge retains bounded payload reads and forwards only
+the existing allowlisted power job. Browser/API tests cover anonymous and missing-
+CSRF rejection, malformed requests, cancellation before confirmation, accepted
+submission and pending state after reload. Host-side tests continue to mock the
+systemd power command; 33 focused Python tests, Nuxt typecheck/build, all 39 Setup
+unit tests and all 40 production-server browser/API tests pass. The UI explicitly
+identifies the bounded pre-shutdown checkpoint/backup handling as not implemented
+yet. Boot outcome
+reporting and that data-protection workflow remain pending. No machine was rebooted
+or shut down, and no live appliance was changed.

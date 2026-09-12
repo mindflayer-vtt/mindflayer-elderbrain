@@ -76,6 +76,62 @@ test('System update requires both confirmations and remains visible after reload
   await expect(page.getByText('Update: running — downloading-host', { exact: true })).toBeVisible();
 });
 
+test('power API requires authentication, CSRF and exact confirmation', async ({ request, playwright, baseURL }) => {
+  const url = '/elderbrain/api/system/power';
+  const data = { action: 'shutdown', confirmPower: true };
+  const anonymous = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  try {
+    expect((await anonymous.get(url)).status()).toBe(401);
+    expect((await anonymous.post(url, { headers: { 'x-elderbrain-request': '1' }, data })).status()).toBe(401);
+  } finally { await anonymous.dispose(); }
+  expect((await request.post(url, { data })).status()).toBe(403);
+  const session = await (await request.get('/elderbrain/api/auth/session')).json();
+  const headers = { 'x-elderbrain-request': '1', 'x-csrf-token': session.csrf };
+  for (const invalid of [
+    { action: 'shutdown', confirmPower: false },
+    { action: 'poweroff', confirmPower: true },
+    { action: 'reboot', confirmPower: true, force: true },
+  ]) expect((await request.post(url, { headers, data: invalid })).status()).toBe(400);
+  const response = await request.post(url, { headers, data });
+  expect(response.status()).toBe(202);
+  expect(response.headers()['cache-control']).toBe('no-store');
+  expect(await response.json()).toMatchObject({ kind: 'power', state: 'queued', request: data });
+  expect(await (await request.get(url)).json()).toEqual({ pending: true });
+});
+
+test('System power controls require a second explicit confirmation and retain pending state', async ({ page }) => {
+  const jobs: Record<string, unknown>[] = [];
+  let pending = false;
+  let submitted: unknown;
+  await page.route('**/api/jobs', route => route.fulfill({ json: jobs }));
+  await page.route('**/api/system/power', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { pending } });
+    submitted = route.request().postDataJSON();
+    const job = { id: '8'.repeat(32), kind: 'power', state: 'queued', stage: 'queued' };
+    jobs.push(job);
+    pending = true;
+    return route.fulfill({ status: 202, json: job });
+  });
+  await page.goto('/elderbrain/system');
+  const reboot = page.getByRole('button', { name: 'Reboot appliance' });
+  await expect(reboot).toBeEnabled();
+  await page.getByRole('button', { name: 'Shut down appliance' }).click();
+  await expect(page.getByRole('button', { name: 'Confirm shutdown' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  expect(submitted).toBeUndefined();
+  await reboot.click();
+  const confirm = page.getByRole('button', { name: 'Confirm reboot' });
+  await expect(confirm).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'I understand and want to reboot the appliance now.' }).check();
+  await confirm.click();
+  expect(submitted).toEqual({ action: 'reboot', confirmPower: true });
+  await expect(page.getByText('Reboot accepted. The protected host job will continue if this page disconnects.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('A reboot or shutdown is pending on this boot.')).toBeVisible();
+  await expect(page.getByText('Power request: queued — queued')).toBeVisible();
+  await expect(reboot).toBeDisabled();
+});
+
 test('network restore keeps queued capability and confirms known job ID after disconnection', async ({ page }) => {
   let disconnected = false;
   await page.route('**/api/network/change', async route => {

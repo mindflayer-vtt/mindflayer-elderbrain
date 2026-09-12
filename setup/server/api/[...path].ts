@@ -30,6 +30,22 @@ export default defineEventHandler(async (event) => {
     return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as unknown;
   }
   try {
+    if (route === 'system/power' && method === 'GET') {
+      const result = await command(socket, 'power-status');
+      if (!result.ok) throw new Error('Power status unavailable');
+      return JSON.parse(result.output || 'null');
+    }
+    if (route === 'system/power' && method === 'POST') {
+      const input = await body() as Record<string, unknown>;
+      if (!input || Array.isArray(input) || Object.keys(input).sort().join(',') !== 'action,confirmPower'
+          || !['reboot', 'shutdown'].includes(input.action as string) || input.confirmPower !== true)
+        throw new Error('Choose reboot or shutdown and explicitly confirm service interruption');
+      const payload = Buffer.from(JSON.stringify(input));
+      const result = await backupUpload(socket, Readable.from([payload]), payload.length, 'power-start');
+      if (!result.ok) throw new Error('Power request was not accepted. Check active jobs and maintenance status.');
+      setResponseStatus(event, 202);
+      return JSON.parse(result.output || 'null');
+    }
     if (route === 'system/check' && method === 'POST') {
       const input = await body();
       if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length)

@@ -6,12 +6,14 @@ import socket
 import socketserver
 import struct
 import subprocess
+import sys
+import types
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 class ManagementRuntimeTests(unittest.TestCase):
-    def test_update_bridge_bounds_payload_and_preserves_confirmations(self):
+    def test_host_job_bridge_bounds_payload_and_preserves_confirmations(self):
         # Load the actual handler class without executing the root-owned socket
         # server's installation/startup code on the development machine.
         source = Path(__file__).resolve().parents[1] / 'appliance/lib/management-server'
@@ -40,6 +42,18 @@ class ManagementRuntimeTests(unittest.TestCase):
             self.assertFalse(send(invalid)['ok'])
         self.assertFalse(send(data, uid=999)['ok'])
         jobs.submit.assert_not_called()
+
+        selected = {'action': 'shutdown', 'confirmPower': True}
+        payload = json.dumps(selected).encode()
+        self.assertTrue(send(f'power-start {len(payload)}\n'.encode() + payload)['ok'])
+        jobs.submit.assert_called_once_with('power', selected)
+
+        jobs.directory.parent = Path('/test/state')
+        power = types.SimpleNamespace(pending=Mock(return_value=True))
+        with patch.dict(sys.modules, {'power_service': power}):
+            status = send(b'power-status\n')
+        self.assertEqual(json.loads(status['output']), {'pending': True})
+        power.pending.assert_called_once_with(Path('/test/state'))
 
     def test_bind_mounted_socket_directory_survives_service_restart(self):
         root = Path(__file__).resolve().parents[1]

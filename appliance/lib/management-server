@@ -87,14 +87,18 @@ class Handler(socketserver.StreamRequestHandler):
             elif action == 'release-check':
                 from release_catalog import check
                 result = {'ok': True, 'output': json.dumps(check())}
-            elif action.startswith("update-start "):
-                size = int(action.removeprefix("update-start "))
+            elif action == 'power-status':
+                from power_service import pending
+                result = {'ok': True, 'output': json.dumps({'pending': pending(JOBS.directory.parent)})}
+            elif action.startswith(("update-start ", "power-start ")):
+                operation, length = action.split(' ', 1)
+                size = int(length)
                 if not 0 < size <= 2048:
-                    raise ValueError("Invalid update request size")
+                    raise ValueError("Invalid host job request size")
                 payload = self.rfile.read(size)
                 if len(payload) != size:
-                    raise ValueError("Incomplete update request")
-                result = {"ok": True, "output": json.dumps(JOBS.submit("update", json.loads(payload)))}
+                    raise ValueError("Incomplete host job request")
+                result = {"ok": True, "output": json.dumps(JOBS.submit(operation.removesuffix('-start'), json.loads(payload)))}
             elif action.startswith("keypad-install-start "):
                 size = int(action.removeprefix("keypad-install-start "))
                 if not 0 < size <= 2048:

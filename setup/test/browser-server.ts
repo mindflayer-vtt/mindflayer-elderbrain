@@ -25,6 +25,7 @@ let borgSettings: Record<string, unknown> = { configured: false };
 let displayPreview = { phase: 'idle', id: '', deadline: 0 };
 let displayCandidate: unknown;
 let checkpointRetention = { enabled: false, keep: 10 };
+let powerPending = false;
 const management = net.createServer({ allowHalfOpen: true }, (socket) => {
   socket.once("data", (data) => {
     const action = data.toString().trim();
@@ -33,6 +34,17 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
         version: '1.2.3', hostVersion: '1.1.0', setupVersion: '2.0.0', notes: 'Improved offline updates. <script>unsafe()</script>',
         downtimeSeconds: 120, compatible: true, manifestSha256: 'a'.repeat(64),
       } }) }) + '\n');
+      return;
+    }
+    if (action === 'power-status') {
+      const output = JSON.stringify({ pending: powerPending });
+      socket.end(JSON.stringify({ ok: true, output }) + '\n');
+      // API tests observe acceptance once, then model the next boot so their
+      // synthetic power request cannot block unrelated browser scenarios.
+      if (powerPending) {
+        powerPending = false;
+        for (const job of jobs) if (job.kind === 'power' && job.state === 'queued') job.state = 'completed';
+      }
       return;
     }
     if (action.startsWith('network-snapshot-restore-start ')) {
@@ -126,13 +138,15 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify({ version: "1.2.3" }) }) + "\n");
       return;
     }
-    if (action.startsWith("update-start ")) {
+    if (action.startsWith("update-start ") || action.startsWith("power-start ")) {
       const end = data.indexOf(10);
       const size = Number(data.subarray(0, end).toString().split(' ')[1]);
       let payload = data.subarray(end + 1);
       const finish = () => {
-        const job = { id: '6'.repeat(32), kind: 'update', state: 'queued', createdAt: Date.now() / 1000,
+        const kind = action.startsWith('power-start ') ? 'power' : 'update';
+        const job = { id: (kind === 'power' ? '7' : '6').repeat(32), kind, state: 'queued', createdAt: Date.now() / 1000,
           request: JSON.parse(payload.subarray(0, size).toString()) };
+        if (kind === 'power') powerPending = true;
         jobs.unshift(job);
         socket.end(JSON.stringify({ ok: true, output: JSON.stringify(job) }) + '\n');
       };
@@ -266,7 +280,12 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
       return;
     }
     if (action === "jobs-list") {
-      socket.end(JSON.stringify({ ok: true, output: JSON.stringify(jobs) }) + "\n");
+      const output = JSON.stringify(jobs);
+      socket.end(JSON.stringify({ ok: true, output }) + "\n");
+      // Request-context API tests have no workers to advance their synthetic
+      // jobs. Complete them after the first durable-list observation so one
+      // test cannot leave the fixture's global admission gate occupied.
+      for (const job of jobs) if (job.state === 'queued') job.state = 'completed';
       return;
     }
     socket.end(JSON.stringify({ ok: true, action, output: action === "foundry-logs" ? "Foundry container state: running\n2026-09-10T12:00:00Z Foundry test log" : "active" }) + "\n");
