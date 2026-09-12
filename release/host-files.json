@@ -300,6 +300,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_services.py",
+    "path": "runtime/release_services.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_staging.py",
     "path": "runtime/release_staging.py",
     "mode": 420

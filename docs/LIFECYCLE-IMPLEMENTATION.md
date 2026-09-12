@@ -1117,3 +1117,17 @@ passed 438 tests (five skipped) before the final two focused recovery tests.
 No live deployment occurred. Trusted prepared-runtime verification, fixed actual
 host targets, checkpoint adapter, update-specific service health/interlocks and
 stable boot-recovery worker wiring remain before enabling activation.
+
+Added UpdateServices for update-specific worker/Compose control. It requires the
+stack's stable active/exited state, saves an explicit worker allowlist, stops all
+listed workers and affected containers, and restores only the previously active
+set. Recovery stopping uses project labels, not a potentially broken new Compose
+file. Validation rejects builds, mutable images, implicit pulls and service-set
+changes; recreation explicitly forbids builds/pulls and runs container/worker plus
+required API health checks before graphics. It deliberately does not invoke stack
+startup, backup rescheduling or secret/certificate mutation during health recovery.
+Seven command-level tests pass; the combined service/activation/package suite
+passes 21 tests. Read-only QEMU systemctl checks confirm the actual stack is
+active/exited and all five allowlisted host workers are active. No service was
+stopped or changed. Concrete health/interlock/checkpoint adapters, offline legacy
+rollback preparation and stable boot recovery remain pending before live use.

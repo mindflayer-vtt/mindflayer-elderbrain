@@ -325,3 +325,19 @@ units and enforce real health/interlock checks. The recovery worker must live
 outside the runtime being replaced and be wired into boot before update admission
 is enabled. These integration requirements remain pending; fixture tests do not
 qualify actual appliance activation or rollback.
+
+`release_services.UpdateServices` supplies update-specific service mechanics:
+it admits only a stable completed stack oneshot, records allowlisted host workers,
+stops those workers plus graphics/containers, and uses project-labelled container
+discovery for stopping without parsing potentially broken Compose configuration.
+Validation requires the exact coordinated service set, digest pins, no build
+configuration and `pull_policy: never`. Recreation explicitly uses `--no-build`
+and `--pull never`, restores only previously running workers/services, and checks
+container/worker health plus a required host API health callback before graphics.
+
+The stack oneshot itself is not restarted during the switch, avoiding legacy
+startup commands. The host coordinator must still install the offline stack unit
+for subsequent boot, and prepare an offline-compatible previous runtime before
+admitting a legacy installation to this update path. Concrete API checks, firmware
+and network-operation interlocks, stable-worker/boot recovery and checkpoint
+integration are still required before this adapter is enabled on an appliance.
