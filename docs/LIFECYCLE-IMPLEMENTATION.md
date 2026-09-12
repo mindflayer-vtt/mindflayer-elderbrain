@@ -1357,3 +1357,38 @@ active-writer refusal, and actual prepared-source/cache revalidation. Recovery
 routing and local-ID-versus-mutable-tag validation also pass. No VM files were
 changed this turn. Concrete bootstrap-proof admission and real baseline switch,
 offline reboot and full signed-update rollback qualification remain pending.
+
+Added read-only installed-bootstrap verification against the caller-authenticated
+module inventory, selected bundle, complete receipt, retained bytes, all fixed
+boot files and enablement links. Added tests rejecting changed writer gates,
+missing enablement and damaged retained migration code. Refactored trusted payload
+staging into a reusable context without changing provisioning's trust boundary.
+Full regression suite: 519 tests, five skipped, passing.
+
+test/qemu/install-offline-baseline.py installed matching recovery in the identified
+VM, checked actual loaded Requires/After gates for every writer and host alias,
+reprepared cached images and completed migration f5f02ee2e19f460da203ece2d0694c1d.
+Prepared evidence remains at
+/root/elderbrain-baseline-migration-cjd60lu0/bb522b0371f645a8b8318efe51e214a2.
+Live Compose now uses immutable local IDs and the stack unit disables build/pull.
+Configuration/current application health passed before commit; old managed files
+remain retained. ActivationReady remains false: this is not yet a signed release.
+
+Actual disconnected-link reboot now passes for the migrated VM. Host-side
+test/qemu/offline-reboot.py verifies VM identity, schedules its reboot, disconnects
+virtio-net-pci.0 and restores it in finally after seven monitored 30-second waits.
+Link-down epoch 1789216222.8313148 (12:30:22 UTC), link-restored epoch
+1789216440.834378 (12:34:00 UTC). New boot ID is
+2988c84a-2a8e-4695-80dd-dcdd92f29496. Storage/early recovery completed at 12:30:40,
+management at 12:32:43 and stack/graphics/final recovery at 12:33:06, all before
+network restoration. CA-verified HTTPS Setup health subsequently returned
+{"ok":true}. No build/pull is present in the installed startup unit, and live
+Compose pins cached local IDs. No licensed Foundry instance was started.
+
+The deliberate missing link caused systemd-networkd-wait-online.service to time
+out, delaying appliance startup by roughly two minutes; this remains a boot UX
+improvement, not an image-download dependency. All Elderbrain units succeeded.
+The virtual link is restored and the PC remains on; Lenovo was not contacted.
+Interrupted-migration VM recovery, full signed-update activation/rollback and
+fresh-ISO prebuilt-image provisioning remain unqualified. Final local suite after
+strict proof metadata-permission checks: 519 tests, five skipped, passing.

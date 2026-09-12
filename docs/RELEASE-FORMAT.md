@@ -549,3 +549,11 @@ unfinished migration. UpdateServices also accepts immutable local image IDs for
 the trusted legacy rollback baseline; signed candidate authentication and registry
 digest requirements are unchanged. Concrete bootstrap-proof admission and the
 installed-VM migration/offline reboot qualification remain required.
+
+`release_bootstrap.verify_installed` provides the concrete read-only file proof:
+it derives the expected bundle identity from the caller-authenticated recovery
+module inventory, verifies the selected complete installation and every retained
+module, compares all installed launcher/unit/gate bytes, and checks enablement
+links. It runs under the migration's maintenance lock; it neither repairs files
+nor selects another bundle. The disposable VM migration adapter additionally
+checks effective systemd Requires/After dependencies for every writer/alias gate.

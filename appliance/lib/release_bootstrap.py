@@ -5,6 +5,8 @@ Bootstrap completion is not update readiness: migration and qualification of the
 previous runtime are still required before admitting an update.
 """
 import os
+import hashlib
+import json
 from pathlib import Path
 import stat
 import tempfile
@@ -13,8 +15,8 @@ import uuid
 from backup_service import Maintenance, save_record
 from release_interlocks import update_admission
 from release_prepare import sync_directory
-from release_recovery_bundle import install as install_bundle, selection_window
-from release_runtime import read_regular
+from release_recovery_bundle import install as install_bundle, selection_window, verify_tree
+from release_runtime import private_directory, read_regular
 from release_staging import inventory
 from restore_service import persistent_identity
 
@@ -83,6 +85,55 @@ def publish(path, value, mode):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def verify_installed(tree, allowed_paths, *, host_root=Path('/')):
+    """Read-only prerequisite proof; caller holds maintenance and trusts tree."""
+    root, tree = Path(host_root).absolute(), Path(tree).absolute()
+    if tree.resolve() != tree:
+        raise ValueError('Recovery proof source must be canonical')
+    paths = inventory(allowed_paths)
+    recovery = private_directory(root / 'usr/lib/elderbrain-recovery')
+    descriptors = {}
+    for name in sorted(paths):
+        if Path(name).parent == Path('runtime') and name.endswith('.py'):
+            source = tree / name
+            if source.resolve() != source:
+                raise ValueError('Aliased recovery proof source')
+            value = read_regular(source, 4 * 1024 ** 2)
+            descriptors[source.name] = {'size': len(value), 'sha256': hashlib.sha256(value).hexdigest()}
+    if not {'release_recovery.py', 'release_baseline_install.py'} <= set(descriptors):
+        raise ValueError('Recovery proof lacks migration entry points')
+    manifest = json.dumps({'format': 1, 'entrypoint': 'release_recovery.py', 'files': descriptors},
+                          sort_keys=True, separators=(',', ':')).encode()
+    identity = hashlib.sha256(manifest).hexdigest()
+    for name in ('active.json', 'installation.json'):
+        info = (recovery / name).lstat()
+        if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600:
+            raise ValueError('Recovery proof metadata must be private')
+    selector = json.loads(read_regular(recovery / 'active.json', 65536))
+    receipt = json.loads(read_regular(recovery / 'installation.json', 65536))
+    if (selector != {'format': 1, 'bundle': identity} or type(selector['format']) is not int
+            or not isinstance(receipt, dict) or type(receipt.get('format')) is not int or receipt['format'] != 1
+            or receipt.get('state') != 'installed' or receipt.get('bundle') != identity):
+        raise ValueError('Matching recovery bootstrap is not completely installed')
+    manifest_info = (recovery / identity / 'bundle.json').lstat()
+    if manifest_info.st_uid != os.geteuid() or stat.S_IMODE(manifest_info.st_mode) != 0o600:
+        raise ValueError('Recovery proof manifest must be private')
+    verify_tree(recovery / identity, descriptors, manifest)
+    for target, source in files().items():
+        if paths.get(source) != 0o644 or (tree / source).resolve() != tree / source:
+            raise ValueError('Missing reviewed recovery boot file')
+        destination = root / target
+        directory(destination.parent, root)
+        if existing(destination) != read_regular(tree / source, 4 * 1024 ** 2):
+            raise ValueError('Installed recovery boot file differs')
+    for name in UNITS:
+        target = root / 'etc/systemd/system/multi-user.target.wants' / name
+        directory(target.parent, root)
+        if not target.is_symlink() or os.readlink(target) != '../' + name:
+            raise ValueError('Recovery boot unit is not enabled')
+    return {'bundle': identity}
 
 
 def install(tree, allowed_paths, *, state, host_root=Path('/')):

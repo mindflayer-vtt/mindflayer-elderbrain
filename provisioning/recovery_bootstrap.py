@@ -4,6 +4,7 @@ This entry point shares the installer's trust boundary, not the online updater's
 it must never be pointed at a downloaded, unauthenticated release directory.
 """
 import importlib.util
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,8 @@ sys.path.insert(0, str(ROOT / 'appliance/lib'))
 from release_bootstrap import existing, files, install
 
 
-def provision(*, host_root=Path('/')):
+@contextmanager
+def staged_payload():
     # Use the same reviewed inventory parser as the host release packager.
     spec = importlib.util.spec_from_file_location('bootstrap_inventory', ROOT / 'release/build-host.py')
     builder = importlib.util.module_from_spec(spec)
@@ -40,8 +42,12 @@ def provision(*, host_root=Path('/')):
             with destination.open('xb') as stream:
                 os.fchmod(stream.fileno(), entry['mode'])
                 stream.write(value)
-        return install(tree, {entry['path']: entry['mode'] for entry in selected},
-                       state=Path(host_root) / 'var/lib/mindflayer-elderbrain', host_root=host_root)
+        yield tree, {entry['path']: entry['mode'] for entry in selected}
+
+
+def provision(*, host_root=Path('/')):
+    with staged_payload() as (tree, paths):
+        return install(tree, paths, state=Path(host_root) / 'var/lib/mindflayer-elderbrain', host_root=host_root)
 
 
 if __name__ == '__main__':

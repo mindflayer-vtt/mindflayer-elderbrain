@@ -125,6 +125,37 @@ class BootstrapTests(unittest.TestCase):
             self.install()
         self.assertFalse((self.root / 'usr').exists())
 
+    def test_installed_proof_checks_bundle_files_gates_and_enablement(self):
+        result = self.install()
+        def proof():
+            return bootstrap.verify_installed(self.tree, self.fixture.paths, host_root=self.root)
+        self.assertEqual(proof(), {'bundle': result['bundle']})
+        gate = self.units / 'docker.service.d/20-update-recovery.conf'
+        original = gate.read_bytes()
+        gate.write_text('changed gate')
+        with self.assertRaisesRegex(ValueError, 'boot file differs'):
+            proof()
+        gate.write_bytes(original)
+        link = self.units / 'multi-user.target.wants' / bootstrap.UNITS[0]
+        link.unlink()
+        with self.assertRaisesRegex(ValueError, 'not enabled'):
+            proof()
+        link.symlink_to('../' + bootstrap.UNITS[0])
+        recovery = self.root / 'usr/lib/elderbrain-recovery'
+        selector = recovery / 'active.json'
+        selector.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, 'metadata must be private'):
+            proof()
+        selector.chmod(0o600)
+        manifest = recovery / result['bundle'] / 'bundle.json'
+        manifest.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, 'manifest must be private'):
+            proof()
+        manifest.chmod(0o600)
+        (recovery / result['bundle'] / 'release_baseline_install.py').write_text('damaged')
+        with self.assertRaisesRegex(ValueError, 'bytes differ'):
+            proof()
+
     def test_interrupted_publication_retains_history_and_unready_receipt(self):
         original = bootstrap.publish
         def interrupted(path, value, mode):
