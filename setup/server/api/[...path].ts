@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { command, backupDownload, backupUpload } from "../utils/management";
 import { load, validate, saveFoundrySecret } from "../utils/config";
 import { beamerStatus, saveBeamer, removeBeamer } from "../utils/beamer";
+import { updateRequest } from '../utils/update-request';
 import type { ControllerMonitor } from "../utils/controllers";
 import type { KeypadInventory } from "../utils/keypads";
 
@@ -29,6 +30,13 @@ export default defineEventHandler(async (event) => {
     return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as unknown;
   }
   try {
+    if (route === 'system/update' && method === 'POST') {
+      const payload = Buffer.from(JSON.stringify(updateRequest(await body())));
+      const result = await backupUpload(socket, Readable.from([payload]), payload.length, 'update-start');
+      if (!result.ok) throw new Error('Update was not accepted. Check active jobs and maintenance status before retrying.');
+      setResponseStatus(event, 202);
+      return JSON.parse(result.output || 'null');
+    }
     if (route === 'snapshots/restore-network' && method === 'POST') {
       const input = await body() as { checkpoint?: unknown; interface?: unknown; confirmRestore?: unknown; confirmDowntime?: unknown };
       if (input?.confirmRestore !== true || input.confirmDowntime !== true)

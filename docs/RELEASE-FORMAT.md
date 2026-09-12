@@ -622,3 +622,12 @@ Installer trust/preparation configuration, boot-time job outcome reconciliation,
 release discovery/download and authenticated
 System-page API/UI integration remain pending. This job path is not yet a complete
 end-user update workflow.
+
+Setup now exposes `POST /elderbrain/api/system/update` behind the existing
+HTTPS/admin-readiness/CSRF middleware. The body is the exact four-field host
+request above; unknown fields, paths, implicit consent and malformed identities
+are rejected. The bridge accepts a bounded `update-start` body and submits the
+persistent job; HTTP 202 returns its record, available thereafter through the
+authenticated jobs endpoint. Acceptance is not activation success: the worker
+must still authenticate the prepared artifacts and pass all activation gates.
+Discovery/download, the System page and power controls are still pending.

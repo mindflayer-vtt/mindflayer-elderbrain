@@ -119,6 +119,20 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify({ version: "1.2.3" }) }) + "\n");
       return;
     }
+    if (action.startsWith("update-start ")) {
+      const end = data.indexOf(10);
+      const size = Number(data.subarray(0, end).toString().split(' ')[1]);
+      let payload = data.subarray(end + 1);
+      const finish = () => {
+        const job = { id: '6'.repeat(32), kind: 'update', state: 'queued', createdAt: Date.now() / 1000,
+          request: JSON.parse(payload.subarray(0, size).toString()) };
+        jobs.unshift(job);
+        socket.end(JSON.stringify({ ok: true, output: JSON.stringify(job) }) + '\n');
+      };
+      if (payload.length >= size) finish();
+      else socket.on('data', chunk => { payload = Buffer.concat([payload, chunk]); if (payload.length >= size) finish(); });
+      return;
+    }
     if (action.startsWith("keypad-install-start ")) {
       const end = data.indexOf(10);
       const size = Number(data.subarray(0, end).toString().split(" ")[1]);

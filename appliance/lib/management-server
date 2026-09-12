@@ -84,6 +84,14 @@ class Handler(socketserver.StreamRequestHandler):
                 from serial_release import release
                 selected = release()
                 result = {"ok": True, "output": json.dumps({"version": selected["version"]})}
+            elif action.startswith("update-start "):
+                size = int(action.removeprefix("update-start "))
+                if not 0 < size <= 2048:
+                    raise ValueError("Invalid update request size")
+                payload = self.rfile.read(size)
+                if len(payload) != size:
+                    raise ValueError("Incomplete update request")
+                result = {"ok": True, "output": json.dumps(JOBS.submit("update", json.loads(payload)))}
             elif action.startswith("keypad-install-start "):
                 size = int(action.removeprefix("keypad-install-start "))
                 if not 0 < size <= 2048:

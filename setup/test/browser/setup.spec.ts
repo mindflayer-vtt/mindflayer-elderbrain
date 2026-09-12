@@ -13,6 +13,27 @@ test.beforeAll(async ({ playwright, baseURL }) => {
 });
 test.use({ storageState: async ({}, use) => { await use({ cookies, origins: [] }); } });
 
+test('update API requires authentication, CSRF and exact confirmed release identity', async ({ request, playwright, baseURL }) => {
+  const url = '/elderbrain/api/system/update';
+  const data = { version: '1.2.3', manifestSha256: 'a'.repeat(64), confirmUpdate: true, confirmDowntime: true };
+  const anonymous = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  try { expect((await anonymous.post(url, { headers: { 'x-elderbrain-request': '1' }, data })).status()).toBe(401); }
+  finally { await anonymous.dispose(); }
+  expect((await request.post(url, { data })).status()).toBe(403);
+  const session = await (await request.get('/elderbrain/api/auth/session')).json();
+  const headers = { 'x-elderbrain-request': '1', 'x-csrf-token': session.csrf };
+  for (const changes of [{ confirmUpdate: false }, { confirmDowntime: false }, { version: '../release' },
+    { manifestSha256: 'invalid' }, { key: '/tmp/untrusted.pem' }])
+    expect((await request.post(url, { headers, data: { ...data, ...changes } })).ok()).toBe(false);
+  const response = await request.post(url, { headers, data });
+  expect(response.status()).toBe(202);
+  expect(response.headers()['cache-control']).toBe('no-store');
+  const job = await response.json();
+  expect(job).toMatchObject({ kind: 'update', state: 'queued', request: data });
+  const jobs = await (await request.get('/elderbrain/api/jobs')).json();
+  expect(jobs).toContainEqual(job);
+});
+
 test('network restore keeps queued capability and confirms known job ID after disconnection', async ({ page }) => {
   let disconnected = false;
   await page.route('**/api/network/change', async route => {

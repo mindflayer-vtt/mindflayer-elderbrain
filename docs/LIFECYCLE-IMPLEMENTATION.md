@@ -1530,3 +1530,15 @@ Setup health. This proves the worker survives replacement/restart of management;
 it does not yet qualify job reconciliation after boot or the public UI workflow.
 No production trust key, repository push, registry publication or physical Lenovo
 change was involved. The development PC remains on.
+
+Added the authenticated System update submission API and bounded bridge transport.
+Only the exact version/digest and two explicit boolean confirmations are accepted;
+no user-controlled key, command or filesystem path is forwarded. Host JobStore
+validation remains independent of Setup validation. The production-server
+integration test proves anonymous 401, missing-CSRF 403, rejected invalid/extra
+fields, accepted HTTP 202 with no-store, and subsequent job-list visibility using
+a mock management peer. Actual bridge-handler tests cover payload limits, short
+reads, unauthorized peer rejection and exact forwarding to JobStore. Nuxt
+typecheck/build, request validator tests, 26 focused Python tests and whitespace
+checks pass. This adds API integration, not release discovery or a finished System
+page; those and power/backup controls remain pending. No live appliance changes.
