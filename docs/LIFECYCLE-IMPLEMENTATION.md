@@ -922,3 +922,16 @@ its own verified comment. Evidence: `/root/network-restore-evidence-w5pr5yt4`.
 Session 5064 exited zero; it is no longer running. Both real stable-IP confirmation
 and deadline rollback now pass, including management restart while each worker
 was live. Address-changing and reboot-mid-restore qualification remain separate.
+
+Coordinated release groundwork now verifies exact signed manifest bytes with a
+separately supplied pinned appliance public key before JSON parsing. Format 1
+binds independently versioned host/Setup components, a host archive size/hash,
+digest-pinned Setup and dependency images, platform/schema, host API compatibility,
+release notes and downtime estimate. Duplicate/unknown fields, mutable image
+references and mismatched package bytes fail closed. Setup-only compatibility
+checks the installed host API. Nine tests pass using real temporary RSA/OpenSSL
+signatures, tampering, schema/platform/API failures and unsafe host paths/types.
+See `RELEASE-FORMAT.md` for the contract and remaining activation/trust boundaries.
+No production signing key/release was created. Packaging, trusted download,
+migration/checkpoint/activation/rollback and replacing ordinary boot builds/pulls
+remain implementation work; this verifier alone does not enable updates.
