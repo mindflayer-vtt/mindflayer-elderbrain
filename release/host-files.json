@@ -285,6 +285,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_prepare.py",
+    "path": "runtime/release_prepare.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_staging.py",
     "path": "runtime/release_staging.py",
     "mode": 420

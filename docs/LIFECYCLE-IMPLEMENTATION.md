@@ -999,3 +999,16 @@ profile enabled (no daemon/container action). Host package round-trip tests pass
 The installer bootstrap unit remains unchanged; activation still must render,
 validate and install this release runtime after prebuilt image/dependency setup.
 No live unit changed, and disconnected cold boot is not yet qualified.
+
+Durable release preparation now connects signature/platform/schema validation,
+private archive staging, explicit image preparation, generated pinned Compose and
+config-only validation. It takes a private preparation lock, checks staging space,
+refuses existing versions, fsyncs its complete tree and publishes via directory
+rename. It retains the authenticated archive/manifest/signature for re-verification
+and records image identities without copying the persistent environment. No live
+runtime or service is touched. Seven tests pass with real signed package assembly
+and extraction plus mocked Docker: success, tampered artifact before image work,
+Compose failure with no published version, existing-version preservation, low
+space, concurrent preparation and private parent enforcement. Receipts explicitly
+remain dependenciesPrepared=false/activationReady=false: complete offline host
+dependencies and actual update activation/rollback are still unimplemented.

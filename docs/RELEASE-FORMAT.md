@@ -174,3 +174,27 @@ the staged Compose file before installing this unit. The fresh installer's older
 bootstrap unit is intentionally unchanged until the installer can supply verified
 prebuilt images and complete host dependencies. This is not yet an offline cold
 boot qualification or a live switch to the release runtime.
+
+## Durable preparation (not activation)
+
+`release_prepare.prepare` connects authenticated package staging, compatibility
+checks, explicit image preparation, Compose rendering and config-only validation.
+It requires a private canonical release directory, takes a preparation lock,
+checks host-staging disk space and refuses to replace an existing version. Files
+and directories are fsynced before a complete private tree is renamed into place.
+Interrupted hidden staging directories are not published release versions.
+
+The prepared version retains the exact compressed archive and signature for
+later re-verification, the staged tree with generated runtime Compose, and a
+receipt containing the manifest hash and verified image identities. It never
+copies the persistent environment file, starts services or changes the live
+runtime. Compose validation reads the existing environment only; output is not
+logged because it can include credentials.
+
+The current receipt deliberately states `dependenciesPrepared: false` and
+`activationReady: false`. Completing host dependency packaging and verifying those
+dependencies is required before the activation coordinator may switch to it.
+Docker image-store space accounting, recovery checkpoints, migration, activation,
+health rollback and boot integration are still separate unfinished work. Image
+downloads can populate the cache on a failed preparation, but no images are run
+or deleted and no incomplete release directory is presented as activation-ready.
