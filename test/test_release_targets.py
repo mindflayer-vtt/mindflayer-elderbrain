@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'appliance/lib'))
 from release_targets import bindings, sources, targets
+from release_bootstrap import files as bootstrap_files
 from restore_transaction import RestoreTransaction
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,7 +45,11 @@ class DeploymentTargetTests(unittest.TestCase):
         inventory = json.loads((ROOT / 'release/host-files.json').read_text())
         packaged = {entry['path'] for entry in inventory}
         self.assertTrue(set(bindings().values()) - {'runtime'} <= packaged)
-        self.assertTrue({name for name in packaged if name.startswith('units/')} <= set(bindings().values()))
+        managed = set(bindings().values()) | set(bootstrap_files().values())
+        self.assertTrue({name for name in packaged if name.startswith('units/')} <= managed)
+        self.assertNotIn('etc/systemd/system/elderbrain-storage.service', bindings())
+        self.assertEqual(bootstrap_files()['etc/systemd/system/elderbrain-storage.service'],
+                         'units/elderbrain-storage.service')
         self.assertFalse(any(name.startswith(('var/', 'etc/ssh/')) for name in bindings()))
         self.assertNotIn('templates/appliance.env', bindings().values())
         self.assertNotIn('templates/sway.conf', bindings().values())

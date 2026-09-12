@@ -16,7 +16,10 @@ def bindings():
     result = {'opt/mindflayer-elderbrain': 'runtime', 'usr/local/sbin/elderbrain': 'bin/elderbrain',
               'etc/opt/chrome/policies/managed/elderbrain.json': 'templates/chrome/elderbrain.json',
               'etc/cloud/cloud.cfg.d/99-elderbrain-ssh-identity.cfg': 'templates/cloud/99-elderbrain-ssh-identity.cfg'}
-    for name in SERVICES:
+    # The storage guard is part of the atomically selected recovery-bootstrap
+    # generation. Treating its stable anchor as an ordinary file target would
+    # reject every correctly provisioned appliance as aliased during updates.
+    for name in (service for service in SERVICES if service != 'elderbrain-storage'):
         result['etc/systemd/system/' + name + '.service'] = 'units/' + name + '.service'
     for name in STORAGE_WRITERS:
         result['etc/systemd/system/' + name + '.service.d/10-storage-required.conf'] = 'units/storage-required.conf'

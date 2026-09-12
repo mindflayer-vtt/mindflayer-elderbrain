@@ -1,8 +1,10 @@
 import fcntl
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch, Mock
 
@@ -73,8 +75,28 @@ class SnapshotCoordinationTests(unittest.TestCase):
                 record.write_text(json.dumps({'phase': 'confirmed'}))
             with stable_settings(state):
                 with self.assertRaises(RuntimeError):
-                    with stable_settings(state):
+                    with stable_settings(state, timeout=0):
                         self.fail('Concurrent settings lock accepted')
+
+    def test_brief_settings_lock_contention_is_retried(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            lock_dir = state / 'display-preview'
+            lock_dir.mkdir()
+            descriptor = os.open(lock_dir / 'lock', os.O_CREAT | os.O_RDWR, 0o600)
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+
+            def release():
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+                os.close(descriptor)
+
+            timer = threading.Timer(0.05, release)
+            timer.start()
+            try:
+                with stable_settings(state, timeout=1):
+                    self.assertTrue(True)
+            finally:
+                timer.join()
 
     def test_durable_pause_and_locks_release_before_resume(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -5,6 +5,7 @@ import json
 import os
 import argparse
 from pathlib import Path
+import time
 
 from backup_service import Maintenance, HostServices
 from local_snapshots import Snapshots
@@ -12,18 +13,26 @@ from storage_guard import check
 
 
 @contextmanager
-def stable_settings(state):
+def stable_settings(state, *, timeout=5.0, monotonic=time.monotonic, sleep=time.sleep):
     """Hold existing transaction locks; never checkpoint an unconfirmed change."""
+    if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or timeout < 0:
+        raise ValueError('Invalid settings lock timeout')
+    deadline = monotonic() + timeout
     with ExitStack() as stack:
         for name in ('display-preview', 'network-transaction'):
             directory = Path(state) / name
             directory.mkdir(mode=0o700, exist_ok=True)
             descriptor = os.open(directory / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             stack.callback(os.close, descriptor)
-            try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as error:
-                raise RuntimeError('Settings operation in progress') from error
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError as error:
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        raise RuntimeError('Settings operation in progress') from error
+                    sleep(min(0.05, remaining))
             file = directory / 'state.json'
             if file.exists():
                 record = json.loads(file.read_text())

@@ -7,12 +7,28 @@ import socketserver
 import struct
 import subprocess
 import sys
+import tempfile
 import types
 import unittest
 from unittest.mock import Mock, patch
 
 
 class ManagementRuntimeTests(unittest.TestCase):
+    def test_clean_install_release_catalog_has_an_isolated_import_closure(self):
+        root = Path(__file__).resolve().parents[1]
+        installer = (root / 'provisioning/install.sh').read_text()
+        modules = ('appliance_release', 'release_policy', 'release_recovery_status', 'release_catalog')
+        for name in modules:
+            self.assertIn(f'appliance/lib/{name}.py" "$RUNTIME/{name}.py', installer)
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            for name in modules:
+                (runtime / f'{name}.py').write_bytes((root / 'appliance/lib' / f'{name}.py').read_bytes())
+            subprocess.run([sys.executable, '-I', '-B', '-c',
+                            'import sys;sys.path.insert(0,sys.argv[1]);import release_catalog', str(runtime)],
+                           check=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=10)
+
     def test_host_job_bridge_bounds_payload_and_preserves_confirmations(self):
         # Load the actual handler class without executing the root-owned socket
         # server's installation/startup code on the development machine.

@@ -11,7 +11,7 @@ import stat
 from urllib.parse import urlsplit
 
 from appliance_release import VERSION, unique, verify, require_compatible
-from release_recovery_bundle import active as active_recovery
+from release_recovery_status import active as active_recovery
 from release_policy import ReleasePolicy
 
 

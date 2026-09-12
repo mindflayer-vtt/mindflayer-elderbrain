@@ -405,6 +405,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_recovery_status.py",
+    "path": "runtime/release_recovery_status.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_recovery.py",
     "path": "runtime/release_recovery.py",
     "mode": 420

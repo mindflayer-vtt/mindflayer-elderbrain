@@ -126,6 +126,8 @@ install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_jobs.py" "$RUNTIME/host_jobs.py
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/power_service.py" "$RUNTIME/power_service.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/appliance_release.py" "$RUNTIME/appliance_release.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/update_request.py" "$RUNTIME/update_request.py"
+install -m 0644 "$PAYLOAD_DIR/appliance/lib/release_policy.py" "$RUNTIME/release_policy.py"
+install -m 0644 "$PAYLOAD_DIR/appliance/lib/release_recovery_status.py" "$RUNTIME/release_recovery_status.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/release_catalog.py" "$RUNTIME/release_catalog.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/local_snapshots.py" "$RUNTIME/local_snapshots.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/checkpoint_compatibility.py" "$RUNTIME/checkpoint_compatibility.py"

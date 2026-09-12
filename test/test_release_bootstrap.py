@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 from . import test_release_prepare as preparation_fixture
 from backup_service import Maintenance, save_record
 import release_bootstrap as bootstrap
+from release_recovery_status import active as recovery_status
 from release_staging import stage
 
 spec = importlib.util.spec_from_file_location(
@@ -192,6 +193,13 @@ class BootstrapTests(unittest.TestCase):
         recovery = self.root / 'usr/lib/elderbrain-recovery'
         self.assertEqual(launcher_module.selected(recovery),
                          recovery / baseline['bundle'] / 'release_recovery.py')
+        self.assertEqual(recovery_status(directory=recovery),
+                         {'bundle': baseline['bundle'], 'recoveryApi': 1})
+        unexpected = recovery / baseline['bundle'] / 'unexpected.pyc'
+        unexpected.write_bytes(b'diagnostic cache')
+        with self.assertRaisesRegex(ValueError, 'unexpected or missing'):
+            recovery_status(directory=recovery)
+        unexpected.unlink()
 
     def test_online_switch_reloads_live_systemd_manager(self):
         run = Mock()

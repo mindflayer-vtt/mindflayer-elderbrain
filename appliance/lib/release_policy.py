@@ -6,8 +6,33 @@ import re
 import stat
 
 from appliance_release import unique
-from backup_service import save_record
-from release_runtime import read_regular
+
+
+def read_regular(path, limit):
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= limit:
+            raise ValueError('Invalid release policy file')
+        value = stream.read(limit + 1)
+    if len(value) > limit:
+        raise ValueError('Release policy file exceeds limit')
+    return value
+
+
+def save_record(path, record):
+    temporary = path.with_suffix('.tmp')
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'w') as stream:
+        json.dump(record, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 MAX_SEQUENCE = 2 ** 63 - 1
 
