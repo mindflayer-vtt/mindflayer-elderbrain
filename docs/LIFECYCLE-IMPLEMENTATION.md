@@ -987,3 +987,15 @@ Read-only inspection of the VM's real cached Mindflayer server image passed with
 no pull or container action; helpers were copied only into its private test folder.
 This is not yet integrated into ordinary startup, installation or update activation;
 no newly labelled Setup image or complete signed production release was built.
+
+Added release Compose rendering: signed digest literals replace all four image
+references, Setup build configuration is removed, all services prohibit implicit
+pulls, and Setup's server-image metadata matches the coordinated release. Exact
+comparison tests prove all unrelated configuration/interpolation is preserved.
+The reviewed host package now carries a release-specific stack unit with no
+build/pull precommands, explicit --no-build/--pull never and bounded health/startup
+waits. Five tests pass, including real Docker Compose validation with Foundry's
+profile enabled (no daemon/container action). Host package round-trip tests pass.
+The installer bootstrap unit remains unchanged; activation still must render,
+validate and install this release runtime after prebuilt image/dependency setup.
+No live unit changed, and disconnected cold boot is not yet qualified.

@@ -275,6 +275,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_compose.py",
+    "path": "runtime/release_compose.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_images.py",
     "path": "runtime/release_images.py",
     "mode": 420
@@ -395,7 +400,7 @@
     "mode": 420
   },
   {
-    "source": "provisioning/systemd/elderbrain-stack.service",
+    "source": "release/elderbrain-stack.service",
     "path": "units/elderbrain-stack.service",
     "mode": 420
   },

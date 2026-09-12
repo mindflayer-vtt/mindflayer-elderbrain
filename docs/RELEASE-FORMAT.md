@@ -155,3 +155,22 @@ build arguments for those labels. Release builds must supply values matching the
 metadata; labels are compatibility declarations, not a substitute for API tests.
 Image preparation is not yet wired into the installer or updater, and the existing
 ordinary boot build/pull behavior is not changed by this helper.
+
+## Installed-release runtime configuration
+
+`release_compose.render` takes the authenticated Compose template and verified
+manifest and produces a staged configuration. All service image references are
+replaced by signed digests, build settings are removed, and every service receives
+`pull_policy: never`. Setup's advertised server image also comes from the release,
+not a stale image override in the persistent environment file. Other settings,
+including domain/port/state-path interpolation, mounts, secrets and Foundry's
+optional profile, are preserved. Extra services and indirect Compose includes or
+service extensions are rejected rather than escaping the coordinated image set.
+
+The host package uses `release/elderbrain-stack.service`, which runs no build/pull
+precommands and starts Compose with `--no-build --pull never`, a 120-second health
+wait and 300-second systemd startup timeout. Activation must generate and validate
+the staged Compose file before installing this unit. The fresh installer's older
+bootstrap unit is intentionally unchanged until the installer can supply verified
+prebuilt images and complete host dependencies. This is not yet an offline cold
+boot qualification or a live switch to the release runtime.
