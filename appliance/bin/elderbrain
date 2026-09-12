@@ -85,7 +85,6 @@ case ${1:-} in
     require_root
     exec python3 "$COMPOSE_DIR/backup_service.py" restore-recover ;;
   update) echo 'Updates are release-driven; see docs/ADMIN.md. No automatic update was performed.' ;;
-  reboot) require_root; systemctl reboot ;;
-  shutdown) require_root; systemctl poweroff ;;
+  reboot|shutdown) require_root; exec python3 "$COMPOSE_DIR/power_service.py" "$1" ;;
   *) usage; exit 2 ;;
 esac

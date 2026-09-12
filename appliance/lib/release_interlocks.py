@@ -40,6 +40,9 @@ def settings_admission(state):
     """Lock order is maintenance then display/network transaction lock."""
     maintenance = Maintenance(Path(state) / 'maintenance', None)
     with maintenance.locked():
+        from power_service import pending
+        if pending(state):
+            raise RuntimeError('A power operation is pending')
         if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
             raise RuntimeError('Recover maintenance before changing appliance settings')
         yield

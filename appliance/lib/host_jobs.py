@@ -166,6 +166,9 @@ class JobStore:
         gate = os.open(self.directory / "admission.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
             fcntl.flock(gate, fcntl.LOCK_EX)
+            from power_service import pending
+            if pending(self.directory.parent):
+                raise RuntimeError('A power operation is pending')
             if any(record["state"] in ACTIVE for record in self.list()):
                 raise RuntimeError("Another host job is running")
             identity = uuid.uuid4().hex

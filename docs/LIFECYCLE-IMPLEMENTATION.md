@@ -1621,3 +1621,17 @@ accepts the Git/dirty version labels produced by source-built ISOs as well as
 semantic host release versions. Eleven focused tests, shell syntax and whitespace
 checks pass. No ISO rebuild or live appliance mutation occurred; complete initial
 offline-baseline/release integration and fresh-ISO update testing remain pending.
+
+Replaced the CLI's unguarded reboot/shutdown calls with a host power coordinator.
+It requires verified persistent storage and holds job-admission, maintenance and
+display/network settings locks while checking for active workers or unfinished
+operations. Before requesting systemd power transition it durably records the
+current boot ID, preventing subsequent host-job and interactive settings admission
+in the acceptance-to-shutdown interval. Failed requests clear the pending state;
+records from an earlier boot do not block work after restart. Accepted requests
+are not claimed as physically completed; no power action was executed in tests.
+Thirty-six focused tests verify live-worker exclusion, maintenance/storage guards,
+pending settings, subsequent admission exclusion, failure and boot scoping. Shell
+syntax and whitespace checks pass. This is the CLI safety foundation, not the
+persistent power-job/UI or shutdown checkpoint/remote-backup workflow, which remain
+pending. No VM, Lenovo or development-PC power operation was sent.

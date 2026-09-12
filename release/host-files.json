@@ -180,6 +180,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/power_service.py",
+    "path": "runtime/power_service.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/host_jobs.py",
     "path": "runtime/host_jobs.py",
     "mode": 420
