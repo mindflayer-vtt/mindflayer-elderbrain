@@ -198,3 +198,32 @@ Docker image-store space accounting, recovery checkpoints, migration, activation
 health rollback and boot integration are still separate unfinished work. Image
 downloads can populate the cache on a failed preparation, but no images are run
 or deleted and no incomplete release directory is presented as activation-ready.
+
+## Target-platform dependency inputs
+
+`release/build-dependencies.py` builds an isolated offline-input directory on
+Ubuntu 26.04 amd64 with Python 3.14. Use a Python interpreter with pip available:
+
+```sh
+python -m pip --version
+python release/build-dependencies.py OUTPUT_NEW_DIRECTORY
+```
+
+The builder downloads/builds each exact pinned Python runtime package with
+`pip wheel --no-deps`, and packs the exact browser-helper package without running
+NPM lifecycle scripts. Its tarball must match the lockfile SHA-512 integrity.
+The serial requirements now include the transitive versions qualified in the VM;
+borgmatic already had a complete pinned runtime set. Pip's isolated *build*
+dependencies may still be downloaded during this release-builder operation.
+
+`dependencies.json` records input hashes, target/Python version, runtime pins and
+artifact sizes/SHA-256 digests. It currently declares `offlineInstallVerified:
+false`: building files alone is not offline qualification, signing or installation.
+The dependency directory is not yet included in the signed release manifest and
+must not be accepted from an untrusted source based on this unsigned receipt.
+
+The QEMU-only `test/qemu/offline-dependencies.sh` runs under `unshare --net`, creates
+fresh private test environments, uses pip `--no-index --no-deps` and npm `--offline`,
+and checks dependency consistency and imports without modifying live environments.
+Its input must be a trusted freshly built test bundle. Evidence for the initial
+successful target-platform run is recorded in `LIFECYCLE-IMPLEMENTATION.md`.

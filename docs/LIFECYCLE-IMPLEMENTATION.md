@@ -1012,3 +1012,26 @@ Compose failure with no published version, existing-version preservation, low
 space, concurrent preparation and private parent enforcement. Receipts explicitly
 remain dependenciesPrepared=false/activationReady=false: complete offline host
 dependencies and actual update activation/rollback are still unimplemented.
+
+Read-only VM inspection found Python 3.14.4 and Node 22.22.1; both installed
+Python environments passed pip check. Pinned serial's full 14-package runtime set
+to these qualified versions rather than leaving esptool transitive resolution
+open. Added a target-platform dependency builder: exact runtime pins, no runtime
+dependency resolution, reviewed browser graph plus SHA-512 lock integrity, and
+per-artifact/input hash receipts. Four input/platform tests pass.
+
+Real Ubuntu VM build completed in session 74336: 27 Python wheels plus the locked
+playwright-core archive at
+`/root/elderbrain-network-qualification-uVAuzb0L/dependencies-build-1`.
+Fresh disposable serial/borgmatic environments and browser helper then installed
+successfully under `unshare --net`, pip --no-index/--no-deps and npm --offline.
+Both pip checks passed; esptool 4.9.0, borgmatic 2.1.7 and Playwright import checks
+passed. Evidence environments remain at `/root/elderbrain-offline-deps-8C13ePwE`.
+Added the reusable QEMU-only offline check script with a network-namespace guard.
+No live runtime environment changed. All 409 host tests pass (five skipped).
+
+This qualifies the built dependency inputs, not complete release delivery:
+dependencies.json is still unsigned and intentionally reports verification false.
+The signed manifest/archive chain and durable preparation must incorporate and
+reverify these dependencies before any activationReady flag can become true.
+OS-level packages/Chrome/Docker compatibility and activation/rollback also remain.

@@ -3,6 +3,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 bash -n "$root/iso/select-storage.sh"
 bash -n "$root/test/qemu/preserve-baseline.sh"
+bash -n "$root/test/qemu/offline-dependencies.sh"
 # These are source files, not a Python virtual environment. A generic lib/
 # ignore rule must never silently omit the privileged host implementation.
 while IFS= read -r -d '' source; do
