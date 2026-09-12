@@ -1,0 +1,15 @@
+[Unit]
+Description=Verify Elderbrain persistent data using stable recovery code
+DefaultDependencies=no
+Before=network-pre.target shutdown.target
+Conflicts=shutdown.target
+RequiresMountsFor=/var/lib/mindflayer-elderbrain /usr/lib/elderbrain-recovery /usr/libexec
+BindsTo=var-lib-mindflayer\x2delderbrain.mount
+After=var-lib-mindflayer\x2delderbrain.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /usr/libexec/elderbrain-recovery.py storage
+RemainAfterExit=yes
+TimeoutStartSec=30
+UMask=0077

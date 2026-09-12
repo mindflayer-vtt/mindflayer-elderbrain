@@ -1,5 +1,20 @@
 [
   {
+    "source": "provisioning/update/elderbrain-update-recovery.service",
+    "path": "bootstrap/elderbrain-update-recovery.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/update/elderbrain-update-finish.service",
+    "path": "bootstrap/elderbrain-update-finish.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/update/writer-recovery.conf",
+    "path": "bootstrap/writer-recovery.conf",
+    "mode": 420
+  },
+  {
     "source": "provisioning/update/recovery-launcher.py",
     "path": "bootstrap/recovery-launcher.py",
     "mode": 420
@@ -465,7 +480,7 @@
     "mode": 420
   },
   {
-    "source": "provisioning/systemd/elderbrain-storage.service",
+    "source": "release/elderbrain-storage.service",
     "path": "units/elderbrain-storage.service",
     "mode": 420
   },

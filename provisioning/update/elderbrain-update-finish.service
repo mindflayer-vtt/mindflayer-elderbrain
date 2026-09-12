@@ -1,0 +1,17 @@
+[Unit]
+Description=Verify recovered Elderbrain update after normal service startup
+Requires=elderbrain-update-recovery.service
+After=elderbrain-update-recovery.service docker.service containerd.service
+After=elderbrain-stack.service elderbrain-management.service elderbrain-graphics.service
+After=elderbrain-display-watchdog.service elderbrain-network-watchdog.service
+After=elderbrain-network-confirmation.service elderbrain-admin-console.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /usr/libexec/elderbrain-recovery.py finish
+RemainAfterExit=yes
+TimeoutStartSec=30min
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

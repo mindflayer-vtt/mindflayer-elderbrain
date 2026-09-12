@@ -77,16 +77,22 @@ def selected(directory):
 
 
 def launch(phase, directory=Path('/usr/lib/elderbrain-recovery')):
-    if phase not in ('files', 'finish'):
+    if phase not in ('storage', 'files', 'finish'):
         raise ValueError('Invalid recovery phase')
     entrypoint = selected(directory)
-    os.execve('/usr/bin/python3', ['/usr/bin/python3', '-I', '-B', str(entrypoint), phase],
+    arguments = [str(entrypoint), phase]
+    if phase == 'storage':
+        guard = entrypoint.parent / 'storage_guard.py'
+        if not guard.is_file():
+            raise ValueError('Verified recovery bundle has no storage guard')
+        arguments = [str(guard)]
+    os.execve('/usr/bin/python3', ['/usr/bin/python3', '-I', '-B', *arguments],
               {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'})
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('phase', choices=('files', 'finish'))
+    parser.add_argument('phase', choices=('storage', 'files', 'finish'))
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise SystemExit('Update recovery requires root')

@@ -1,0 +1,22 @@
+[Unit]
+Description=Recover interrupted Elderbrain update before data writers
+DefaultDependencies=no
+Requires=elderbrain-storage.service
+After=elderbrain-storage.service
+Before=local-fs.target network-pre.target shutdown.target
+Before=etc-netplan.mount etc-ssh.mount root-.ssh.mount home-elderbrain\x2dinstaller-.ssh.mount
+Conflicts=shutdown.target
+RequiresMountsFor=/var/lib/mindflayer-elderbrain /usr/lib/elderbrain-recovery /usr/libexec
+BindsTo=var-lib-mindflayer\x2delderbrain.mount
+After=var-lib-mindflayer\x2delderbrain.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /usr/libexec/elderbrain-recovery.py files
+ExecStartPost=/usr/bin/systemctl daemon-reload
+RemainAfterExit=yes
+TimeoutStartSec=30min
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

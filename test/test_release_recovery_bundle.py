@@ -120,6 +120,14 @@ class RecoveryBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'private'):
             launcher.selected(self.directory)
 
+    def test_storage_phase_uses_verified_guard_outside_live_runtime(self):
+        result = self.install()
+        select(result['id'], directory=self.directory, maintenance=Maintenance(self.root / 'maintenance', None))
+        with patch.object(launcher.os, 'execve') as execute:
+            launcher.launch('storage', self.directory)
+        argv = execute.call_args.args[1]
+        self.assertEqual(argv, ['/usr/bin/python3', '-I', '-B', str(Path(result['directory']) / 'storage_guard.py')])
+
 
 if __name__ == '__main__':
     unittest.main()

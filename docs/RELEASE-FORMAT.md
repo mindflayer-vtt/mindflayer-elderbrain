@@ -479,3 +479,20 @@ private owner/modes before executing the selected entry point with isolated Pyth
 bytecode disabled and a clean environment. It imports no bundle code to perform
 these checks. The launcher is packaged under `bootstrap/`, deliberately outside
 the runtime deployment map; installing it and its boot units remains pending.
+
+The bootstrap now carries an early recovery unit, a later health-completion unit,
+a writer gate and a release-specific storage unit. The storage unit uses the
+verified bundle's `storage_guard.py`
+through the launcher's `storage` phase, so a missing live runtime cannot prevent
+recovery from checking the data volume. Storage verification depends on the data
+and code mounts, not local-fs.target or host alias mounts. Early recovery precedes
+those aliases and local-fs.target as well as networking: a host directory can be
+temporarily absent mid-rollback. Each alias mount and writer (including Docker's
+socket and containerd) needs a `Requires` plus `After` gate so failure blocks startup.
+Health completion follows the normal appliance services and is not a prerequisite
+of services it may restart. The bootstrap installer must install these fragments
+as one prerequisite to update admission; they are not enabled by packaging alone.
+
+The proposed unit graph passed `systemd-analyze verify` using actual appliance
+dependency declarations and stand-ins for missing OS mounts/executables. This is
+dependency/syntax verification, not an installed-VM cold-boot test.

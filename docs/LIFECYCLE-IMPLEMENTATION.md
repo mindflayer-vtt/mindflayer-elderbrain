@@ -1253,3 +1253,24 @@ runtime map. Four new tests cover verified launch arguments, protected selection
 tampering before execution and unsafe selector/module permissions. The focused
 bundle/package suite passes 13 tests. No live selector or boot files were changed;
 bootstrap installation and boot dependency ordering remain pending.
+
+Added packaged bootstrap recovery/finish units, a Requires+After writer gate and
+a release-specific storage unit. Inspection found the original storage unit launched its
+guard from /opt/mindflayer-elderbrain, which can be absent mid-switch. The launcher's
+new storage phase now uses the verified bundle guard. Early recovery runs after
+the data mount/storage check but before host aliases, local-fs.target and networking;
+finish follows normal workers so it can restart them without a dependency cycle.
+Four new tests cover stable guard execution, storage/writer directives and a real
+systemd-analyze dependency graph check. The graph test substitutes only unavailable
+application executables and OS mount/service fixtures; no units are installed or
+started. A direct development-host check first reported the expected missing data
+mount/appliance executables; the complete modeled graph then passed. Bootstrap
+installation and real VM boot qualification remain pending.
+
+Extending the graph test to actual host bind-mount dependencies exposed a cycle:
+the original storage unit waited for aliases whose directories recovery may need
+to restore. A dependency-reset drop-in did not remove these relationships, as
+confirmed by systemd-analyze. The complete release storage unit replaces that
+dependency set instead; the expanded graph with all four gated alias mounts now
+verifies successfully. The legacy provisioning storage unit remains unchanged
+until the bootstrap installer can install the complete recovery prerequisites.
