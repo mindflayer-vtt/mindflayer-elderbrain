@@ -91,6 +91,38 @@ class Activation:
         with self.admission(), self.maintenance.locked():
             return self.recover_locked(self.maintenance.previous())
 
+    def recover_files(self):
+        """Early boot only: caller orders this before every writer service.
+
+No Docker/config/health commands or service starts occur here. Pins and the
+nonterminal maintenance record survive until normal recovery verifies health.
+"""
+        with self.admission(), self.maintenance.locked():
+            record = self.maintenance.previous()
+            if record.get('operation') != 'update':
+                raise ValueError('This is not an interrupted update')
+            if record.get('state') in ('completed', 'rolled-back'):
+                return record
+            with self.exclusive():
+                self.services.assert_quiescent()
+                transaction = self.transaction(record)
+                self.write(record, 'recovery-required')
+                self.restore_files_locked(record, transaction)
+                self.refresh()
+            self.write(record, 'files-recovered')
+            return record
+
+    def restore_files_locked(self, record, transaction):
+        """Private shared rollback step; caller proves writers stopped."""
+        committed = transaction.journal.exists() and transaction.read()['state'] == 'committed'
+        if transaction.journal.exists() and not committed:
+            transaction.rollback()
+        if not committed and record['dataMayHaveChanged'] and not record['dataRolledBack']:
+            self.restore_checkpoint(record)
+            record['dataRolledBack'] = True
+            self.write(record, 'recovery-required')
+        return committed
+
     def recover_locked(self, record):
         if record.get('operation') != 'update':
             raise ValueError('This is not an interrupted update')
@@ -99,19 +131,11 @@ class Activation:
             return record
         transaction = self.transaction(record)
         self.write(record, 'recovery-required')
-        committed = False
         with self.exclusive():
             # Even a failed health check may leave new writers running. Never
             # replace code or restore data unless stopping them succeeds.
             self.services.stop(record['services'])
-            if transaction.journal.exists():
-                committed = transaction.read()['state'] == 'committed'
-                if not committed:
-                    transaction.rollback()
-            if not committed and record['dataMayHaveChanged'] and not record['dataRolledBack']:
-                self.restore_checkpoint(record)  # Must be idempotent across interruption.
-                record['dataRolledBack'] = True
-                self.write(record, 'recovery-required')
+            committed = self.restore_files_locked(record, transaction)
         self.refresh()
         self.services.validate()
         self.services.resume_restored(record['services'])

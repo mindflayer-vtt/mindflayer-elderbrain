@@ -51,6 +51,17 @@ class UpdateServices(HostServices):
         self.run(['systemctl', 'stop', *self.UNITS])
         super().stop(saved)
 
+    def assert_quiescent(self):
+        # containerd can keep containers alive when Docker uses live restore.
+        # Early recovery must precede both engines, not merely Docker's unit.
+        units = ('docker.service', 'containerd.service', 'elderbrain-stack.service',
+                 'elderbrain-graphics.service', 'elderbrain-backup.service',
+                 'elderbrain-network-recovery.service', *self.UNITS)
+        for unit in units:
+            result = self.run(['systemctl', 'is-active', unit], check=False)
+            if result.stdout.strip() not in ('inactive', 'failed') or result.returncode != 3:
+                raise RuntimeError('Early update recovery requires all writer services inactive')
+
     def validate(self):
         super().validate()
         document = json.loads(self.run([*self.compose, 'config', '--format', 'json']).stdout)

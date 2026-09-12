@@ -1209,3 +1209,14 @@ were unmounted and the loop device detached. Actual storage identity is checked 
 fixture mount UUID; runtime compatibility metadata is simulated. No live runtime,
 Foundry workload or appliance data was modified. This qualifies the data rollback
 adapter, not full update activation or boot-time power-loss recovery.
+
+Separated early update file recovery from running-service recovery. The shared
+rollback step is now used by recover_files, which checks all managed writers plus
+Docker/containerd are inactive before file changes, restores code/data and aliases,
+and leaves a files-recovered maintenance record with pins retained. No Docker,
+Compose validation or service start is attempted before boot writers are allowed.
+Normal recovery subsequently verifies health and completes/unpins. Four new tests
+cover early recovery without starts/pin release, rejection of active writers,
+repeat recovery without repeated data restoration and inactive/unknown unit checks.
+The focused activation/service suite passes 22 tests. Stable external worker and
+boot ordering are still required; this turn did not alter appliance boot units.

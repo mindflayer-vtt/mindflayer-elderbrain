@@ -425,3 +425,18 @@ refresh and pin-cleanup qualification on an isolated filesystem in QEMU using
 `test/qemu/update-checkpoints.py`. Runtime metadata is simulated; actual
 whole-appliance update rollback still requires combined VM qualification.
 Stable worker/boot recovery and the live update entry point remain unconnected.
+
+## Early-boot recovery phase
+
+`Activation.recover_files` separates file/data recovery from service startup. It
+requires the service adapter to prove Docker, containerd, the stack, graphics,
+backup/network recovery and managed workers are inactive before any file changes.
+It resolves the update journal and restores the checkpoint as needed, refreshes
+aliases and records `files-recovered`. It does not invoke Docker, validate live
+Compose, start services, release checkpoint pins or declare the update healthy.
+
+Later normal recovery performs service/configuration health checks and reaches
+`completed` or `rolled-back`; repeated early recovery does not repeat completed
+data rollback. The future boot unit must enforce ordering before every writer,
+not merely rely on these point-in-time inactive checks. Stable recovery code
+outside the replaced runtime and boot-unit integration remain pending.

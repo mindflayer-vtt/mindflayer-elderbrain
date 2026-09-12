@@ -61,6 +61,7 @@ class ActivationTests(unittest.TestCase):
         self.released = []
         self.restored = []
         self.lock_held = False
+        self.boot_quiescent = False
 
         @contextmanager
         def exclusive():
@@ -78,7 +79,8 @@ class ActivationTests(unittest.TestCase):
 
         def restore_checkpoint(record):
             self.assertTrue(self.lock_held)
-            self.assertEqual(self.services.events[-1], 'stop')
+            if not self.boot_quiescent:
+                self.assertEqual(self.services.events[-1], 'stop')
             (self.root / 'data').write_text((self.root / 'checkpoint').read_text())
             self.restored.append(record['id'])
 
@@ -210,6 +212,50 @@ class ActivationTests(unittest.TestCase):
         self.assertFalse(self.maintenance.journal.exists())
         self.assertEqual(self.services.events, [])
         self.assertEqual((self.root / 'runtime/VERSION').read_text(), 'old')
+
+    def interrupt_health(self):
+        def crash(saved):
+            (self.root / 'data').write_text('partial migration')
+            raise SystemExit('power loss')
+        with patch.object(self.services, 'resume_restored', side_effect=crash):
+            with self.assertRaises(SystemExit):
+                self.activate()
+        self.services.events.clear()
+
+    def test_early_boot_restores_files_without_starting_services_or_releasing_pins(self):
+        self.interrupt_health()
+        with patch.object(self.services, 'assert_quiescent', create=True,
+                          side_effect=lambda: setattr(self, 'boot_quiescent', True)) as check:
+            result = self.activation.recover_files()
+        check.assert_called_once()
+        self.assertEqual(result['state'], 'files-recovered')
+        self.assertEqual((self.root / 'runtime/VERSION').read_text(), 'old')
+        self.assertEqual((self.root / 'data').read_text(), 'original')
+        self.assertEqual(self.services.events, [])
+        self.assertEqual(self.released, [])
+        self.activation.recover()
+        self.assertEqual(self.maintenance.previous()['state'], 'rolled-back')
+        self.assertEqual(len(self.restored), 1)
+        self.assertEqual(len(self.released), 1)
+
+    def test_early_boot_refuses_live_writers_before_file_changes(self):
+        self.interrupt_health()
+        with patch.object(self.services, 'assert_quiescent', create=True,
+                          side_effect=RuntimeError('writers active')):
+            with self.assertRaisesRegex(RuntimeError, 'writers active'):
+                self.activation.recover_files()
+        self.assertEqual((self.root / 'runtime/VERSION').read_text(), 'new')
+        self.assertEqual((self.root / 'data').read_text(), 'partial migration')
+        self.assertEqual(self.released, [])
+
+    def test_early_boot_replay_does_not_repeat_data_restore(self):
+        self.interrupt_health()
+        with patch.object(self.services, 'assert_quiescent', create=True,
+                          side_effect=lambda: setattr(self, 'boot_quiescent', True)):
+            self.activation.recover_files()
+            self.activation.recover_files()
+        self.assertEqual(len(self.restored), 1)
+        self.assertEqual(self.services.events, [])
 
 
 if __name__ == '__main__':

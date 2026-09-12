@@ -105,6 +105,23 @@ class UpdateServiceTests(unittest.TestCase):
             self.services.resume_restored(self.saved)
         self.assertEqual(self.calls, [])
 
+    def test_early_recovery_checks_units_without_starting_docker(self):
+        calls = []
+        def inactive(args, **options):
+            calls.append(args)
+            return SimpleNamespace(stdout='inactive\n', returncode=3)
+        self.services.run = inactive
+        self.services.assert_quiescent()
+        self.assertIn(['systemctl', 'is-active', 'containerd.service'], calls)
+        self.assertIn(['systemctl', 'is-active', 'elderbrain-network-recovery.service'], calls)
+        self.assertTrue(all(args[:2] == ['systemctl', 'is-active'] for args in calls))
+        self.services.run = lambda *args, **options: SimpleNamespace(stdout='active\n', returncode=0)
+        with self.assertRaisesRegex(RuntimeError, 'inactive'):
+            self.services.assert_quiescent()
+        self.services.run = lambda *args, **options: SimpleNamespace(stdout='unknown\n', returncode=4)
+        with self.assertRaisesRegex(RuntimeError, 'inactive'):
+            self.services.assert_quiescent()
+
 
 if __name__ == '__main__':
     unittest.main()
