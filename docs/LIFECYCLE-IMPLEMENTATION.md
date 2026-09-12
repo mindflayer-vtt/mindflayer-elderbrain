@@ -683,3 +683,18 @@ The fixture simulates service health/runtime metadata and host alias refresh;
 it does not qualify actual Foundry containers or OS mount aliases. Production
 storage guards remain unchanged; the fixture checks its own mounted UUID.
 The installation disk, preserve baseline and running installer were untouched.
+
+Network transaction journals now represent absent files distinctly from empty
+files, allowing validated candidates to add/remove Netplan sources and recover
+exact previous contents/modes after timeout or process loss. External edits block
+rollback instead of being overwritten. All 55 network tests pass, including four
+new addition/deletion tests. This is groundwork for checkpoint network restore;
+checkpoint source preparation, timed restore entry point and UI remain pending.
+
+The preserve-test installer rebooted into the installed appliance. Console shows
+management started and stack startup running. SSH now presents
+SHA256:EkwA/FqKM4IDJd5cmOt1Ob4c1iYl+S0DY/2cmKO6gwk, unlike both the temporary live
+installer key and saved appliance identity. Neither trust file has been replaced.
+This requires diagnosis before claiming preserve-reinstall success; do not reseed
+the existing baseline or treat a new key as proof of preservation. Installed tty2
+may contain the bootstrap password and must not be captured.

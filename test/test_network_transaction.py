@@ -2,14 +2,58 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'appliance/lib'))
 spec = importlib.util.spec_from_file_location('network_transaction', ROOT / 'appliance/lib/network_transaction.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
 class NetworkTransactionTests(unittest.TestCase):
+    def test_added_and_removed_sources_roll_back_on_timeout(self):
+        self.store.stage({'50-network.yaml': {'before': self.before, 'after': None},
+                          '70-restored.yaml': {'before': None, 'after': self.after}}, 'ens3', seconds=15)
+        self.store.tick()
+        added = self.netplan / '70-restored.yaml'
+        self.assertFalse(self.source.exists())
+        self.assertEqual(added.read_bytes(), self.after)
+        self.clock += 16
+        self.assertEqual(self.store.tick()['phase'], 'rolled-back')
+        self.assertEqual(self.source.read_bytes(), self.before)
+        self.assertEqual(self.source.stat().st_mode & 0o777, 0o640)
+        self.assertFalse(added.exists())
+
+    def test_added_and_removed_sources_can_be_confirmed(self):
+        staged = self.store.stage({'50-network.yaml': {'before': self.before, 'after': None},
+                                   '70-restored.yaml': {'before': None, 'after': self.after}}, 'ens3')
+        self.store.tick()
+        self.assertEqual(self.store.confirm(staged['id'], 'trusted-destination')['phase'], 'confirmed')
+        self.assertFalse(self.source.exists())
+        self.assertEqual((self.netplan / '70-restored.yaml').read_bytes(), self.after)
+
+    def test_external_file_created_after_deletion_blocks_rollback(self):
+        self.store.stage({'50-network.yaml': {'before': self.before, 'after': None}}, 'ens3', seconds=15)
+        self.store.tick()
+        self.source.write_bytes(b'external replacement')
+        self.clock += 16
+        with self.assertRaisesRegex(ValueError, 'External edit'):
+            self.store.tick()
+        self.assertEqual(self.source.read_bytes(), b'external replacement')
+
+    def test_partial_addition_is_recovered_after_process_loss(self):
+        self.store.stage({'50-network.yaml': {'before': self.before, 'after': None},
+                          '70-restored.yaml': {'before': None, 'after': self.after}}, 'ens3')
+        record = self.store.read()
+        record['phase'] = 'applying'
+        self.store.write(record)
+        added = record['files']['70-restored.yaml']
+        self.store.replace('70-restored.yaml', added['after'], added['before'])
+        self.store.tick()
+        self.assertEqual(self.source.read_bytes(), self.before)
+        self.assertFalse((self.netplan / '70-restored.yaml').exists())
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

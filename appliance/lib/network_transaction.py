@@ -61,7 +61,11 @@ class NetworkTransaction:
     def file(self, name):
         parent = os.open(self.netplan, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
-            descriptor = os.open(self.filename(name), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+            try:
+                descriptor = os.open(self.filename(name), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+            except FileNotFoundError:
+                # Absence is durable rollback state, distinct from an empty file.
+                return {'bytes': None, 'mode': 0o600, 'uid': 0, 'gid': 0}
             with os.fdopen(descriptor, 'rb') as stream:
                 info = os.fstat(stream.fileno())
                 if not stat.S_ISREG(info.st_mode) or info.st_size > 2 * 1024 * 1024:
@@ -75,6 +79,16 @@ class NetworkTransaction:
         parent = os.open(self.netplan, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         temporary = '.network-' + secrets.token_hex(16)
         try:
+            if content is None:
+                try:
+                    info = os.stat(self.filename(name), dir_fd=parent, follow_symlinks=False)
+                except FileNotFoundError:
+                    return
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError('Refusing to remove an unsafe Netplan source')
+                os.unlink(name, dir_fd=parent)
+                os.fsync(parent)
+                return
             descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600, dir_fd=parent)
             with os.fdopen(descriptor, 'wb') as stream:
                 stream.write(base64.b64decode(content, validate=True))
@@ -125,11 +139,15 @@ class NetworkTransaction:
             for name, change in changes.items():
                 name = self.filename(name)
                 original = self.file(name)
-                if base64.b64decode(original['bytes']) != change['before']:
+                original_bytes = base64.b64decode(original['bytes']) if original['bytes'] is not None else None
+                if original_bytes != change['before']:
                     raise ValueError('Netplan source changed during preparation')
-                if not isinstance(change['after'], bytes) or len(change['after']) > 2 * 1024 * 1024:
+                if change['after'] is not None and (not isinstance(change['after'], bytes) or len(change['after']) > 2 * 1024 * 1024):
                     raise ValueError('Invalid Netplan candidate')
-                files[name] = {'before': original, 'after': base64.b64encode(change['after']).decode()}
+                if original_bytes is None and change['after'] is None:
+                    raise ValueError('Network change has neither an existing nor a candidate file')
+                files[name] = {'before': original, 'after':
+                               base64.b64encode(change['after']).decode() if change['after'] is not None else None}
             record = {'id': secrets.token_hex(16), 'phase': 'staged', 'interface': interface,
                       'deadline': self.clock() + seconds, 'expires': self.monotonic() + seconds, 'boot': self.boot, 'files': files,
                       'fingerprint': fingerprint, 'confirmation': confirmation}
