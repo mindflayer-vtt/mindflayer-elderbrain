@@ -562,3 +562,22 @@ checkpoint projection/staging/compatibility tests plus six snapshot tests and
 static checks pass, including capture timing and persisted compatibility data.
 The future activation coordinator must enforce this check and later add explicit
 migration support; exact comparison alone is not a completed coordinated updater.
+
+Manual/remote restore on persistent installations now creates a protected
+before-restore Btrfs checkpoint while writers are stopped, before the existing
+rollback archive and live file replacement. Display/network settings locks cover
+mutation and release before service resume. Checkpoint protection is released
+only after completed restore or recovered rollback; the checkpoint remains for
+retention. Generic restore recovery preserves commit-vs-rollback behavior. New
+ordering/failure tests pass; full host suite: 308 tests, 5 optional skips.
+Actual Btrfs integration of this new restore hook is still pending. This does not
+yet expose selective checkpoint activation or replace the manual archive path.
+
+VM2232 provisioning recovery completed. General appliance/browser/management
+bridge checks and all persistent-storage checks passed on the recovered install.
+Reloaded ssh.service so it serves the preserved host key, then successfully seeded
+a new test with preserve-baseline.sh. Persistent private evidence directory:
+`test/.qemu/preserve-20260912` (baseline.json, baseline.sha256, known_hosts).
+Use that exact directory for verification after the next OS reinstall. The old
+/tmp-baseline run remains unqualified; this is a new test. Current guest software
+is the old ISO payload; newer restore hooks are not deployed there.

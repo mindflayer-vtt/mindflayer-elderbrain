@@ -2,6 +2,7 @@
 import time
 import uuid
 from pathlib import Path
+from contextlib import nullcontext
 
 from backup_service import save_record
 from restore_transaction import RestoreTransaction
@@ -14,11 +15,15 @@ class RestoreCoordinator:
     make_rollback must create and validate a complete archive while writers are
     stopped. No live target is replaced before that callback succeeds.
     """
-    def __init__(self, maintenance, targets, make_rollback, *, refresh_targets=None):
+    def __init__(self, maintenance, targets, make_rollback, *, refresh_targets=None,
+                 before_restore=None, release_checkpoint=None, exclusive=nullcontext):
         self.maintenance = maintenance
         self.targets = targets
         self.services = maintenance.services
         self.make_rollback = make_rollback
+        self.before_restore = before_restore or (lambda record: None)
+        self.release_checkpoint = release_checkpoint or (lambda record: None)
+        self.exclusive = exclusive
         # Persistent-directory aliases must point at the newly installed trees
         # before configuration validation or any writer restarts. Recovery must
         # repeat this even after a crash between rename and mount refresh.
@@ -45,19 +50,23 @@ class RestoreCoordinator:
             transaction = self.transaction(record)
             self.write(record, "stopping")
             try:
-                self.services.stop(record["services"])
-                self.write(record, "creating-rollback")
-                record["rollbackArchive"] = str(self.make_rollback(record))
-                self.write(record, "preparing-restore")
-                transaction.prepare(staged_sources)
-                self.write(record, "installing-restore")
-                transaction.apply()
+                with self.exclusive():
+                    self.services.stop(record["services"])
+                    self.write(record, "creating-rollback")
+                    self.before_restore(record)
+                    self.write(record, "creating-rollback")
+                    record["rollbackArchive"] = str(self.make_rollback(record))
+                    self.write(record, "preparing-restore")
+                    transaction.prepare(staged_sources)
+                    self.write(record, "installing-restore")
+                    transaction.apply()
                 self.write(record, "verifying-restore")
                 self.refresh_targets()
                 self.services.validate()
                 self.services.resume_restored(record["services"])
                 transaction.commit()
                 self.write(record, "completed")
+                self.release_checkpoint(record)
                 return record
             except Exception:
                 # A failed start may have brought up some writers. Stop again
@@ -74,24 +83,22 @@ class RestoreCoordinator:
         if record.get("operation") != "restore":
             raise ValueError("This is not an interrupted restore")
         if record.get("state") in ("completed", "rolled-back"):
+            self.release_checkpoint(record)
             return record
         transaction = self.transaction(record)
         self.write(record, "recovery-required")
-        self.services.stop(record["services"])
-        if transaction.journal.exists():
-            if transaction.read()["state"] == "committed":
-                # Crash after commit but before the outer completion record:
-                # retain verified new data; recheck services rather than reverting.
-                self.refresh_targets()
-                self.services.validate()
-                self.services.resume_restored(record["services"])
-                self.write(record, "completed")
-                return record
-            transaction.rollback()
+        committed = False
+        with self.exclusive():
+            self.services.stop(record["services"])
+            if transaction.journal.exists():
+                committed = transaction.read()["state"] == "committed"
+                if not committed:
+                    transaction.rollback()
         self.refresh_targets()
         self.services.validate()
         self.services.resume_restored(record["services"])
-        self.write(record, "rolled-back")
+        self.write(record, "completed" if committed else "rolled-back")
+        self.release_checkpoint(record)
         return record
 
 
@@ -141,6 +148,26 @@ def alias_refresher(state, host_root, keys, identity):
     return refresh_verified
 
 
+def checkpoint_hooks(state, runtime, host_root, identity):
+    if identity is None:
+        return {}
+    from local_snapshots import Snapshots
+    from checkpoint_compatibility import capture
+    from snapshot_service import stable_settings
+    def guard():
+        if persistent_identity(state, host_root) != identity:
+            raise ValueError('Persistent storage changed during restore checkpoint')
+    snapshots = Snapshots(state, quiesce=nullcontext, guard=guard,
+                          compatibility=lambda: capture(runtime))
+    def before(record):
+        record['rollbackCheckpoint'] = snapshots.create('before-restore', owner=record['id'], purpose='restore')['id']
+    def release(record):
+        if record.get('rollbackCheckpoint'):
+            snapshots.unpin(record['rollbackCheckpoint'], record['id'], 'restore')
+    return {'before_restore': before, 'release_checkpoint': release,
+            'exclusive': lambda: stable_settings(state)}
+
+
 def restore_host(archive, state, runtime, maintenance, *, host_root=Path("/")):
     import backup_archive
     from backup_service import create_backup
@@ -188,7 +215,8 @@ def restore_host(archive, state, runtime, maintenance, *, host_root=Path("/")):
                                  host_root=host_root, operation=record)["archive"]
 
         return RestoreCoordinator(maintenance, targets, rollback,
-                                  refresh_targets=alias_refresher(state, host_root, targets, identity)).restore(sources)
+                                  refresh_targets=alias_refresher(state, host_root, targets, identity),
+                                  **checkpoint_hooks(state, runtime, host_root, identity)).restore(sources)
 
 
 def recover_host(state, runtime, maintenance, *, host_root=Path("/")):
@@ -201,4 +229,5 @@ def recover_host(state, runtime, maintenance, *, host_root=Path("/")):
     if not keys or not set(keys) <= set(known):
         raise ValueError("Invalid restore target list")
     return RestoreCoordinator(maintenance, {key: known[key] for key in keys}, None,
-                              refresh_targets=alias_refresher(state, host_root, keys, identity)).recover()
+                              refresh_targets=alias_refresher(state, host_root, keys, identity),
+                              **checkpoint_hooks(state, runtime, host_root, identity)).recover()

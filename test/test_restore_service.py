@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "appliance/lib"))
@@ -36,6 +37,52 @@ class Services:
 
 
 class RestoreServiceTests(unittest.TestCase):
+    def test_checkpoint_precedes_replacement_and_pin_release_follows_health(self):
+        def checkpoint(record):
+            self.assertEqual(self.services.events[-1], 'stop')
+            self.assertEqual((self.live / 'data').read_text(), 'old')
+            record['rollbackCheckpoint'] = 'a' * 32
+        def release(record):
+            self.assertEqual(record['state'], 'completed')
+            self.assertEqual(self.services.events[-1], 'resume')
+            self.assertEqual(record['rollbackCheckpoint'], 'a' * 32)
+            self.services.events.append('unpin')
+        self.coordinator.before_restore = checkpoint
+        self.coordinator.release_checkpoint = release
+        self.coordinator.restore({'elderbrain': self.staged})
+        self.assertEqual(self.services.events[-1], 'unpin')
+
+    def test_checkpoint_failure_keeps_live_data_and_resumes_old_services(self):
+        def fail(record):
+            raise RuntimeError('checkpoint capture failed')
+        self.coordinator.before_restore = fail
+        with self.assertRaisesRegex(RuntimeError, 'checkpoint capture failed'):
+            self.coordinator.restore({'elderbrain': self.staged})
+        self.assertEqual((self.live / 'data').read_text(), 'old')
+        self.assertEqual(self.maintenance.previous()['state'], 'rolled-back')
+        self.assertEqual(self.services.events[-1], 'resume')
+
+    def test_settings_lock_is_released_before_restore_or_rollback_resumes(self):
+        held = []
+        @contextmanager
+        def exclusive():
+            held.append(True)
+            try:
+                yield
+            finally:
+                held.pop()
+        original = self.services.resume_restored
+        def resume(saved):
+            self.assertFalse(held)
+            original(saved)
+        self.services.resume_restored = resume
+        self.coordinator.exclusive = exclusive
+        self.services.reject_new = True
+        with self.assertRaises(RuntimeError):
+            self.coordinator.restore({'elderbrain': self.staged})
+        self.assertFalse(held)
+        self.assertEqual((self.live / 'data').read_text(), 'old')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
