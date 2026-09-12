@@ -1,0 +1,115 @@
+"""Complete signed test-release activation on the identified disposable VM."""
+import argparse
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+from contextlib import nullcontext
+from unittest.mock import patch
+import uuid
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'appliance/lib'))
+from provisioning.recovery_bootstrap import provision, staged_payload
+from release_apply import activate
+from release_prepare import prepare
+from release_recovery import health
+
+
+def command(*args):
+    return subprocess.check_output(args, text=True, timeout=60).strip()
+
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('dependency_inputs', type=Path)
+parser.add_argument('--version', default='1.0.1')
+parser.add_argument('--fail-health', action='store_true')
+args = parser.parse_args()
+assert os.geteuid() == 0
+assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
+assert command('lsblk', '-dn', '-o', 'SERIAL', '/dev/vda') == 'elderbrain-vm-test'
+assert args.dependency_inputs.is_dir()
+runtime = Path('/opt/mindflayer-elderbrain')
+previous_version = (runtime / 'VERSION').read_text()
+previous_compose = (runtime / 'compose.yaml').read_bytes()
+current = yaml.safe_load((runtime / 'compose.yaml').read_bytes())
+references = {}
+for name, reference in {**{name: current['services'][name]['image'] for name in
+                         ('traefik', 'mindflayer-server', 'foundry')},
+                        'elderbrain-setup': 'elderbrain-setup-release-test:1.0.1'}.items():
+    image = json.loads(command('docker', 'image', 'inspect', reference))[0]
+    assert image['RepoDigests'], 'Signed test requires a real cached digest'
+    references[name] = image['RepoDigests'][0]
+evidence = Path(tempfile.mkdtemp(prefix='elderbrain-signed-activation-', dir='/root'))
+print('Evidence: ' + str(evidence), flush=True)
+spec = importlib.util.spec_from_file_location('assembler', ROOT / 'release/assemble.py')
+assembler = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(assembler)
+private, public = evidence / 'test-private.pem', evidence / 'test-public.pem'
+subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048',
+                '-out', str(private)], check=True, capture_output=True)
+private.chmod(0o600)
+subprocess.run(['openssl', 'pkey', '-in', str(private), '-pubout', '-out', str(public)], check=True, capture_output=True)
+metadata = {'format': 2, 'kind': 'mindflayer-elderbrain-release', 'version': args.version,
+    'platform': {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'},
+    'host': {'version': args.version, 'apiVersion': 1},
+    'setup': {'version': '1.0.1', 'image': references.pop('elderbrain-setup'), 'hostApi': {'min': 1, 'max': 1}},
+    'images': references, 'configurationSchema': 1, 'notes': 'Disposable VM signed activation only', 'downtimeSeconds': 120}
+bundle = evidence / 'bundle'
+assembler.assemble(metadata, ROOT, ROOT / 'release/host-files.json', bundle, private, public,
+                   dependency_directory=args.dependency_inputs)
+paths = {entry['path']: entry['mode'] for entry in assembler.host.entries(ROOT / 'release/host-files.json')}
+paths['runtime/VERSION'] = 0o644
+dependencies, prepared = evidence / 'dependencies', evidence / 'prepared'
+dependencies.mkdir(mode=0o700)
+prepared.mkdir(mode=0o700)
+manifest, signature, key = (bundle / 'manifest.json').read_bytes(), (bundle / 'manifest.sig').read_bytes(), public.read_bytes()
+prepare(bundle / 'elderbrain-host.tar.zst', manifest, signature, key, paths, directory=prepared,
+    platform=metadata['platform'], configuration_schema=1, environment_file=runtime / 'appliance.env',
+    allow_download=False, dependency_archive=bundle / 'elderbrain-dependencies.tar.zst', dependency_directory=dependencies)
+print('Signed runtime prepared from cached images and offline dependencies', flush=True)
+provision()
+command('systemctl', 'daemon-reload')
+marker = Path('/var/lib/mindflayer-elderbrain/foundry') / ('.elderbrain-rollback-test-' + uuid.uuid4().hex)
+injected = []
+if args.fail_health:
+    assert args.version + '\n' != previous_version
+    with marker.open('xb') as stream:
+        stream.write(b'before-update\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+def fail_health(saved, state, **options):
+    health(saved, state, **options)
+    if not injected:
+        assert (runtime / 'VERSION').read_text() == args.version + '\n'
+        with marker.open('wb') as stream:
+            stream.write(b'changed-by-new-release\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        injected.append(True)
+        raise RuntimeError('Injected post-start update health failure')
+with staged_payload() as (tree, _), \
+        (patch('release_apply.health', side_effect=fail_health) if args.fail_health else nullcontext()):
+    try:
+        result = activate(prepared / args.version, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
+                          platform=metadata['platform'], configuration_schema=1, parent=evidence)
+    except RuntimeError as error:
+        assert args.fail_health and str(error) == 'Injected post-start update health failure'
+        assert injected and marker.read_bytes() == b'before-update\n'
+        assert (runtime / 'VERSION').read_text() == previous_version
+        assert (runtime / 'compose.yaml').read_bytes() == previous_compose
+        record = json.loads(Path('/var/lib/mindflayer-elderbrain/maintenance/maintenance.json').read_text())
+        assert record['state'] == 'rolled-back' and record['dataRolledBack'] is True
+        print(json.dumps({'state': 'signed-update-code-and-data-rollback-passed', 'id': record['id'],
+                          'marker': str(marker), 'evidence': str(evidence)}), flush=True)
+    else:
+        assert not args.fail_health
+        assert result['state'] == 'completed' and result['version'] == args.version
+        assert (runtime / 'VERSION').read_text() == args.version + '\n'
+        print(json.dumps(result), flush=True)

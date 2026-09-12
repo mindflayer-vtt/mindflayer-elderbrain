@@ -575,3 +575,12 @@ remains open through file copying, activation and any immediate rollback. The
 adapter wires the fixed deployment map, pinned checkpoints, storage refresh and
 management/Setup health probes, and returns only id/state/version. This is not yet
 a public job/API entry point or evidence of completed end-to-end activation.
+
+`test/qemu/signed-activation.py` now provides real disposable-VM evidence for this
+adapter: complete signed format-2 activation of host/Setup 1.0.1, then a signed
+host 1.0.2 update with compatible unchanged Setup followed by injected post-start
+health failure. The latter restores previous code, exact Compose and a modified
+data fixture from its Btrfs checkpoint, then passes restored service health.
+Disposable signing keys and cached image digests are used without external
+publication. This does not qualify interrupted signed-update boot recovery,
+licensed Foundry data migration, or the still-pending public update job/API.

@@ -1435,3 +1435,35 @@ so signed cached-image qualification does not require an external test registry.
 npm reported one low-severity audit finding during installation; it was not
 remediated in this activation-wiring change. Full real signed preparation and
 activation/rollback qualification, plus the persistent public update job, remain.
+
+Real signed activation now passes on the disposable VM through
+test/qemu/signed-activation.py. Fresh disposable RSA keys sign a complete format-2
+release assembled from current reviewed host sources, previously built dependency
+inputs and real cached image digests. Preparation verifies signatures, installs
+dependencies offline into separate stable prefixes and checks the cached labelled
+Setup image; the current independent recovery bundle is installed before activation.
+The real release_apply adapter captures its pinned Btrfs checkpoint, deploys fixed
+targets and verifies live health. Update e4aafe18eb474e47a4f1aa7fd19a60ca completed
+as version 1.0.1. Evidence: /root/elderbrain-signed-activation-2qvck2rh.
+Installed VERSION is 1.0.1, stack/management/graphics are active, all three enabled
+containers are healthy and CA-verified Setup health returns {"ok":true}. No image
+was published externally and the optional licensed Foundry instance was not started.
+
+The same fixture now qualifies real code AND data rollback after startup. A second
+signed host release 1.0.2 reuses compatible Setup 1.0.1, captures a checkpoint with
+a dedicated hidden fixture file under Foundry data, passes real health once,
+writes changed fixture contents and injects a single health failure. All signing,
+staging, dependency/image checks, service operations, Btrfs snapshots, file/data
+transactions and bind-alias refreshes remain real; only the final health outcome
+is deliberately failed. Update c61c7f08a7094215bd57a505a4db9dd0 rolled back with
+dataRolledBack true. The fixture verified restored VERSION 1.0.1, exact original
+Compose bytes and original fixture contents, then real restored-service health.
+Evidence: /root/elderbrain-signed-activation-rc7pi8pr; checkpoint
+37be6dfea92c82024a0f43aed083569a. Marker retained as test evidence:
+/var/lib/mindflayer-elderbrain/foundry/.elderbrain-rollback-test-ceb12e066e9748b7952d82c828675d2f.
+Final direct checks confirmed stack/management/graphics active, no failed units and
+CA-verified Setup health {"ok":true}. This is live health-failure rollback, not
+interrupted signed-update boot recovery or actual licensed Foundry schema migration.
+Public persistent update jobs, production release/ISO integration and remaining
+goal features are still pending. PC stays on; no physical Lenovo or external
+repository/registry publication was involved.
