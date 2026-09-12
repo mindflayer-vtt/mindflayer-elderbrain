@@ -1926,3 +1926,17 @@ The VM and installation remained healthy, but delayed human input exhausted the
 observer and required running the same guest checks manually. The harness now
 starts that timer only after explicit operator acknowledgement and reports a clear
 terminal timeout instead of falling through to an ambiguous SSH error.
+
+The same production `4c53d74` ISO also completed a fresh install under OVMF using
+the explicit UEFI mode added to the host harness in `463cce0`. A diagnostic QEMU
+monitor command unintentionally stopped the VM during first-boot provisioning;
+the retained installation then resumed from the same disk and OVMF variable store
+without repair. It completed provisioning and passed the full guest, persistent
+storage, HTTPS/authentication and administration-UI checks. Runtime evidence
+confirmed `/sys/firmware/efi`, the GPT ESP at `/dev/vda2` mounted as VFAT on
+`/boot/efi`, separate ext4 OS and Btrfs persistent-data partitions, all baseline,
+stack, management, graphics and bounded wait-online units active, and no failed
+units. Password-only SSH was rejected. This qualifies fresh BIOS and UEFI install
+and additionally demonstrates recovery from an abrupt interruption during UEFI
+first boot; populated preserve reinstall and signed-update interruption matrices
+remain separate acceptance gates.
