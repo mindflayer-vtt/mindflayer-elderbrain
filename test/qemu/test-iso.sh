@@ -3,7 +3,9 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 ssh_port=${QEMU_SSH_PORT:-2222}
 vnc_display=${QEMU_VNC_DISPLAY:-0}
+firmware=${QEMU_FIRMWARE:-bios}
 [[ $ssh_port =~ ^[0-9]{1,5}$ && $vnc_display =~ ^[0-9]{1,2}$ ]] || { echo 'Invalid QEMU port/display' >&2; exit 2; }
+[[ $firmware == bios || $firmware == uefi ]] || { echo 'QEMU_FIRMWARE must be bios or uefi' >&2; exit 2; }
 [[ ${QEMU_STORAGE_PROMPTS_AUTOMATED:-0} =~ ^[01]$ ]] || { echo 'QEMU_STORAGE_PROMPTS_AUTOMATED must be 0 or 1' >&2; exit 2; }
 ((10#$ssh_port >= 1024 && 10#$ssh_port <= 65535)) || { echo 'SSH port must be 1024..65535' >&2; exit 2; }
 ssh_port=$((10#$ssh_port)); vnc_display=$((10#$vnc_display))
@@ -12,6 +14,15 @@ test_state="$ROOT/test/.qemu"; mkdir -p "$test_state"
 work_base=${QEMU_WORK_ROOT:-$test_state}
 mkdir -p "$work_base"
 work=$(mktemp -d "$work_base/run.XXXXXX")
+firmware_args=()
+if [[ $firmware == uefi ]]; then
+  ovmf_code=${QEMU_OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}
+  ovmf_vars_template=${QEMU_OVMF_VARS:-/usr/share/edk2/x64/OVMF_VARS.4m.fd}
+  [[ -r $ovmf_code && -r $ovmf_vars_template ]] || { echo 'Readable OVMF code and variable-store templates are required for UEFI' >&2; exit 2; }
+  ovmf_vars="$work/OVMF_VARS.4m.fd"
+  cp "$ovmf_vars_template" "$ovmf_vars"
+  firmware_args=(-drive "if=pflash,format=raw,readonly=on,file=$ovmf_code" -drive "if=pflash,format=raw,file=$ovmf_vars")
+fi
 if [[ -n ${QEMU_SSH_PRIVATE_KEY:-} ]]; then
   key=$QEMU_SSH_PRIVATE_KEY
   [[ -f $key && -f $key.pub ]] || { echo 'Supplied SSH key pair is missing' >&2; exit 2; }
@@ -45,9 +56,9 @@ cleanup() {
   if [[ -S $monitor ]]; then printf 'quit\n' | nc -q 0 -U "$monitor" >/dev/null 2>&1 || true; fi
 }
 trap cleanup EXIT
-echo 'Starting QEMU; the test explicitly selects the second, destructive Elderbrain boot entry.'
+echo "Starting QEMU with $firmware firmware; the test explicitly selects the second, destructive Elderbrain boot entry."
 echo 'At the storage console choose fresh, serial elderbrain-vm-test, then ERASE elderbrain-vm-test. This applies only to the newly created disposable disk above.'
-qemu-system-x86_64 "${accel[@]}" -m 4096 -smp 2 -drive "file=$disk,if=none,id=appliance-disk" -device virtio-blk-pci,drive=appliance-disk,serial=elderbrain-vm-test -cdrom "$iso" -boot once=d \
+qemu-system-x86_64 "${accel[@]}" "${firmware_args[@]}" -m 4096 -smp 2 -drive "file=$disk,if=none,id=appliance-disk" -device virtio-blk-pci,drive=appliance-disk,serial=elderbrain-vm-test -cdrom "$iso" -boot once=d \
   -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$ssh_port-:22" -vnc "127.0.0.1:$vnc_display" -monitor "unix:$monitor,server,nowait" -daemonize -pidfile "$work/qemu.pid"
 for attempt in $(seq 1 20); do [[ -S $monitor ]] && break; sleep 0.25; done
 sleep 15

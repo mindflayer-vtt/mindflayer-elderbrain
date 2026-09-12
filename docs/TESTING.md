@@ -51,6 +51,13 @@ storage directory, leaving monitor sockets and other runtime files under
 `QEMU_WORK_ROOT`. Each disk receives a unique directory; existing disks are not
 reused or overwritten.
 
+Set `QEMU_FIRMWARE=uefi` to run the same destructive fresh-install qualification
+under OVMF instead of legacy BIOS. Each run copies the OVMF variable-store template
+into its private runtime directory; the host template is never modified. The
+defaults are `/usr/share/edk2/x64/OVMF_CODE.4m.fd` and
+`/usr/share/edk2/x64/OVMF_VARS.4m.fd`; distributions with different paths can use
+`QEMU_OVMF_CODE` and `QEMU_OVMF_VARS`.
+
 The harness pauses its installation-readiness timer until the operator confirms
 that the final guarded storage prompt was submitted. This keeps human review time
 outside the bounded 30-minute install/provisioning window. A separate controller
