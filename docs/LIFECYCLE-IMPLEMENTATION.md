@@ -715,3 +715,42 @@ cloud-init schema validator (an initially attempted empty ssh_genkeytypes list
 was rejected and removed); two local policy/order tests and shell checks pass.
 No policy was applied to the VM and no keys were restored or baseline reseeded.
 A new ISO/preserve reinstall must verify this fix end to end before qualification.
+
+New independent SSH-fix preservation run seeded at
+`test/.qemu/preserve-sshfix-20260912` after stack/management/graphics were healthy
+and guest-storage.py passed. Its baseline checksum passes. Previous failed-run
+evidence remains untouched. New baseline OS UUID is
+589bfe02-676f-427d-857c-6f5608a7b29e, persistent data UUID remains
+84f7219a-b5db-4127-8ea8-2e6850746cf8, and expected host key is
+SHA256:EkwA/FqKM4IDJd5cmOt1Ob4c1iYl+S0DY/2cmKO6gwk.
+Fixed ISO built successfully from b3213854c772 (dirty marker only the unrelated
+user .gitignore edit):
+`/mnt/local-hdd-Stores2/elderbrain-ssh-preserve-xGN4gEA1/mindflayer-elderbrain-b3213854c772.iso`
+SHA256 a03d8bd0c5dab3f91a246cda1867ca6a3c4afeb0d70ea3628316f862edead3ae.
+Verified Ubuntu signature/checksum, changed the VM's ide1-cd0 to the new ISO,
+set next boot to CD and requested a graceful reboot. Installer selection and
+preserve confirmation remain pending. Reset boot order to disk after selecting
+the installer. Do not reseed the new baseline. No Ventoy/Lenovo changes.
+
+The VM reached the ISO GRUB menu and is now booting the live installer. A down/
+enter selection was sent near the menu timeout, so verify that the Elderbrain
+storage prompt actually appears (do not assume the selected entry). Subsequent
+boot order is reset to disk. No preserve inputs or formatting confirmation have
+been entered for this new run yet.
+
+The first boot was confirmed to be the generic Ubuntu language screen, with no
+installation started. Reset that idle live session, interrupted the GRUB timeout,
+and explicitly selected Elderbrain. Its storage prompt appeared. Entered preserve,
+verified displayed disk serial and both OS/data UUIDs against the SSH-fix baseline,
+then confirmed `REINSTALL OS elderbrain-vm-test`. The new preserve install is now
+authorized; continue observing this run, not restarting it. Boot order is disk.
+Final verification must use `test/.qemu/preserve-sshfix-20260912` unchanged.
+
+Network staging now accepts a complete archived /etc/netplan YAML file set and
+validates it in a private temporary root with the current compatible vendor/run
+layers. It emits additions/removals/replacements for the existing timed journal,
+rejects unsafe names/oversized values and concurrent source changes, and never
+writes live network files. Returned merged configuration/bytes stay private.
+All 24 staging/transaction tests pass, including file-set restoration and source
+conflicts. This does not yet connect checkpoints to the network coordinator or
+expose a network-restore UI. The fixed-ISO preserve install reached OS extraction.

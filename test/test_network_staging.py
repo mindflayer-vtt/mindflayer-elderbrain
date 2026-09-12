@@ -15,6 +15,34 @@ with patch.object(sys, 'path', [str(ROOT / 'appliance/lib'), *sys.path]):
 
 
 class NetworkStagingTests(unittest.TestCase):
+    def test_restore_stages_complete_file_set_and_preserves_live_sources(self):
+        before = self.source.read_bytes()
+        vendor = self.root / 'lib/netplan/10-vendor.yaml'
+        vendor.parent.mkdir(parents=True)
+        vendor.write_text('network: {version: 2}')
+        def validate(root, operation):
+            self.assertEqual(root.stat().st_mode & 0o777, 0o700)
+            self.assertFalse((root / 'etc/netplan/50-source.yaml').exists())
+            self.assertEqual((root / 'etc/netplan/70-archived.yaml').read_bytes(), before)
+            self.assertEqual((root / 'etc/netplan/70-archived.yaml').stat().st_mode & 0o777, 0o600)
+            self.assertEqual((root / 'lib/netplan/10-vendor.yaml').read_bytes(), vendor.read_bytes())
+            return {'network': {'version': 2}} if operation == 'get' else None
+        result = module.prepare_restore({'70-archived.yaml': before}, self.root, validate=validate)
+        self.assertEqual(result['changes'], {'50-source.yaml': {'before': before, 'after': None},
+                                            '70-archived.yaml': {'before': None, 'after': before}})
+        self.assertEqual(self.source.read_bytes(), before)
+        self.assertFalse((self.source.parent / '70-archived.yaml').exists())
+
+    def test_restore_rejects_paths_invalid_bytes_and_concurrent_changes(self):
+        for archived in ({}, {'../escape.yaml': b''}, {'x.yaml': 'text'}, {'x.yaml': b'x' * (2 * 1024 * 1024 + 1)}):
+            with self.assertRaises(ValueError):
+                module.prepare_restore(archived, self.root, validate=self.validate)
+        def validate(root, operation):
+            self.source.chmod(0o640)
+            return {}
+        with self.assertRaisesRegex(ValueError, 'changed during'):
+            module.prepare_restore({'70-archived.yaml': b'network: {version: 2}'}, self.root, validate=validate)
+
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)

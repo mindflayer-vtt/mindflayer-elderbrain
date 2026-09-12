@@ -7,6 +7,51 @@ import subprocess
 import tempfile
 import yaml
 from network_sources import rewrite
+from network_transaction import NetworkTransaction
+
+
+def prepare_restore(archived, root='/', validate=None):
+    """Validate a complete archived /etc/netplan set without live mutations.
+
+    Caller must verify/pin the checkpoint first. Returned configuration and file
+    bytes are private; the coordinator derives address confirmation separately.
+    Runtime/vendor Netplan layers remain those of the compatible installed OS.
+    """
+    validate = validate or netplan
+    if not isinstance(archived, dict) or not 1 <= len(archived) <= 64:
+        raise ValueError('Invalid archived Netplan file set')
+    for name, content in archived.items():
+        NetworkTransaction.filename(name)
+        if not isinstance(content, bytes) or len(content) > 2 * 1024 * 1024:
+            raise ValueError('Invalid archived Netplan file')
+    before = snapshot(root)
+    previous = {Path(name).name: value['content'] for name, value in before.items()
+                if name.startswith('etc/netplan/')}
+    with tempfile.TemporaryDirectory(prefix='elderbrain-network-restore-') as directory:
+        stage = Path(directory)
+        (stage / 'etc/netplan').mkdir(parents=True)
+        for name, value in before.items():
+            if name.startswith('etc/netplan/'):
+                continue
+            target = stage / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(value['content'])
+            target.chmod(0o600)
+        for name, content in archived.items():
+            target = stage / 'etc/netplan' / name
+            target.write_bytes(content)
+            target.chmod(0o600)
+        validate(stage, 'generate')
+        configuration = validate(stage, 'get')
+        baseline = fingerprint(before)
+        if fingerprint(snapshot(root)) != baseline:
+            raise ValueError('Netplan sources changed during restore validation')
+        changes = {name: {'before': previous.get(name), 'after': archived.get(name)}
+                   for name in sorted(set(previous) | set(archived))
+                   if previous.get(name) != archived.get(name)}
+        if not changes or len(changes) > 64:
+            raise ValueError('No network changes or too many changed sources')
+        return {'changes': changes, 'fingerprint': baseline, 'configuration': configuration}
 
 
 def snapshot(root='/'):
