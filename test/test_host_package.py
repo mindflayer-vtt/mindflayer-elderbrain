@@ -54,6 +54,9 @@ class HostPackageTests(unittest.TestCase):
     def test_reviewed_inventory_excludes_private_config_and_live_settings(self):
         entries = builder.entries(ROOT / 'release/host-files.json')
         self.assertGreater(len(entries), 70)
+        included = {entry['source'] for entry in entries}
+        self.assertTrue({str(file.relative_to(ROOT)) for file in (ROOT / 'appliance/lib').glob('*.py')} <= included,
+                        'Review new host modules into the release inventory')
         for entry in entries:
             self.assertTrue((ROOT / entry['source']).is_file())
             self.assertNotIn('/private/', entry['source'])

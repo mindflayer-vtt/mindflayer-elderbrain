@@ -973,3 +973,17 @@ unpinned images/metadata overrides, and insecure private-key permissions.
 Only temporary test-key releases were assembled. No production key, publication,
 registry write, installation or host hardware change occurred. Image existence/
 import, complete offline host dependencies and activation remain unimplemented.
+
+Signed release image preparation now defaults to local inspection only; missing
+images require explicit download permission. Pulls use only the signed digest and
+platform and are followed by registry-digest/local-ID/platform verification.
+Setup image version/API labels must match the signed manifest, and Setup-only
+preparation requires compatibility with the installed host API. No builds,
+container starts, tag changes or pruning occur. Added Setup Dockerfile metadata
+arguments and included the helper in the reviewed host package inventory.
+Seven tests cover offline/missing images, exact explicit pull/reinspection,
+signature ordering, digest/platform/label mismatches and API compatibility.
+Read-only inspection of the VM's real cached Mindflayer server image passed with
+no pull or container action; helpers were copied only into its private test folder.
+This is not yet integrated into ordinary startup, installation or update activation;
+no newly labelled Setup image or complete signed production release was built.

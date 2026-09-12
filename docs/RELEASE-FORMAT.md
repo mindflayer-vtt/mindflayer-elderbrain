@@ -132,3 +132,26 @@ This command is local assembly, not publication or appliance installation. It
 does not prove that referenced registry images exist or import them, and it does
 not resolve the host dependency packaging work described above. Signing a source
 archive is not proof that a release is ready for appliance deployment.
+
+## Explicit image preparation
+
+`release_images.prepare` authenticates the signed manifest before any Docker
+operation. By default it only inspects cached images; missing images fail without
+a network request. With explicit `allow_download=True`, missing images are pulled
+by signed digest and Linux architecture, then inspected again. It never builds,
+starts containers, changes tags, or prunes previous images. Installed host API
+compatibility is required when preparing Setup alone.
+
+Each cached image must prove its registry reference/digest, Linux architecture
+and local content ID. Setup additionally carries these image labels, checked
+against the signed release:
+
+- `org.opencontainers.image.version`
+- `io.mindflayer.elderbrain.host-api-min`
+- `io.mindflayer.elderbrain.host-api-max`
+
+The Setup Dockerfile accepts `SETUP_VERSION`, `HOST_API_MIN`, and `HOST_API_MAX`
+build arguments for those labels. Release builds must supply values matching the
+metadata; labels are compatibility declarations, not a substitute for API tests.
+Image preparation is not yet wired into the installer or updater, and the existing
+ordinary boot build/pull behavior is not changed by this helper.
