@@ -85,6 +85,9 @@ class NetworkCheckpointRestoreTests(unittest.TestCase):
         self.assertEqual(self.maintenance.previous()['state'], 'rolled-back')
         self.snapshots.unpin_owner.assert_called_once_with(self.maintenance.previous()['id'], 'restore')
         self.assertTrue(self.network.read()['cleanupComplete'])
+        with patch.object(self.network, 'write') as write:
+            self.network.finalize()
+            write.assert_not_called()
 
     def test_completed_network_restore_releases_without_service_calls(self):
         self.start()

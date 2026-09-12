@@ -187,7 +187,8 @@ class NetworkTransaction:
         # network lock is held: checkpoint capture takes these locks in reverse.
         with self.locked():
             record = self.read()
-        if record and record['phase'] in ('confirmed', 'rolled-back') and self.on_terminal is not None:
+        if (record and record['phase'] in ('confirmed', 'rolled-back')
+                and not record.get('cleanupComplete') and self.on_terminal is not None):
             self.on_terminal(record)
             if record.get('restoreOwner'):
                 with self.locked():

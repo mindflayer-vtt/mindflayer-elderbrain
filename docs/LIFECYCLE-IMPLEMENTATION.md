@@ -825,3 +825,22 @@ admission are still not connected; network checkpoint restore is not exposed yet
 The same live installer processes 21289/24511/24736 remain active; dpkg advanced
 to node-gyp at 09:52:14. No reinstall restart, baseline replacement, Ventoy copy
 or physical Lenovo access was performed.
+
+Network workers now lazily attach the checkpoint cleanup callback to their exact
+journal, including boot rollback and normal deadline/confirmation processing.
+Ordinary networking never constructs the checkpoint coordinator. Completed
+cleanup is skipped rather than rewriting/fsyncing its acknowledgment every tick.
+The snapshot recovery command routes network restores through their dedicated
+coordinator and does not run snapshot recovery if networking is still pending.
+All 79 network tests and the five snapshot-coordination tests pass. Production
+API/UI admission and real-VM network checkpoint restore qualification remain.
+
+The SSH-fix preserve reinstall completed and booted with the expected saved
+appliance host key. `preserve-baseline.sh verify` against the unchanged
+`test/.qemu/preserve-sshfix-20260912` baseline passed: OS replaced; data identity,
+fixture contents, SSH identity and settings preserved. The baseline checksum
+also passed. `guest-storage.py` passed its persistent aliases, OS/data separation,
+directory ownership/access and storage service dependency checks on that guest.
+This qualifies the populated BIOS preserve case for the b3213854c772 ISO, not
+UEFI, missing-data boot, offline startup or newer network-restore code. General
+installed-service/browser checks are running through exec session 29808.

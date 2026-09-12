@@ -33,10 +33,18 @@ def run_netplan(operation, timeout=30):
 
 def transaction():
     from network_confirmation import verify
+    def finalize(record):
+        if not record.get('restoreOwner') or record.get('cleanupComplete'):
+            return
+        # Lazy construction avoids touching checkpoint storage for ordinary
+        # networking. Pass this journal to avoid recursive worker construction.
+        from network_checkpoint_restore import coordinator
+        coordinator(network=store).finalize(record)
     store = NetworkTransaction('/var/lib/mindflayer-elderbrain/network-transaction',
         '/etc/netplan', apply=lambda: run_netplan('apply'),
         verify_confirmation=lambda proof, _public: verify(proof, store.read()),
-        verify_sources=lambda expected: fingerprint(snapshot()) == expected)
+        verify_sources=lambda expected: fingerprint(snapshot()) == expected,
+        on_terminal=finalize)
     return store
 
 

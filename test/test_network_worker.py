@@ -14,6 +14,28 @@ spec.loader.exec_module(module)
 
 
 class NetworkWorkerTests(unittest.TestCase):
+    @patch('network_checkpoint_restore.coordinator')
+    @patch.object(module, 'NetworkTransaction')
+    def test_restore_cleanup_uses_same_journal_and_is_lazy(self, transaction, coordinator):
+        store = module.transaction()
+        callback = transaction.call_args.kwargs['on_terminal']
+        coordinator.assert_not_called()
+        callback({'phase': 'confirmed'})
+        callback({'phase': 'confirmed', 'restoreOwner': 'a' * 32, 'cleanupComplete': True})
+        coordinator.assert_not_called()
+        record = {'phase': 'rolled-back', 'restoreOwner': 'a' * 32}
+        callback(record)
+        coordinator.assert_called_once_with(network=store)
+        coordinator.return_value.finalize.assert_called_once_with(record)
+
+    @patch('network_checkpoint_restore.coordinator')
+    @patch.object(module, 'NetworkTransaction')
+    def test_cleanup_failure_propagates_for_worker_retry(self, transaction, coordinator):
+        module.transaction()
+        coordinator.return_value.finalize.side_effect = RuntimeError('storage unavailable')
+        with self.assertRaisesRegex(RuntimeError, 'storage unavailable'):
+            transaction.call_args.kwargs['on_terminal']({'phase': 'rolled-back', 'restoreOwner': 'a' * 32})
+
     def process(self, popen):
         process = MagicMock()
         process.pid = 4321

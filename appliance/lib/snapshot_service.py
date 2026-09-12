@@ -85,6 +85,9 @@ def main():
         if maintenance.previous().get('operation') == 'restore':
             from restore_service import recover_host
             recover_host(snapshots.state, runtime, maintenance)
+        elif maintenance.previous().get('operation') == 'network-restore':
+            from network_checkpoint_restore import coordinator
+            coordinator(snapshots.state, runtime, maintenance=maintenance).recover()
         else:
             maintenance.recover()
         snapshots.recover()
