@@ -557,3 +557,10 @@ module, compares all installed launcher/unit/gate bytes, and checks enablement
 links. It runs under the migration's maintenance lock; it neither repairs files
 nor selects another bundle. The disposable VM migration adapter additionally
 checks effective systemd Requires/After dependencies for every writer/alias gate.
+
+Disposable-VM qualification now includes process loss after the original Compose
+file is moved out of its live path, followed by reboot. Early recovery restores
+the original Compose/startup-unit hashes and inodes before normal service startup;
+management and Setup health then pass. See `test/qemu/interrupted-baseline.py`.
+This is baseline file-migration recovery evidence, not full signed-release
+activation, application-data rollback or physical power-loss qualification.

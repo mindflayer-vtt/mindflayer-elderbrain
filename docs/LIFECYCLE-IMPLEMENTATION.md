@@ -1392,3 +1392,25 @@ The virtual link is restored and the PC remains on; Lenovo was not contacted.
 Interrupted-migration VM recovery, full signed-update activation/rollback and
 fresh-ISO prebuilt-image provisioning remain unqualified. Final local suite after
 strict proof metadata-permission checks: 519 tests, five skipped, passing.
+
+Actual interrupted-baseline boot recovery is now qualified on the disposable VM.
+test/qemu/interrupted-baseline.py installs matching independent recovery, prepares
+an offline baseline and injects SystemExit immediately after the real rename of
+live compose.yaml into its retained rollback location. The live Compose file is
+deliberately absent, the stack unit unchanged and maintenance remains installing.
+No archive/file-transaction/storage/service adapters are mocked; only the process
+loss injection wraps os.rename. Evidence:
+/root/elderbrain-interrupted-baseline-wx4ltz9i/evidence.json; migration
+78a9ce529c2c4d9191b63a1ed38f6225; source fixture
+/root/elderbrain-interruption-source-4QTwAsw7.
+
+After a graceful VM reboot, early recovery reported rolled-back at 4.096 seconds,
+before stack at 21.588 seconds, graphics at 21.761 seconds and finish at 21.927
+seconds. The verification phase proved a changed boot ID, original SHA256 hashes
+and inode numbers for both managed files, matching rolled-back maintenance ID,
+offline Compose validation and live management/CA-verified Setup health. No jobs
+or failed units remained. This tests process loss at a real file-switch boundary
+followed by reboot, not physical abrupt power loss or full signed update/data
+rollback. The existing offline baseline remains installed and functional. The
+focused migration/recovery suite passes 15 tests; diff whitespace check passes.
+The physical Lenovo was not contacted and the development PC remains on.
