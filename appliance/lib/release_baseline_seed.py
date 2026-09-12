@@ -5,6 +5,11 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
+
+# The stable launcher executes this file with isolated Python startup from the
+# independently retained recovery tree, not from the replaceable live runtime.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from appliance_release import unique
 from backup_service import Maintenance, save_record

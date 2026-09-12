@@ -173,8 +173,10 @@ or boot unit is changed here; existing bundles are verified, never overwritten.
             # Import the full dependency closure with no live-runtime search path
             # and no bytecode writes. This does not call either recovery phase.
             run(['/usr/bin/python3', '-I', '-B', '-c',
-                 'import sys; sys.path.insert(0,sys.argv[1]); import release_recovery; '
-                 'assert callable(release_recovery.recover)', str(staged)], check=True,
+                 'import sys; sys.path.insert(0,sys.argv[1]); '
+                 'import release_recovery, release_baseline_seed; '
+                 'assert callable(release_recovery.recover) and callable(release_baseline_seed.finalize)',
+                 str(staged)], check=True,
                 env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'}, cwd=work,
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
             verify_tree(staged, files, manifest)

@@ -1847,3 +1847,14 @@ strict greater-than ordering. Focused baseline, recovery-bundle, release-policy,
 payload, target and backup tests pass, and the installed systemd graph verifies
 outside the restricted sandbox. Full local suites and clean-ISO/VM qualification
 remain pending; no VM or physical appliance was changed for this milestone.
+
+The first clean BIOS qualification of commit `7aff5f7` reached the installed OS
+with the mutable bootstrap stack healthy, but the new baseline service failed
+closed before policy publication, management or graphics. Its verified recovery
+bundle contained `appliance_release.py`; the baseline script itself had not added
+that bundle directory to isolated Python's import path. The finalizer now applies
+the same explicit isolated-path setup as the main recovery entry point, and bundle
+publication imports both entry points before selection. Thirty-five focused
+baseline/bootstrap/bundle tests, including direct `runpy` execution under `-I`,
+pass. The failed VM and ISO are diagnostic evidence only; a rebuilt ISO must repeat
+clean installation before the baseline is qualified.

@@ -72,8 +72,14 @@ class RecoveryBundleTests(unittest.TestCase):
         self.assertEqual({file.stat().st_mode & 0o777 for file in destination.iterdir()}, {0o600})
         # The source staging context is gone; import must still be independent.
         subprocess.run(['/usr/bin/python3', '-I', '-B', '-c',
-                        'import sys;sys.path.insert(0,sys.argv[1]);import release_recovery;'
-                        'assert callable(release_recovery.recover)', str(destination)], check=True,
+                        'import sys;sys.path.insert(0,sys.argv[1]);'
+                        'import release_recovery,release_baseline_seed;'
+                        'assert callable(release_recovery.recover) and callable(release_baseline_seed.finalize)',
+                        str(destination)], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(['/usr/bin/python3', '-I', '-B', '-c',
+                        'import runpy,sys;runpy.run_path(sys.argv[1])',
+                        str(destination / 'release_baseline_seed.py')], check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def test_modified_existing_bundle_is_not_overwritten(self):
