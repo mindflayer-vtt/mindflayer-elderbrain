@@ -3,6 +3,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import stat
 import subprocess
@@ -11,6 +12,8 @@ import tempfile
 from release_prepare import sync_directory
 from release_runtime import private_directory, read_regular
 from release_staging import inventory
+from appliance_release import unique
+from backup_service import save_record
 
 
 def verify_tree(directory, files, manifest):
@@ -27,6 +30,37 @@ def verify_tree(directory, files, manifest):
         data = read_regular(file, 4 * 1024 ** 2)
         if len(data) != expected['size'] or hashlib.sha256(data).hexdigest() != expected['sha256']:
             raise ValueError('Recovery module bytes differ')
+
+
+def select(identity, *, directory, maintenance):
+    """Caller verified storage; serialized selection cannot change mid-update."""
+    if not isinstance(identity, str) or not re.fullmatch(r'[a-f0-9]{64}', identity):
+        raise ValueError('Invalid recovery bundle identity')
+    directory = private_directory(directory)
+    with maintenance.locked():
+        if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
+            raise RuntimeError('Cannot change recovery code during unfinished maintenance')
+        bundle = private_directory(directory / identity)
+        manifest = read_regular(bundle / 'bundle.json', 65536)
+        if hashlib.sha256(manifest).hexdigest() != identity:
+            raise ValueError('Recovery manifest identity differs')
+        value = json.loads(manifest, object_pairs_hook=unique)
+        if (not isinstance(value, dict) or set(value) != {'format', 'entrypoint', 'files'}
+                or type(value['format']) is not int or value['format'] != 1
+                or value['entrypoint'] != 'release_recovery.py' or not isinstance(value['files'], dict)
+                or not 1 <= len(value['files']) <= 256 or 'release_recovery.py' not in value['files']):
+            raise ValueError('Invalid recovery bundle manifest')
+        for name, item in value['files'].items():
+            if (not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*\.py', name) or not isinstance(item, dict)
+                    or set(item) != {'size', 'sha256'} or type(item['size']) is not int
+                    or not 0 < item['size'] <= 4 * 1024 ** 2 or not isinstance(item['sha256'], str)
+                    or not re.fullmatch(r'[a-f0-9]{64}', item['sha256'])):
+                raise ValueError('Invalid recovery module descriptor')
+        if sum(item['size'] for item in value['files'].values()) > 64 * 1024 ** 2:
+            raise ValueError('Recovery bundle exceeds limit')
+        verify_tree(bundle, value['files'], manifest)
+        save_record(directory / 'active.json', {'format': 1, 'bundle': identity})
+    return {'bundle': identity}
 
 
 def install(tree, allowed_paths, *, directory, run=subprocess.run):

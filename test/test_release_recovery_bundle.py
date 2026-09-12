@@ -1,11 +1,18 @@
 import json
+import importlib.util
 from pathlib import Path
 import subprocess
 import unittest
+from unittest.mock import patch
 
 import test.test_release_prepare as preparation_fixture
-from release_recovery_bundle import install
+from release_recovery_bundle import install, select
 from release_staging import stage
+from backup_service import Maintenance, save_record
+
+spec = importlib.util.spec_from_file_location('recovery_launcher', Path(__file__).resolve().parents[1] / 'provisioning/update/recovery-launcher.py')
+launcher = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(launcher)
 
 
 class RecoveryBundleTests(unittest.TestCase):
@@ -70,6 +77,48 @@ class RecoveryBundleTests(unittest.TestCase):
         self.directory.chmod(0o755)
         with self.assertRaisesRegex(ValueError, 'private canonical'):
             self.install()
+
+    def test_selection_and_verified_launcher_use_only_stable_bundle(self):
+        result = self.install()
+        maintenance = Maintenance(self.root / 'maintenance', None)
+        select(result['id'], directory=self.directory, maintenance=maintenance)
+        expected = Path(result['directory']) / 'release_recovery.py'
+        self.assertEqual(launcher.selected(self.directory), expected)
+        with patch.object(launcher.os, 'execve') as execute:
+            launcher.launch('files', self.directory)
+        execute.assert_called_once_with('/usr/bin/python3', ['/usr/bin/python3', '-I', '-B', str(expected), 'files'],
+                                        {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'})
+
+    def test_unfinished_maintenance_preserves_active_selection(self):
+        result = self.install()
+        maintenance = Maintenance(self.root / 'maintenance', None)
+        select(result['id'], directory=self.directory, maintenance=maintenance)
+        before = (self.directory / 'active.json').read_bytes()
+        save_record(maintenance.journal, {'operation': 'update', 'state': 'files-recovered'})
+        with self.assertRaisesRegex(RuntimeError, 'unfinished maintenance'):
+            select('a' * 64, directory=self.directory, maintenance=maintenance)
+        self.assertEqual((self.directory / 'active.json').read_bytes(), before)
+
+    def test_launcher_rejects_tampering_before_execution(self):
+        result = self.install()
+        select(result['id'], directory=self.directory, maintenance=Maintenance(self.root / 'maintenance', None))
+        (Path(result['directory']) / 'release_recovery.py').write_text('bad code')
+        with patch.object(launcher.os, 'execve') as execute:
+            with self.assertRaises(ValueError):
+                launcher.launch('finish', self.directory)
+        execute.assert_not_called()
+
+    def test_launcher_rejects_unsafe_selector_and_public_module(self):
+        result = self.install()
+        maintenance = Maintenance(self.root / 'maintenance', None)
+        select(result['id'], directory=self.directory, maintenance=maintenance)
+        save_record(self.directory / 'active.json', {'format': 1, 'bundle': '../escape'})
+        with self.assertRaisesRegex(ValueError, 'selection'):
+            launcher.selected(self.directory)
+        select(result['id'], directory=self.directory, maintenance=maintenance)
+        (Path(result['directory']) / 'release_recovery.py').chmod(0o644)
+        with self.assertRaisesRegex(ValueError, 'private'):
+            launcher.selected(self.directory)
 
 
 if __name__ == '__main__':

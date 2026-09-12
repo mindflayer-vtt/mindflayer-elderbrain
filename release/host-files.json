@@ -1,5 +1,10 @@
 [
   {
+    "source": "provisioning/update/recovery-launcher.py",
+    "path": "bootstrap/recovery-launcher.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/bin/elderbrain",
     "path": "bin/elderbrain",
     "mode": 493

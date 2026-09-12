@@ -470,3 +470,12 @@ parent must be private and separate from the source tree. This helper does not
 select the active bundle or install boot units. The update coordinator must retain
 a known recovery implementation outside its deployment targets before admission;
 the active selector/launcher and boot integration still need implementation.
+
+`release_recovery_bundle.select` now verifies a bundle and atomically selects its
+content hash under the maintenance lock, refusing unfinished operations. Existing
+bundles remain retained. The stdlib-only bootstrap launcher independently validates
+the selector, manifest digest, bounded module inventory, every module's digest and
+private owner/modes before executing the selected entry point with isolated Python,
+bytecode disabled and a clean environment. It imports no bundle code to perform
+these checks. The launcher is packaged under `bootstrap/`, deliberately outside
+the runtime deployment map; installing it and its boot units remains pending.

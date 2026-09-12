@@ -1242,3 +1242,14 @@ imports both before publication and after source staging is gone, repeat reuse,
 tampering, failed import, unexpected files and parent permissions. No VM or host
 appliance mutation occurred. Active bundle selection/launcher and boot integration
 remain pending, as does complete combined update/rollback qualification.
+
+Added maintenance-guarded active recovery bundle selection and a minimal stdlib
+bootstrap launcher. Selection verifies the content-addressed bundle and refuses
+unfinished maintenance before atomically updating active.json. The launcher checks
+selector schema, manifest hash, exact bounded module inventory, hashes and private
+permissions before any bundle import, then executes isolated Python with bytecode
+disabled and a clean environment. It ships in bootstrap/, not the replaceable
+runtime map. Four new tests cover verified launch arguments, protected selection,
+tampering before execution and unsafe selector/module permissions. The focused
+bundle/package suite passes 13 tests. No live selector or boot files were changed;
+bootstrap installation and boot dependency ordering remain pending.
