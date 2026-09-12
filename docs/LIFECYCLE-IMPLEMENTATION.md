@@ -541,3 +541,13 @@ Three boundary tests pass. These are private staging primitives only; they are
 not yet wired to checkpoint reads, transaction activation or an API/UI. Full
 selective rollback remains incomplete, including security, network and Foundry
 activation paths. Provisioning recovery remains active on VM2232.
+
+Added checkpoint_staging.py private staging for preferences, keypad settings and
+the whole Foundry data directory. It uses the component projections, emits fixed
+target maps and private fsynced JSON, preserves live files, validates canonical
+paths and rejects links in JSON paths plus unsafe links/special files in Foundry.
+Six projection/staging tests pass. Staging has no activation/API entry point;
+the coordinator must still verify/pin checkpoint identity and schema compatibility,
+quiesce writers, create a rollback checkpoint, activate/recover and release pins.
+Network/security/device identity coordinators remain required. This intermediate
+module is not yet installed by provisioning or available to end users.
