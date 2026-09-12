@@ -1574,3 +1574,25 @@ job reconciliation, power/backup controls and other goal requirements remain ope
 No physical appliance, production key, registry or external repository was changed.
 Full Python regression suite: 542 tests passed with five skipped; whitespace check
 also passes. This does not replace the pending real HTTPS end-to-end qualification.
+
+The real HTTPS-download-to-activation qualification now passes on the disposable
+QEMU VM. Source: /root/elderbrain-https-source-0R0OUiKV; evidence:
+/root/elderbrain-signed-activation-b3qn515x/job.json; job
+16993f81a849425a85bb27f34a5c12c7. The fixture reuses the prior disposable signing
+key, retains the old reviewed inventory and supplies the current reviewed one.
+Version 1.0.5 and its dependency prefix were absent before submission. The worker
+fetched manifest/signature and both archives over guest-CA-verified loopback HTTPS,
+prepared offline dependencies and cached immutable images, then activated in a
+separate live systemd scope after the submitter exited. The verifier confirmed
+completed 1.0.5, changed management InvocationID, matching maintenance job/operation
+IDs, offline Compose validation and real management/CA-verified Setup health.
+No failed units were present during activation. The server journal records HTTP
+200 for all four signed release files; images were cached, not registry-downloaded.
+
+Guarded cleanup reverified terminal success/health and exact fixture paths, stopped
+the transient HTTPS server and removed only its source configuration and guest TLS
+trust certificate. Evidence and signed artifacts remain. Fixture syntax, 25
+focused Python tests and whitespace checks pass. No production trust key, external
+publication or physical Lenovo contact occurred; the development PC remains on.
+Remaining goal work includes ISO trust provisioning, boot job reconciliation,
+power/backup controls, remaining restore/storage qualification and branded boot.

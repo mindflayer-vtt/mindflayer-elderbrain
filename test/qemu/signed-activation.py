@@ -11,6 +11,7 @@ from contextlib import nullcontext
 from unittest.mock import patch
 import uuid
 import hashlib
+import time
 
 import yaml
 
@@ -36,6 +37,7 @@ failures = parser.add_mutually_exclusive_group()
 failures.add_argument('--fail-health', action='store_true')
 failures.add_argument('--interrupt', action='store_true')
 failures.add_argument('--job', action='store_true')
+failures.add_argument('--download-job', type=Path, help='Reuse the explicitly identified prior disposable job signing fixture')
 args = parser.parse_args()
 assert os.geteuid() == 0
 assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
@@ -58,10 +60,18 @@ spec = importlib.util.spec_from_file_location('assembler', ROOT / 'release/assem
 assembler = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(assembler)
 private, public = evidence / 'test-private.pem', evidence / 'test-public.pem'
-subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048',
+if args.download_job:
+    previous = args.download_job.resolve()
+    assert previous.parent == Path('/root') and previous.name.startswith('elderbrain-signed-activation-')
+    assert (previous / 'job.json').is_file()
+    private, public = previous / 'test-private.pem', previous / 'test-public.pem'
+    assert public.read_bytes() == Path('/etc/elderbrain/release-public.pem').read_bytes(), 'Only reuse the prior disposable test pin'
+    assert not Path('/etc/elderbrain/release-source.json').exists(), 'Do not replace a configured source'
+else:
+    subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048',
                 '-out', str(private)], check=True, capture_output=True)
-private.chmod(0o600)
-subprocess.run(['openssl', 'pkey', '-in', str(private), '-pubout', '-out', str(public)], check=True, capture_output=True)
+    private.chmod(0o600)
+    subprocess.run(['openssl', 'pkey', '-in', str(private), '-pubout', '-out', str(public)], check=True, capture_output=True)
 metadata = {'format': 2, 'kind': 'mindflayer-elderbrain-release', 'version': args.version,
     'platform': {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'},
     'host': {'version': args.version, 'apiVersion': 1},
@@ -73,28 +83,61 @@ assembler.assemble(metadata, ROOT, ROOT / 'release/host-files.json', bundle, pri
 paths = {entry['path']: entry['mode'] for entry in assembler.host.entries(ROOT / 'release/host-files.json')}
 paths['runtime/VERSION'] = 0o644
 dependencies, prepared = evidence / 'dependencies', evidence / 'prepared'
-if args.job:
-    assert not Path('/etc/elderbrain/release-public.pem').exists(), 'Do not replace an existing release trust pin'
-    assert not Path('/etc/elderbrain/release-inventory.json').exists(), 'Do not replace an existing release inventory'
+if args.job or args.download_job:
+    if args.job:
+        assert not Path('/etc/elderbrain/release-public.pem').exists(), 'Do not replace an existing release trust pin'
+        assert not Path('/etc/elderbrain/release-inventory.json').exists(), 'Do not replace an existing release inventory'
     dependencies = Path('/usr/lib/elderbrain-dependencies')
     releases = Path('/var/lib/elderbrain-releases')
     releases.mkdir(mode=0o700, exist_ok=True)
     (releases / 'staging').mkdir(mode=0o700, exist_ok=True)
     prepared = releases / 'prepared'
-dependencies.mkdir(mode=0o700, exist_ok=args.job)
-prepared.mkdir(mode=0o700, exist_ok=args.job)
+dependencies.mkdir(mode=0o700, exist_ok=bool(args.job or args.download_job))
+prepared.mkdir(mode=0o700, exist_ok=bool(args.job or args.download_job))
 manifest, signature, key = (bundle / 'manifest.json').read_bytes(), (bundle / 'manifest.sig').read_bytes(), public.read_bytes()
-prepare(bundle / 'elderbrain-host.tar.zst', manifest, signature, key, paths, directory=prepared,
-    platform=metadata['platform'], configuration_schema=1, environment_file=runtime / 'appliance.env',
-    allow_download=False, dependency_archive=bundle / 'elderbrain-dependencies.tar.zst', dependency_directory=dependencies)
-print('Signed runtime prepared from cached images and offline dependencies', flush=True)
+if not args.download_job:
+    prepare(bundle / 'elderbrain-host.tar.zst', manifest, signature, key, paths, directory=prepared,
+        platform=metadata['platform'], configuration_schema=1, environment_file=runtime / 'appliance.env',
+        allow_download=False, dependency_archive=bundle / 'elderbrain-dependencies.tar.zst', dependency_directory=dependencies)
+    print('Signed runtime prepared from cached images and offline dependencies', flush=True)
+else:
+    assert not (prepared / args.version).exists() and not (dependencies / args.version).exists()
+    # Trust a fresh test TLS CA in this disposable guest only. No insecure TLS
+    # flags or environment overrides are passed to the isolated worker.
+    command('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+            '-subj', '/CN=Elderbrain disposable release test', '-addext', 'subjectAltName=IP:127.0.0.1',
+            '-addext', 'basicConstraints=critical,CA:TRUE', '-keyout', str(evidence / 'tls.key'), '-out', str(evidence / 'tls.crt'))
+    (evidence / 'tls.key').chmod(0o600)
+    ca = Path('/usr/local/share/ca-certificates') / (evidence.name + '.crt')
+    with ca.open('xb') as stream:
+        stream.write((evidence / 'tls.crt').read_bytes())
+    command('update-ca-certificates')
+    inventory_file = Path('/etc/elderbrain/release-inventory.json')
+    (evidence / 'previous-inventory.json').write_bytes(inventory_file.read_bytes())
+    inventory_file.write_text(json.dumps(paths))
+    with Path('/etc/elderbrain/release-source.json').open('x') as stream:
+        json.dump({'baseUrl': 'https://127.0.0.1:18443/'}, stream)
+    command('systemd-run', '--unit=elderbrain-release-test', '--collect', '--property=Type=exec',
+            '/usr/bin/python3', str(ROOT / 'test/qemu/https-release-server.py'), str(evidence))
+    from release_catalog import check
+    for attempt in range(20):
+        try:
+            checked = check()
+            break
+        except ConnectionRefusedError:
+            if attempt == 19:
+                raise
+            time.sleep(0.1)
+    assert checked['release']['manifestSha256'] == hashlib.sha256(manifest).hexdigest()
+    assert checked['release']['compatible'] is True
+    print('CA-verified HTTPS announcement checked; runtime not prepared', flush=True)
 provision()
 command('systemctl', 'daemon-reload')
-if args.job:
+if args.job or args.download_job:
     # Disposable VM only: independent pin and reviewed inventory. No production
     # key is generated or overwritten by this fixture.
-    for destination, value in ((Path('/etc/elderbrain/release-public.pem'), key),
-            (Path('/etc/elderbrain/release-inventory.json'), json.dumps(paths).encode())):
+    for destination, value in (() if args.download_job else ((Path('/etc/elderbrain/release-public.pem'), key),
+            (Path('/etc/elderbrain/release-inventory.json'), json.dumps(paths).encode()))):
         with destination.open('xb') as stream:
             os.fchmod(stream.fileno(), 0o644)
             stream.write(value)

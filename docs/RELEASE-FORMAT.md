@@ -686,3 +686,16 @@ directories and the current stable bootstrap are still prerequisites; production
 ISO trust provisioning and a real HTTPS-download-to-activation VM qualification
 remain pending. Failed dependency preparation may retain diagnostic prefixes;
 the worker does not overwrite these on retry. Power controls remain pending.
+
+The disposable VM now qualifies the complete HTTPS artifact-download path using
+`test/qemu/signed-activation.py --version 1.0.5 --download-job PRIOR_TEST_EVIDENCE`.
+It reuses only the explicitly identified prior test signing pin and serves the
+four release files from a loopback HTTPS fixture with an independently installed
+temporary guest CA. No TLS verification bypass is used. Both prepared runtime and
+dependency prefix are initially absent; the detached worker downloads, prepares,
+activates and passes actual management/Setup health after management restart.
+Images were already cached, so this test does not qualify a remote registry pull.
+`cleanup-https-release.py` requires a completed healthy job and exact fixture
+source/certificate matches before stopping the server and removing temporary TLS
+trust/source configuration. Signed release artifacts and evidence remain intact.
+Production ISO trust provisioning and physical-hardware qualification remain open.
