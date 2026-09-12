@@ -305,6 +305,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/release_runtime.py",
+    "path": "runtime/release_runtime.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/release_services.py",
     "path": "runtime/release_services.py",
     "mode": 420

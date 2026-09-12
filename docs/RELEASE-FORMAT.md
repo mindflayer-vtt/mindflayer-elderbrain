@@ -355,3 +355,23 @@ starting a display preview or network transaction, so these cannot begin during
 update health checks after settings locks are released for service startup.
 Status and existing confirmation/cancellation paths remain available. These gates
 do not enable an update API or replace the still-required stable recovery worker.
+
+## Reconstructing the activation candidate
+
+`release_runtime.candidate` ignores the prepared release's loose `tree` and
+reconstructs code from the retained, reauthenticated host archive. It also stages
+and verifies the dependency archive and input hashes, requires the stable-prefix
+installation receipt to match the manifest, reruns offline package/version/import
+checks, and inspects signed images with downloads disabled. Persistent storage
+identity is verified before work and again before yielding the private candidate.
+
+Compose is regenerated from the authenticated template and signed pins, then
+validated against the persistent environment. `appliance.env` and `sway.conf`
+become links to verified canonical persistent files; dependency links point to the
+non-relocatable installed prefix. No configuration is copied, initialized or
+overwritten. The context removes its private candidate when finished.
+
+This verifies archive provenance and installed dependency behavior, not a bytewise
+attestation of every installed environment file. Deployment access permissions,
+fixed target selection, checkpoint integration and the stable recovery worker
+remain necessary before using this candidate in actual activation.

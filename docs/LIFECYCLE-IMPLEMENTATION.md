@@ -1144,3 +1144,16 @@ Five new tests cover live flashing, stale worker records, owner/gate validation,
 live/interrupted maintenance exclusion and pending settings with no service stop
 or update journal. No VM or physical appliance changed this turn; stable-worker
 admission and actual update API/recovery wiring remain pending.
+
+Added release_runtime.candidate: reconstructs private code directly from the
+retained reauthenticated archives, ignores loose prepared code, checks dependency
+input binding and installation receipt identity, reruns seven offline dependency
+checks, verifies cached signed images without downloads, regenerates pinned Compose
+and validates it using persistent environment aliases. Storage identity is checked
+before and after preparation. Persistent settings are linked, never copied or
+overwritten; dependency links retain stable prefixes. Six tests cover ignoring a
+tampered loose code tree, archive tampering, mismatched installation receipt,
+missing/changed storage and broken dependencies before image work. Tests use real
+signature/archive reconstruction with mocked execution/storage, not live activation.
+Deployment permissions, fixed target/checkpoint adapters and the stable recovery
+worker remain pending. No appliance was changed this turn.
