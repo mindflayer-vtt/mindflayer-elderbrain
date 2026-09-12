@@ -14,6 +14,16 @@ from backup_service import save_record
 
 
 class JobTests(unittest.TestCase):
+    def test_worker_launch_uses_independent_scope_and_inherited_lock(self):
+        with patch('host_jobs.subprocess.Popen', return_value=SimpleNamespace(wait=lambda: None)) as launch:
+            record = self.store.submit('snapshot-create')
+        args = launch.call_args.args[0]
+        self.assertEqual(args[:4], ['systemd-run', '--scope', '--quiet', '--collect'])
+        self.assertIn('--unit=elderbrain-job-' + record['id'], args)
+        self.assertIn('--expand-environment=no', args)
+        self.assertTrue(launch.call_args.kwargs['start_new_session'])
+        self.assertEqual(len(launch.call_args.kwargs['pass_fds']), 1)
+
     def test_checkpoint_restore_admission_rejects_unsafe_or_unconfirmed_selection(self):
         valid = {'checkpoint': 'b' * 32, 'components': ['preferences'], 'confirmRestore': True}
         for changes in ({'confirmRestore': False}, {'checkpoint': '../disk'},

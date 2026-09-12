@@ -138,7 +138,14 @@ class JobStore:
                         inherited += (secret_fd,)
                     # Inherited lock bridges admission to worker startup, avoiding
                     # any interval in which a queued job is misread as interrupted.
-                    process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
+                    # A new session alone stays in management.service's cgroup.
+                    # A separate scope preserves inherited lock/secret FDs while
+                    # surviving a bridge restart. No credentials enter unit
+                    # properties, argv, the journal, or temporary disk files.
+                    process = subprocess.Popen(['systemd-run', '--scope', '--quiet', '--collect',
+                                                '--unit=elderbrain-job-' + identity,
+                                                '--expand-environment=no', '--',
+                                                sys.executable, str(Path(__file__).resolve()),
                                                 "worker", str(self.directory), identity, str(fd), str(secret_fd if secret_fd is not None else -1)],
                                                pass_fds=inherited, stdin=subprocess.DEVNULL,
                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

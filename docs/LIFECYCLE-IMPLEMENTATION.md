@@ -638,3 +638,14 @@ activation remains unqualified. Worker cgroup durability and dedicated
 network/security/device-identity restore paths remain outstanding.
 The same VM reinstall has progressed through GRUB/security updates to running
 the Elderbrain provisioning script. Preserve-data verification is still pending.
+
+Host job workers now launch in uniquely named systemd scopes instead of remaining
+inside management.service's cgroup. The scope preserves inherited worker-lock and
+memory-only passphrase descriptors; no secret is added to unit properties or argv.
+Sixteen host-job tests pass. `python3 test/host-job-scope.py` also passed against
+real, disposable user systemd units: stopping the launcher service did not stop
+the worker or release its inherited lock, and the memory-only input survived.
+The test cleans up only its unique fixture units. Root system-manager/appliance
+restart testing remains pending; local root access requires a password. Jobs
+still require recovery after power loss and can be interrupted before scope
+handoff; no automatic replay of destructive operations is introduced.
