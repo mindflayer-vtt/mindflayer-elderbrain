@@ -1903,3 +1903,26 @@ QEMU reset with its link still disabled. After link restoration, baseline, stack
 management and graphics were all active; the wait journal recorded timeout at
 30.1 seconds, treated it as a successful bounded result, and `systemctl --failed`
 was empty.
+
+A production tracked-commit ISO was then rebuilt from `4c53d74` with semantic
+version 1.0.0, release sequence 1 and source identity
+`3917ffe9d2531b351d6d726f5ed92efc490be07fc42a17e1ea2ecef717fd54cc`.
+Its SHA-256 is `5eaa150ef722e8844a8218760731876977e31975993813480123a5d97f46a0b7`,
+and inspection found both BIOS and EFI El Torito entries. A fresh BIOS install on
+a new 96 GiB QCOW2 reached immutable baseline sequence 1 and passed the complete
+guest checks for storage separation and identity, fixed aliases, coordinated
+containers, v3 keypad tooling, the management bridge, administration CA/HTTPS,
+authentication/CSRF/logout, bootstrap policy, graphical window and host metrics.
+Password SSH was rejected. The production-installed wait-online drop-in exactly
+matched the source digest. An abrupt reset with the virtual link disabled returned
+the full Chromium login page from cached images before link restoration. The boot
+ID changed, the wait timed out at 35.97 seconds with a successful unit result, all
+baseline/stack/management/graphics/wait units were active, and no failed unit
+remained.
+
+That run also showed the old QEMU harness started its 30-minute readiness timer
+before an operator completed the deliberately interactive destructive prompts.
+The VM and installation remained healthy, but delayed human input exhausted the
+observer and required running the same guest checks manually. The harness now
+starts that timer only after explicit operator acknowledgement and reports a clear
+terminal timeout instead of falling through to an ambiguous SSH error.

@@ -4,6 +4,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 ssh_port=${QEMU_SSH_PORT:-2222}
 vnc_display=${QEMU_VNC_DISPLAY:-0}
 [[ $ssh_port =~ ^[0-9]{1,5}$ && $vnc_display =~ ^[0-9]{1,2}$ ]] || { echo 'Invalid QEMU port/display' >&2; exit 2; }
+[[ ${QEMU_STORAGE_PROMPTS_AUTOMATED:-0} =~ ^[01]$ ]] || { echo 'QEMU_STORAGE_PROMPTS_AUTOMATED must be 0 or 1' >&2; exit 2; }
 ((10#$ssh_port >= 1024 && 10#$ssh_port <= 65535)) || { echo 'SSH port must be 1024..65535' >&2; exit 2; }
 ssh_port=$((10#$ssh_port)); vnc_display=$((10#$vnc_display))
 for command in qemu-system-x86_64 qemu-img ssh ssh-keygen nc; do command -v "$command" >/dev/null || { echo "missing QEMU test dependency: $command" >&2; exit 2; }; done
@@ -51,10 +52,20 @@ qemu-system-x86_64 "${accel[@]}" -m 4096 -smp 2 -drive "file=$disk,if=none,id=ap
 for attempt in $(seq 1 20); do [[ -S $monitor ]] && break; sleep 0.25; done
 sleep 15
 printf 'sendkey down\nsendkey ret\n' | nc -q 0 -U "$monitor" >/dev/null
+if [[ ${QEMU_STORAGE_PROMPTS_AUTOMATED:-0} != 1 ]]; then
+  printf '%s\n' 'Complete the fresh/preserve, exact serial and final confirmation prompts in the VM console.'
+  printf '%s' 'Press Enter here only after submitting the final storage confirmation: '
+  read -r
+fi
+ready=0
 for attempt in $(seq 1 180); do
-  ssh -i "$key" -p "$ssh_port" -o IdentitiesOnly=yes -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=3 root@127.0.0.1 'test -f /opt/mindflayer-elderbrain/VERSION && test -f /etc/elderbrain/storage.json' 2>/dev/null && break
+  if ssh -i "$key" -p "$ssh_port" -o IdentitiesOnly=yes -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=3 root@127.0.0.1 'test -f /opt/mindflayer-elderbrain/VERSION && test -f /etc/elderbrain/storage.json' 2>/dev/null; then
+    ready=1
+    break
+  fi
   sleep 10
 done
+((ready == 1)) || { echo 'Installed appliance did not become SSH-ready within 30 minutes after storage confirmation' >&2; exit 1; }
 ssh_cmd=(ssh -i "$key" -p "$ssh_port" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=5 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@127.0.0.1)
 "${ssh_cmd[@]}" 'bash -s' < "$ROOT/test/qemu/guest-checks.sh"
 "${ssh_cmd[@]}" 'python3 -' < "$ROOT/test/qemu/guest-storage.py"

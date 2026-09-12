@@ -51,6 +51,13 @@ storage directory, leaving monitor sockets and other runtime files under
 `QEMU_WORK_ROOT`. Each disk receives a unique directory; existing disks are not
 reused or overwritten.
 
+The harness pauses its installation-readiness timer until the operator confirms
+that the final guarded storage prompt was submitted. This keeps human review time
+outside the bounded 30-minute install/provisioning window. A separate controller
+that submits all three prompts immediately may set
+`QEMU_STORAGE_PROMPTS_AUTOMATED=1`; this only skips the terminal pause and does not
+weaken or bypass any in-guest storage confirmation.
+
 `test/qemu/live-nfs.py --confirm-disposable-vm` is an additional root-only test
 for a disposable installed VM with `nfs-kernel-server` installed and
 `nfs-server.service` active. Copy it into that VM and run it there, never on the
