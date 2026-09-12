@@ -22,7 +22,9 @@ docker image inspect "$(sed -n 's/^MINDFLAYER_SERVER_IMAGE=//p' /opt/mindflayer-
 including Foundry data, appliance configuration and secrets, Mindflayer identity
 and device credentials, firmware, Traefik state, browser state, managed service
 configuration, SSH server configuration and the root/installer SSH directories
-when present. Archives are mode 0600 but **not encrypted**; keep them private.
+when present. The root-only administration CA authority is included so restored
+appliances retain client trust; Traefik state contains only the public CA copy and
+leaf serving material. Archives are mode 0600 but **not encrypted**; keep them private.
 Password-encrypted CLI exports are available with `elderbrain backup-encrypted
 [destination]`. GPG AES256 encryption wraps the `.tar.zst` as `.tar.zst.gpg`.
 The CLI prompts without echo; automation can supply `--passphrase-fd N` using a
@@ -107,7 +109,9 @@ The web UI stores a Foundry timed URL or account credentials in a mode-0600 Dock
 Administration now requires HTTPS and redirects HTTP requests. First boot prepares
 a local CA and appliance certificate and installs local browser trust. Remote
 clients need to trust the appliance CA after verifying it through a trusted local
-channel, or use an externally managed certificate. Foundry retains its separate
+channel, or use an externally managed certificate. The CA signing key is retained
+under root-only host state and is not mounted into Traefik; only its leaf TLS key
+and certificate are mounted individually. Foundry retains its separate
 login and routing. Installed-appliance TLS verification passed in a clean VM. Neither
 public ACME nor external DNS is assumed.
 

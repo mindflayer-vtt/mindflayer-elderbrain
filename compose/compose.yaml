@@ -23,7 +23,10 @@ services:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/traefik:/etc/traefik/dynamic:ro
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/traefik/admin-tls.yaml:/etc/traefik/dynamic/admin-tls.yaml:ro
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/traefik/lan-routes.yaml:/etc/traefik/dynamic/lan-routes.yaml:ro
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/traefik/tls/admin.crt:/etc/traefik/dynamic/tls/admin.crt:ro
+      - ${ELDERBRAIN_STATE:-/var/lib/mindflayer-elderbrain}/traefik/tls/admin.key:/etc/traefik/dynamic/tls/admin.key:ro
     networks: [proxy]
     healthcheck:
       test: [CMD, traefik, healthcheck, --ping]

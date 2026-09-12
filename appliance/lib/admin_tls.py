@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import secrets
 import ssl
+import stat
 import subprocess
 import tempfile
 
@@ -56,30 +57,62 @@ def replace(path, data):
         temporary.unlink(missing_ok=True)
 
 
-def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik'):
+def validate_layout(directory='/var/lib/mindflayer-elderbrain/traefik',
+                    ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
+    root, ca = Path(directory), Path(ca_directory)
+    tls = root / 'tls'
+    for path in (root, tls, ca):
+        info = path.lstat()
+        if (path.resolve() != path or not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.geteuid() or info.st_mode & 0o022):
+            raise ValueError('Unsafe administration TLS directory')
+    if (tls / 'ca.key').exists() or (tls / 'ca.key').is_symlink():
+        raise ValueError('CA signing key must not be present in served TLS state')
+    for path, private in ((ca / 'ca.key', True), (ca / 'ca.crt', False),
+                          (tls / 'admin.key', True), (tls / 'admin.crt', False),
+                          (tls / 'ca.crt', False)):
+        info = path.lstat()
+        if (path.resolve() != path or not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid() or info.st_mode & (0o077 if private else 0o022)):
+            raise ValueError('Unsafe administration TLS material')
+    if (ca / 'ca.crt').read_bytes() != (tls / 'ca.crt').read_bytes():
+        raise ValueError('Served CA certificate differs from signing authority')
+    openssl(['verify', '-CAfile', ca / 'ca.crt', tls / 'admin.crt'])
+    ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(tls / 'admin.crt', tls / 'admin.key')
+    certificate_key = openssl(['x509', '-in', ca / 'ca.crt', '-pubkey', '-noout'])
+    signing_key = openssl(['pkey', '-in', ca / 'ca.key', '-pubout'])
+    if certificate_key != signing_key:
+        raise ValueError('Administration CA certificate and key differ')
+    return {'state': 'valid'}
+
+
+def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
+                   ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
     address = unicast(address)
     root = Path(directory)
+    ca = Path(ca_directory)
     tls = root / 'tls'
     certificate, key = tls / 'admin.crt', tls / 'admin.key'
     dynamic = root / 'admin-tls.yaml'
     with open(tls / '.refresh.lock', 'a') as lock:
         os.fchmod(lock.fileno(), 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX)
+        validate_layout(root, ca)
         original_config = dynamic.read_bytes()
         original_certificate = certificate.read_bytes()
         existing = names(certificate)
         changed = 'IP:' + address not in existing
         if changed:
-            openssl(['verify', '-CAfile', tls / 'ca.crt', certificate])
+            openssl(['verify', '-CAfile', ca / 'ca.crt', certificate])
             with tempfile.TemporaryDirectory(prefix='.refresh-', dir=tls) as temporary:
                 stage = Path(temporary)
                 openssl(['x509', '-x509toreq', '-in', certificate, '-signkey', key, '-out', stage / 'request.pem'])
                 (stage / 'extensions').write_text('subjectAltName=' + ','.join(existing + ['IP:' + address])
                                                 + '\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\n')
-                openssl(['x509', '-req', '-in', stage / 'request.pem', '-CA', tls / 'ca.crt', '-CAkey', tls / 'ca.key',
+                openssl(['x509', '-req', '-in', stage / 'request.pem', '-CA', ca / 'ca.crt', '-CAkey', ca / 'ca.key',
                          '-set_serial', '0x' + secrets.token_hex(16), '-days', '825', '-extfile', stage / 'extensions',
                          '-out', stage / 'certificate.pem'])
-                openssl(['verify', '-CAfile', tls / 'ca.crt', '-verify_ip', address, stage / 'certificate.pem'])
+                openssl(['verify', '-CAfile', ca / 'ca.crt', '-verify_ip', address, stage / 'certificate.pem'])
                 ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(stage / 'certificate.pem', key)
                 if certificate.read_bytes() != original_certificate or dynamic.read_bytes() != original_config:
                     raise ValueError('TLS configuration changed during refresh')
@@ -90,3 +123,15 @@ def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik'):
             raise ValueError('TLS configuration changed during refresh')
         replace(dynamic, original_config)
         return changed
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=('validate',))
+    parser.add_argument('--directory', default='/var/lib/mindflayer-elderbrain/traefik')
+    parser.add_argument('--ca-directory', default='/var/lib/mindflayer-elderbrain/host/admin-ca')
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        parser.error('must run as root')
+    validate_layout(args.directory, args.ca_directory)

@@ -17,8 +17,11 @@ def available():
     for unit in ('elderbrain-network-recovery', 'elderbrain-network-watchdog', 'elderbrain-network-confirmation'):
         subprocess.run(['systemctl', 'is-active', '--quiet', unit], check=True, timeout=5)
     for name in ('ca.crt', 'ca.key'):
-        if not (Path('/var/lib/mindflayer-elderbrain/traefik/tls') / name).is_file():
+        if not (Path('/var/lib/mindflayer-elderbrain/host/admin-ca') / name).is_file():
             raise ValueError('Appliance TLS initialization is incomplete')
+    exposed = Path('/var/lib/mindflayer-elderbrain/traefik/tls/ca.key')
+    if exposed.exists() or exposed.is_symlink():
+        raise ValueError('CA signing key is exposed in served TLS state')
 
 
 def start(values):

@@ -218,6 +218,7 @@ def create_backup(destination, state, runtime, maintenance, *, host_root=Path("/
                                  ("ssh-admin", host_root / "home/elderbrain-installer/.ssh")):
                 if source.exists():
                     sources[name] = source
+            sources['admin-ca'] = state / 'host/admin-ca'
             archive = destination / ("elderbrain-" + operation["id"] + ".tar.zst")
             manifest = backup_archive.create(archive, sources, version=(runtime / "VERSION").read_text().strip(),
                                              identity=(host_root / "etc/machine-id").read_text().strip())

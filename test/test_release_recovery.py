@@ -32,7 +32,7 @@ class RecoveryEntryTests(unittest.TestCase):
         health(self.saved, Path('/fixture/state'))
         self.socket.sendall.assert_called_once_with(b'host-metrics\n')
         self.socket.settimeout.assert_called_once_with(10)
-        self.tls.assert_called_once_with(cafile='/fixture/state/traefik/tls/ca.crt')
+        self.tls.assert_called_once_with(cafile='/fixture/state/host/admin-ca/ca.crt')
         self.https.assert_called_once_with('127.0.0.1', timeout=10, context=self.tls.return_value)
         self.https.return_value.request.assert_called_once_with('GET', '/elderbrain/health', headers={'Accept': 'application/json'})
         self.response.read.assert_called_once_with(4097)

@@ -18,7 +18,8 @@ from datetime import datetime, timezone
 
 FORMAT = 1
 ROOTS = {"foundry", "elderbrain", "mindflayer", "traefik", "firmware",
-         "service-config", "ssh-root", "ssh-admin", "ssh-server", "browser", "keypad-installations"}
+         "service-config", "ssh-root", "ssh-admin", "ssh-server", "admin-ca",
+         "browser", "keypad-installations"}
 MAX_MANIFEST = 32 * 1024 * 1024
 
 

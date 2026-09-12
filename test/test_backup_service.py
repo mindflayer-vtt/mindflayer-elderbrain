@@ -120,6 +120,20 @@ class MaintenanceTests(unittest.TestCase):
             directory = state / name
             directory.mkdir(parents=True)
             (directory / "user-data").write_text("data-for-" + name)
+        from admin_tls import openssl
+        ca, tls = state / 'host/admin-ca', state / 'traefik/tls'
+        ca.mkdir(parents=True, mode=0o700); tls.mkdir()
+        openssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', ca / 'ca.key',
+                 '-out', ca / 'ca.crt', '-days', '1', '-subj', '/CN=backup-test-CA',
+                 '-addext', 'basicConstraints=critical,CA:TRUE',
+                 '-addext', 'keyUsage=critical,keyCertSign,cRLSign'])
+        openssl(['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-keyout', tls / 'admin.key',
+                 '-out', tls / 'request.pem', '-subj', '/CN=elderbrain',
+                 '-addext', 'subjectAltName=DNS:elderbrain,IP:127.0.0.1'])
+        openssl(['x509', '-req', '-in', tls / 'request.pem', '-CA', ca / 'ca.crt',
+                 '-CAkey', ca / 'ca.key', '-set_serial', '1', '-days', '1',
+                 '-copy_extensions', 'copy', '-out', tls / 'admin.crt'])
+        (tls / 'ca.crt').write_bytes((ca / 'ca.crt').read_bytes())
         (state / "elderbrain/secrets").mkdir(mode=0o700)
         (state / "elderbrain/secrets/admin.json").write_text('{"passwordHash":"test"}')
         journals = state / "keypad-installations"
@@ -145,6 +159,10 @@ class MaintenanceTests(unittest.TestCase):
         with backup_archive.stage(result["archive"], parent=root) as (contents, manifest):
             self.assertEqual((contents / "elderbrain/secrets/admin.json").read_text(), '{"passwordHash":"test"}')
             self.assertEqual((contents / "ssh-root/authorized_keys").read_text(), "test-public-key")
+            self.assertTrue((contents / 'admin-ca/ca.key').is_file())
+            self.assertFalse((contents / 'traefik/tls/ca.key').exists())
+            self.assertEqual((contents / 'admin-ca/ca.crt').read_bytes(),
+                             (contents / 'traefik/tls/ca.crt').read_bytes())
             self.assertEqual(manifest["applianceIdentity"], "test-appliance")
             self.assertEqual((contents / "keypad-installations/private-plan.json").read_text(), '{"credential":"saved-device-secret"}')
             self.assertEqual(json.loads((contents / 'service-config/checkpoint-retention.json').read_text()), {'enabled': True, 'keep': 3})
@@ -157,6 +175,11 @@ class MaintenanceTests(unittest.TestCase):
             invalid_policy = root / 'invalid-policy.tar.zst'
             backup_archive.create(invalid_policy, {name: contents / name for name in manifest['roots']},
                                   version='test', identity='test-appliance')
+            (contents / 'traefik/tls/ca.key').write_text('must-never-be-served')
+            invalid_ca = root / 'invalid-ca.tar.zst'
+            backup_archive.create(invalid_ca, {name: contents / name for name in manifest['roots']},
+                                  version='test', identity='test-appliance')
+            (contents / 'traefik/tls/ca.key').unlink()
         from restore_service import restore_host, recover_host
         (state / "elderbrain/secrets/admin.json").write_text("changed-secret")
         (runtime / "sway.conf").write_text("changed-display")
@@ -186,6 +209,9 @@ class MaintenanceTests(unittest.TestCase):
             restore_host(invalid_policy, state, runtime, self.maintenance, host_root=host)
         self.assertEqual(self.services.events, events)
         self.assertEqual(json.loads(policy.read_text()), {'enabled': True, 'keep': 3})
+        with self.assertRaisesRegex(ValueError, 'TLS authority is invalid'):
+            restore_host(invalid_ca, state, runtime, self.maintenance, host_root=host)
+        self.assertEqual(self.services.events, events)
         (runtime / "VERSION").write_text("different-version")
         events = list(self.services.events)
         with self.assertRaisesRegex(ValueError, "appliance version"):

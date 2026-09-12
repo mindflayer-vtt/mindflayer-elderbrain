@@ -117,6 +117,7 @@ def host_targets(state, runtime, host_root, *, persistent=False):
     targets.update(checkpoint_targets(state))
     targets.update({"ssh-server": host_root / "etc/ssh", "ssh-root": host_root / "root/.ssh",
                     "ssh-admin": host_root / "home/elderbrain-installer/.ssh"})
+    targets['admin-ca'] = state / 'host/admin-ca'
     if persistent:
         # Replace canonical directories, never their mounted OS aliases.
         targets.update({name: state / 'host' / name
@@ -196,9 +197,14 @@ def restore_host(archive, state, runtime, maintenance, *, host_root=Path("/")):
     with backup_archive.stage(archive, parent=maintenance.directory) as (contents, manifest):
         if manifest["applianceVersion"] != (runtime / "VERSION").read_text().strip():
             raise ValueError("Install the backup's appliance version before restoring it")
-        required = set(DATA_ROOTS) | {"service-config", "ssh-server"}
+        required = set(DATA_ROOTS) | {"service-config", "ssh-server", "admin-ca"}
         if not required <= set(manifest["roots"]):
             raise ValueError("Archive is missing required appliance configuration roots")
+        from admin_tls import validate_layout
+        try:
+            validate_layout(contents / 'traefik', contents / 'admin-ca')
+        except (OSError, ValueError) as error:
+            raise ValueError('Archive administration TLS authority is invalid') from error
         if (contents / "service-config/VERSION").read_text().strip() != manifest["applianceVersion"]:
             raise ValueError("Archived service version disagrees with its manifest")
         sources = {name: contents / name for name in manifest["roots"] if name != "service-config"}

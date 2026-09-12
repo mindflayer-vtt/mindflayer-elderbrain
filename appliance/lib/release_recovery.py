@@ -44,7 +44,7 @@ def health(saved, state, *, management_socket=Path('/run/elderbrain/management.s
             if not isinstance(metrics, dict) or not isinstance(metrics.get('history'), list):
                 raise ValueError('Management metrics API is unavailable')
     if 'elderbrain-setup' in saved['compose']:
-        context = ssl.create_default_context(cafile=str(Path(state) / 'traefik/tls/ca.crt'))
+        context = ssl.create_default_context(cafile=str(Path(state) / 'host/admin-ca/ca.crt'))
         connection = http.client.HTTPSConnection('127.0.0.1', timeout=10, context=context)
         try:
             connection.request('GET', '/elderbrain/health', headers={'Accept': 'application/json'})

@@ -1764,3 +1764,18 @@ all accepted the generated configuration; its API showed all five file routers,
 three file services and two middleware definitions enabled. The parser test used
 a disposable local container, which was stopped and auto-removed. No VM or physical
 appliance was changed; signed-update and disconnected-boot qualification remain.
+
+Separated administration CA signing authority from Traefik serving state. The CA
+key and authoritative certificate now live in the private persistent
+`host/admin-ca` directory. Traefik receives individual read-only bind mounts only
+for its two dynamic documents and leaf certificate/key; neither the CA key nor its
+parent directory is mounted. `prepare-admin` refuses legacy exposed-key layouts,
+refuses silent trust rotation when a published CA has lost its key, publishes only
+the public CA copy, and validates CA/key/leaf consistency before stack startup.
+Host certificate refresh, temporary network-confirmation TLS and recovery health
+now use the root-only authority. Manual/Borg source archives include `admin-ca`,
+and restore validates the authority and public copy before stopping writers so
+client trust survives a valid restore. Focused TLS, backup, restore and route tests,
+Compose validation, all 39 Setup tests, all 584 host tests and static checks pass.
+No VM or physical appliance was changed; live renewal, reinstall and restore
+qualification remain pending.

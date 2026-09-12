@@ -9,28 +9,50 @@ if [[ ! -e "$state/elderbrain/secrets/admin.json" && ! -s "$state/elderbrain/sec
   (umask 077; python3 "$runtime/generate-admin-password.py" "$runtime/bootstrap-words.json" > "$state/elderbrain/secrets/initial-password")
   chown 1000:1000 "$state/elderbrain/secrets/initial-password"
 fi
+ca="$state/host/admin-ca"
 tls="$state/traefik/tls"
-install -d -m 0700 "$tls"
+install -d -m 0700 "$state/host" "$ca" "$tls"
+if [[ -e "$tls/ca.key" || -L "$tls/ca.key" ]]; then
+  echo 'Refusing to expose the administration CA signing key to Traefik' >&2
+  exit 1
+fi
+if openssl x509 -in "$ca/ca.crt" -noout >/dev/null 2>&1; then
+  openssl pkey -in "$ca/ca.key" -noout >/dev/null 2>&1 || {
+    echo 'Administration CA key is missing or invalid; preserving the existing trust anchor' >&2
+    exit 1
+  }
+else
+  # A valid published certificate means clients may already trust this CA. Never
+  # silently replace it merely because its signing material is unavailable.
+  if openssl x509 -in "$tls/ca.crt" -noout >/dev/null 2>&1; then
+    echo 'Administration CA authority is incomplete; refusing silent trust rotation' >&2
+    exit 1
+  fi
+  umask 077
+  openssl req -x509 -newkey rsa:3072 -nodes -keyout "$ca/ca.key" -out "$ca/ca.crt" \
+    -days 3650 -subj '/CN=Elderbrain local administration CA' \
+    -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign'
+fi
+if ! cmp -s "$ca/ca.crt" "$tls/ca.crt"; then
+  ca_copy=$(mktemp "$tls/.ca-crt.XXXXXX")
+  install -m 0644 "$ca/ca.crt" "$ca_copy"
+  mv "$ca_copy" "$tls/ca.crt"
+fi
 if ! openssl x509 -in "$tls/admin.crt" -noout >/dev/null 2>&1; then
   umask 077
-  # An interrupted first boot may leave empty files. Preserve a valid CA when
-  # only its leaf is incomplete, so already trusted clients keep the same anchor.
-  if ! openssl x509 -in "$tls/ca.crt" -noout >/dev/null 2>&1; then
-    openssl req -x509 -newkey rsa:3072 -nodes -keyout "$tls/ca.key" -out "$tls/ca.crt" \
-      -days 3650 -subj '/CN=Elderbrain local administration CA' \
-      -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign'
-  fi
   san="DNS:elderbrain,DNS:localhost,DNS:$ELDERBRAIN_HOST,IP:127.0.0.1"
   for address in $(hostname -I); do
     [[ $address =~ ^[0-9a-fA-F:.]+$ ]] && san="$san,IP:$address"
   done
-  openssl req -new -newkey rsa:3072 -nodes -keyout "$tls/admin.key" -out "$tls/admin.csr" \
+  openssl req -new -newkey rsa:3072 -nodes -keyout "$tls/admin.key" -out "$ca/admin.csr" \
     -subj "/CN=$ELDERBRAIN_HOST" -addext "subjectAltName=$san" \
     -addext 'extendedKeyUsage=serverAuth'
-  openssl x509 -req -in "$tls/admin.csr" -CA "$tls/ca.crt" -CAkey "$tls/ca.key" \
+  openssl x509 -req -in "$ca/admin.csr" -CA "$ca/ca.crt" -CAkey "$ca/ca.key" \
     -set_serial "0x$(openssl rand -hex 16)" -out "$tls/admin.crt" -days 825 -copy_extensions copy
+  rm -f "$ca/admin.csr"
 fi
-install -m 0644 "$tls/ca.crt" /usr/local/share/ca-certificates/elderbrain-admin.crt
+python3 "$runtime/admin_tls.py" validate --directory "$state/traefik" --ca-directory "$ca"
+install -m 0644 "$ca/ca.crt" /usr/local/share/ca-certificates/elderbrain-admin.crt
 update-ca-certificates >/dev/null
 # Chrome uses NSS on Linux. Trust this appliance's CA in its dedicated kiosk account.
 kiosk_home=$(getent passwd elderbrain-kiosk | cut -d: -f6)

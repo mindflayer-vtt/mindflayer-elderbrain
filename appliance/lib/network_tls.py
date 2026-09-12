@@ -8,7 +8,7 @@ import tempfile
 from network_config import unicast
 
 
-def context(address, ca_directory='/var/lib/mindflayer-elderbrain/traefik/tls'):
+def context(address, ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
     address = unicast(address)
     ca = Path(ca_directory)
     with tempfile.TemporaryDirectory(prefix='elderbrain-network-tls-') as directory:

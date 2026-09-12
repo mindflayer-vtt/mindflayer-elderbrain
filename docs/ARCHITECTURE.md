@@ -10,6 +10,13 @@ network. Physical keypads are the documented exception: they use restricted-CBOR
 WebSocket over a separate self-signed TLS identity at `/device/v1` on 10443.
 Their firmware pins that identity, so host 10443 maps directly to the server.
 
+The administration CA certificate and signing key live in root-only persistent
+host state at `host/admin-ca`. Traefik receives four individual read-only files:
+its dynamic TLS/routing documents and the leaf server certificate/private key.
+The CA private key is never within a container bind mount. A public CA copy remains
+available in host TLS state for client enrollment, while renewal and network
+confirmation run only in the root host service.
+
 The setup application registers as a receiver on the existing Mindflayer `/ws` protocol. Registration and key-event messages implement discovery/activity; existing `configuration` messages set both keypad LEDs for identification. Seat names belong to Elderbrain configuration; Foundry player/token mappings remain in the Foundry module.
 
 The ISO carries appliance-owned definitions but no Mindflayer server source. Compose pulls the exact tag-and-digest reference in `config/defaults/appliance.env`; the target needs public Internet access but no repository or registry credentials.

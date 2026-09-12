@@ -32,6 +32,9 @@ class DomainRoutesTests(unittest.TestCase):
         self.assertNotIn('providers.docker', compose)
         self.assertNotIn('/var/run/docker.sock', compose)
         self.assertNotIn('traefik.http.', compose)
+        self.assertNotIn('/traefik:/etc/traefik/dynamic', compose)
+        self.assertNotIn('ca.key:/etc/traefik', compose)
+        self.assertIn('/traefik/tls/admin.key:/etc/traefik/dynamic/tls/admin.key:ro', compose)
         prepare = (Path(__file__).resolve().parents[1] / 'provisioning/prepare-admin').read_text()
         self.assertIn('python3 "$runtime/domain_routes.py" "$state"', prepare)
 
