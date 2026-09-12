@@ -19,14 +19,23 @@ from release_staging import stage
 spec = importlib.util.spec_from_file_location('elderbrain_build_host', ROOT / 'release/build-host.py')
 host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
+spec = importlib.util.spec_from_file_location('elderbrain_pack_dependencies', ROOT / 'release/pack-dependencies.py')
+dependencies = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(dependencies)
 
 
-def assemble(metadata, source, inventory, output, signing_key, public_key):
+def assemble(metadata, source, inventory, output, signing_key, public_key, *, dependency_directory=None):
     release = deepcopy(metadata)
     if not isinstance(release, dict) or not isinstance(release.get('host'), dict):
         raise ValueError('Invalid release metadata')
+    if (release.get('format') == 2) != (dependency_directory is not None):
+        raise ValueError('Format 2 requires a dependency input directory')
     keys(release['host'], 'version apiVersion')
     release['host']['artifact'] = {'file': 'elderbrain-host.tar.zst', 'size': 1, 'sha256': '0' * 64}
+    if dependency_directory is not None:
+        if release.get('format') != 2 or 'dependencies' in release:
+            raise ValueError('Use format 2 with computed dependency metadata, not caller overrides')
+        release['dependencies'] = dependencies.describe(dependency_directory)
     validate(release)  # Reject unsupported image/API/schema fields before signing.
     selected = host.entries(inventory)
     paths = {entry['path']: entry['mode'] for entry in selected}
@@ -48,6 +57,8 @@ def assemble(metadata, source, inventory, output, signing_key, public_key):
         work = Path(temporary)
         artifact = work / 'elderbrain-host.tar.zst'
         release['host']['artifact'] = host.build(source, inventory, artifact, release['host']['version'])
+        if dependency_directory is not None:
+            release['dependencies'] = dependencies.pack(dependency_directory, work / 'elderbrain-dependencies.tar.zst')
         manifest = work / 'manifest.json'
         manifest.write_bytes((json.dumps(validate(release), sort_keys=True, separators=(',', ':'), ensure_ascii=True) + '\n').encode())
         signature = work / 'manifest.sig'
@@ -58,9 +69,16 @@ def assemble(metadata, source, inventory, output, signing_key, public_key):
         with stage(artifact, manifest.read_bytes(), signature.read_bytes(), public, paths, parent=work) as (checked, tree):
             if (tree / 'runtime/VERSION').read_text() != checked['host']['version'] + '\n':
                 raise ValueError('Packaged host version does not match release metadata')
+        if dependency_directory is not None:
+            with stage(work / 'elderbrain-dependencies.tar.zst', manifest.read_bytes(), signature.read_bytes(),
+                       public, parent=work, component='dependencies'):
+                pass
         # Manifest is the final readiness artifact. Never expose a manifest for
         # failed signing, wrong-key verification or invalid package inventory.
-        for name in ('elderbrain-host.tar.zst', 'manifest.sig', 'manifest.json'):
+        artifacts = ['elderbrain-host.tar.zst']
+        if dependency_directory is not None:
+            artifacts.append('elderbrain-dependencies.tar.zst')
+        for name in (*artifacts, 'manifest.sig', 'manifest.json'):
             file = work / name
             with file.open('rb') as stream:
                 os.fsync(stream.fileno())
@@ -80,10 +98,12 @@ if __name__ == '__main__':
     parser.add_argument('--inventory', type=Path, default=ROOT / 'release/host-files.json')
     parser.add_argument('--signing-key', required=True, type=Path)
     parser.add_argument('--public-key', required=True, type=Path)
+    parser.add_argument('--dependencies', type=Path)
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     if args.metadata.stat().st_size > 65536:
         parser.error('Metadata exceeds size limit')
     metadata = json.loads(args.metadata.read_bytes(), object_pairs_hook=unique)
-    release = assemble(metadata, args.source, args.inventory, args.output, args.signing_key, args.public_key)
+    release = assemble(metadata, args.source, args.inventory, args.output, args.signing_key, args.public_key,
+                       dependency_directory=args.dependencies)
     print(json.dumps({'version': release['version'], 'host': release['host']['artifact'], 'state': 'assembled'}))

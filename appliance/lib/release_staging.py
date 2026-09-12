@@ -1,5 +1,6 @@
 """Private, bounded host package staging; never writes an installation target."""
 from contextlib import contextmanager
+import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -8,7 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 
-from appliance_release import verify, verify_host
+from appliance_release import verify, verify_artifact
 
 EXPANDED_LIMIT = 512 * 1024 ** 2
 FILE_LIMIT = 64 * 1024 ** 2
@@ -39,7 +40,7 @@ def inventory(paths):
 
 
 @contextmanager
-def stage(archive, manifest, signature, public_key, allowed_paths, *, parent):
+def stage(archive, manifest, signature, public_key, allowed_paths=None, *, parent, component='host'):
     """Yield verified release and staged tree for the lifetime of this context.
 
 Parent must be a private staging directory owned by the caller. A new temporary
@@ -47,6 +48,13 @@ tree prevents links or leftovers from earlier failed releases being reused.
 Callers must never supply live runtime/configuration as the inventory root.
 """
     release = verify(manifest, signature, public_key)
+    if component not in ('host', 'dependencies') or component not in release:
+        raise ValueError('Unsupported release artifact component')
+    if component == 'dependencies':
+        signed_paths = {name: 0o644 for name in release['dependencies']['files']}
+        if allowed_paths is not None and allowed_paths != signed_paths:
+            raise ValueError('Dependency inventory differs from signed manifest')
+        allowed_paths = signed_paths
     paths = inventory(allowed_paths)
     parent = Path(parent)
     info = parent.lstat()
@@ -55,11 +63,11 @@ Callers must never supply live runtime/configuration as the inventory root.
         raise ValueError('Release staging parent must be private and canonical')
     with tempfile.TemporaryDirectory(prefix='release-stage-', dir=parent) as temporary:
         root = Path(temporary)
-        copied = root / 'host.tar.zst'
+        copied = root / (component + '.tar.zst')
         descriptor = os.open(archive, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor, 'rb') as source, copied.open('xb') as output:
             info = os.fstat(source.fileno())
-            size = release['host']['artifact']['size']
+            size = release[component]['artifact']['size']
             if not stat.S_ISREG(info.st_mode) or info.st_size != size:
                 raise ValueError('Host artifact size or type mismatch')
             os.fchmod(output.fileno(), 0o600)
@@ -72,7 +80,7 @@ Callers must never supply live runtime/configuration as the inventory root.
                 remaining -= len(chunk)
             if source.read(1):
                 raise ValueError('Host archive grew during copy')
-        verify_host(copied, release)  # Verify the immutable private copy we unpack.
+        verify_artifact(copied, release, component)  # Verify the private copy we unpack.
         tar = root / 'host.tar'
         with tar.open('xb') as output:
             os.fchmod(output.fileno(), 0o600)
@@ -107,4 +115,8 @@ Callers must never supply live runtime/configuration as the inventory root.
                     output.flush()
                     os.fchmod(output.fileno(), paths[name])
                     os.fsync(output.fileno())
+                if component == 'dependencies':
+                    expected = release['dependencies']['files'][name]
+                    if target.stat().st_size != expected['size'] or hashlib.sha256(target.read_bytes()).hexdigest() != expected['sha256']:
+                        raise ValueError('Dependency file differs from signed inventory')
         yield release, tree

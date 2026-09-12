@@ -1035,3 +1035,17 @@ dependencies.json is still unsigned and intentionally reports verification false
 The signed manifest/archive chain and durable preparation must incorporate and
 reverify these dependencies before any activationReady flag can become true.
 OS-level packages/Chrome/Docker compatibility and activation/rollback also remain.
+
+Format-2 signed releases now require a dependency archive descriptor, cp314 ABI
+and bounded exact file inventory (names, sizes and SHA-256). A dependency packager
+checks freshly built bytes against their receipt, emits deterministic regular-file
+tar/zstd, and local assembly computes/signs dependency metadata rather than accepting
+caller overrides. Both host and dependency archives are verified/staged before the
+manifest is published. Staging checks the compressed archive hash and every signed
+file hash, rejects unsupported path scopes, and never executes dependency code.
+Six signed-dependency tests pass, including the real signature/staging chain,
+changed payload/receipt, missing format-2 dependency directory, unsafe inventory
+and an intentionally inconsistent signed per-file hash. Existing format-1 tests
+remain supported for code-only development. Durable preparation/offline install
+integration remains next; activationReady remains false and no production release
+or signing key was created or published.

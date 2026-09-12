@@ -44,8 +44,11 @@ def unique(pairs):
 
 
 def validate(value):
-    keys(value, 'format kind version platform host setup images configurationSchema notes downtimeSeconds')
-    if type(value['format']) is not int or value['format'] != 1 or value['kind'] != 'mindflayer-elderbrain-release':
+    fields = 'format kind version platform host setup images configurationSchema notes downtimeSeconds'
+    if isinstance(value, dict) and value.get('format') == 2:
+        fields += ' dependencies'
+    keys(value, fields)
+    if type(value['format']) is not int or value['format'] not in (1, 2) or value['kind'] != 'mindflayer-elderbrain-release':
         raise ValueError('Unsupported appliance release format')
     pattern(value['version'], VERSION)
     keys(value['platform'], 'os release architecture')
@@ -76,6 +79,40 @@ def validate(value):
     number(value['downtimeSeconds'], 0, 86400)
     if not isinstance(value['notes'], str) or len(value['notes']) > 16000 or '\0' in value['notes']:
         raise ValueError('Invalid release notes')
+    if value['format'] == 2:
+        validate_dependencies(value['dependencies'])
+    return value
+
+
+def validate_dependencies(value):
+    keys(value, 'artifact pythonAbi files')
+    if value['pythonAbi'] != 'cp314':
+        raise ValueError('Unsupported dependency Python ABI')
+    artifact = value['artifact']
+    keys(artifact, 'file size sha256')
+    if artifact['file'] != 'elderbrain-dependencies.tar.zst':
+        raise ValueError('Unsupported dependency artifact name')
+    number(artifact['size'], 1, 512 * 1024 ** 2)
+    pattern(artifact['sha256'], r'[a-f0-9]{64}')
+    files = value['files']
+    if not isinstance(files, dict) or not 3 <= len(files) <= 256 or 'dependencies.json' not in files:
+        raise ValueError('Invalid dependency file inventory')
+    wheel_count = node_count = total = 0
+    for name, metadata in files.items():
+        if not isinstance(name, str) or len(name) > 240:
+            raise ValueError('Invalid dependency filename')
+        if re.fullmatch(r'wheels/[A-Za-z0-9_][A-Za-z0-9_.+-]*\.whl', name):
+            wheel_count += 1
+        elif re.fullmatch(r'node/playwright-core-[0-9]+\.[0-9]+\.[0-9]+\.tgz', name):
+            node_count += 1
+        elif name != 'dependencies.json':
+            raise ValueError('Unsupported dependency file scope')
+        keys(metadata, 'size sha256')
+        number(metadata['size'], 1, 64 * 1024 ** 2)
+        pattern(metadata['sha256'], r'[a-f0-9]{64}')
+        total += metadata['size']
+    if not wheel_count or node_count != 1 or total > 256 * 1024 ** 2:
+        raise ValueError('Invalid dependency archive contents')
     return value
 
 
@@ -103,7 +140,14 @@ def verify(manifest, signature, public_key):
 
 def verify_host(path, release):
     """Check regular host archive bytes without extracting or executing them."""
-    artifact = validate(release)['host']['artifact']
+    return verify_artifact(path, release, 'host')
+
+
+def verify_artifact(path, release, component):
+    validate(release)
+    if component not in ('host', 'dependencies') or component not in release:
+        raise ValueError('Unsupported release artifact component')
+    artifact = release[component]['artifact']
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(descriptor, 'rb') as source:
         info = os.fstat(source.fileno())

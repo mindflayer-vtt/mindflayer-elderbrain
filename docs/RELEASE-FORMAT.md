@@ -227,3 +227,32 @@ fresh private test environments, uses pip `--no-index --no-deps` and npm `--offl
 and checks dependency consistency and imports without modifying live environments.
 Its input must be a trusted freshly built test bundle. Evidence for the initial
 successful target-platform run is recorded in `LIFECYCLE-IMPLEMENTATION.md`.
+
+## Format 2: authenticated dependency delivery
+
+Format 2 retains the format-1 fields and requires `dependencies`, containing:
+
+- `artifact`: fixed `elderbrain-dependencies.tar.zst` filename, byte size and SHA-256.
+- `pythonAbi`: currently `cp314` for the supported target.
+- `files`: exact relative names with byte sizes and SHA-256 hashes, including
+  `dependencies.json`, wheel files under `wheels/`, and one locked
+  `node/playwright-core-VERSION.tgz`.
+
+Use metadata with `format: 2` and pass `--dependencies BUILT_INPUT_DIRECTORY` to
+`release/assemble.py`. Do not supply `dependencies` in the metadata: the assembler
+computes it from the builder receipt and verifies every source artifact against
+that receipt. It packages a deterministic regular-file archive, signs the final
+manifest, then verifies and stages both archives before publishing any manifest.
+Format 2 without a dependency input directory is rejected.
+
+Dependency staging verifies the signed compressed archive before extraction,
+enforces the signed file allowlist with the existing bounded extraction rules,
+and checks each extracted file's signed size/hash before yielding its private
+tree. It never runs pip, npm, or dependency code. Format 1 remains readable for
+code-only development artifacts, not complete offline activation.
+
+This authenticates dependency bytes but does not itself prove that the wheels
+match every staged requirement or install correctly on the current host. Durable
+preparation still needs to consume this archive, bind its input hashes to the
+host package's locks, and perform offline installation before dependencies can
+be marked prepared or the release can be activated.
