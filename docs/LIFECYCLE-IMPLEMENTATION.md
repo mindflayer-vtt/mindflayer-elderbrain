@@ -1220,3 +1220,14 @@ cover early recovery without starts/pin release, rejection of active writers,
 repeat recovery without repeated data restoration and inactive/unknown unit checks.
 The focused activation/service suite passes 22 tests. Stable external worker and
 boot ordering are still required; this turn did not alter appliance boot units.
+
+Added the standalone root-only release_recovery files/finish entry point wiring
+fixed targets, UpdateCheckpoints and UpdateServices. Storage is verified before
+maintenance directories are opened; non-update state is a no-op, and output omits
+internal service/checkpoint details. Concrete read-only health probes validate the
+management Unix peer UID and bounded metrics reply, and CA-verified localhost
+Setup health through Traefik without redirects. Six tests cover probes, invalid
+peer/redirect/oversize/nonboolean replies, inactive components, fixed coordinator
+wiring/redaction and missing storage. Both actual probes passed in the running
+QEMU VM from a private source copy under isolated Python; no recovery or service
+change was invoked. Independent stable-bundle installation and boot units remain.

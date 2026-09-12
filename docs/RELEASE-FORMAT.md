@@ -440,3 +440,17 @@ Later normal recovery performs service/configuration health checks and reaches
 data rollback. The future boot unit must enforce ordering before every writer,
 not merely rely on these point-in-time inactive checks. Stable recovery code
 outside the replaced runtime and boot-unit integration remain pending.
+
+`release_recovery.py files|finish` now provides a root-only standalone recovery
+entry point that wires the fixed deployment map, checkpoint hooks and update
+service adapter. It validates persistent storage before opening maintenance state,
+does nothing when there is no update record, and returns only public recovery
+identity/state/version. It supports isolated Python startup with imports from its
+own directory, ready for a separately retained recovery bundle.
+
+Finishing recovery checks the root-owned Unix management peer with a read-only
+metrics request and checks Setup through `https://127.0.0.1/elderbrain/health`
+using the appliance CA, strict response validation and no redirect following.
+Only components recorded as active are probed. These probes passed against the
+running disposable VM without invoking recovery or changing services. The script
+is not yet installed as an independent stable bundle or enabled in boot units.
