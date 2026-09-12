@@ -185,7 +185,60 @@ class HostServices:
             self.run(["systemctl", "is-active", "elderbrain-graphics.service"])
 
 
-def create_backup(destination, state, runtime, maintenance, *, host_root=Path("/"), operation=None, passphrase=None):
+def create_archive(destination, source_state, policy_state, runtime, operation, *, host_root=Path("/"),
+                   deadline=None):
+    destination, source_state, policy_state = Path(destination), Path(source_state), Path(policy_state)
+    runtime, host_root = Path(runtime), Path(host_root)
+    destination.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="elderbrain-config-", dir=destination) as temp:
+        backup_archive.remaining(deadline)
+        managed = Path(temp) / "service-config"
+        managed.mkdir(mode=0o700)
+        for name in ("appliance.env", "compose.yaml", "VERSION", "sway.conf"):
+            shutil.copy2(runtime / name, managed / name)
+        # Export policy only, never snapshot trees, pins or deletion journals.
+        # The maintenance lock excludes policy writes and restore activation.
+        from local_snapshots import Snapshots
+        policy = Snapshots(policy_state, quiesce=None).read_retention()
+        save_record(managed / 'checkpoint-retention.json', policy)
+        units = managed / "systemd"
+        units.mkdir()
+        for name in ("elderbrain-stack.service", "elderbrain-management.service",
+                     "elderbrain-graphics.service", "elderbrain-backup.service",
+                     "elderbrain-backup-retry.service"):
+            shutil.copy2(host_root / "etc/systemd/system" / name, units / name)
+        sources = {name: source_state / name for name in
+                   ("foundry", "elderbrain", "mindflayer", "firmware", "traefik", "browser")}
+        sources["keypad-installations"] = source_state / "keypad-installations"
+        sources["service-config"] = managed
+        sources["ssh-server"] = host_root / "etc/ssh"
+        for name, source in (("ssh-root", host_root / "root/.ssh"),
+                             ("ssh-admin", host_root / "home/elderbrain-installer/.ssh")):
+            if source.exists():
+                sources[name] = source
+        sources['admin-ca'] = source_state / 'host/admin-ca'
+        archive = destination / ("elderbrain-" + operation["id"] + ".tar.zst")
+        manifest = backup_archive.create(archive, sources, version=(runtime / "VERSION").read_text().strip(),
+                                         identity=(host_root / "etc/machine-id").read_text().strip(),
+                                         deadline=deadline)
+    return {"archive": str(archive), "preview": backup_archive.preview(manifest), "encrypted": False}
+
+
+def create_checkpoint_backup(destination, state, runtime, checkpoint, operation, *, host_root=Path("/"),
+                             deadline=None):
+    """Archive the immutable data generation retained by a pending-backup pin."""
+    source = Path(state) / "snapshots" / checkpoint
+    if (not source.is_dir() or source.resolve() != source
+            or not all((source / name).is_dir() for name in
+                       ("foundry", "elderbrain", "mindflayer", "firmware", "traefik", "browser",
+                        "keypad-installations", "host/admin-ca"))):
+        raise ValueError("Pending backup checkpoint is incomplete")
+    return create_archive(destination, source, state, runtime, operation, host_root=host_root,
+                          deadline=deadline)
+
+
+def create_backup(destination, state, runtime, maintenance, *, host_root=Path("/"), operation=None,
+                  passphrase=None, deadline=None):
     if passphrase is not None:
         from backup_crypto import validate_passphrase
         validate_passphrase(passphrase)
@@ -193,39 +246,15 @@ def create_backup(destination, state, runtime, maintenance, *, host_root=Path("/
     destination.mkdir(mode=0o700, parents=True, exist_ok=True)
     # A restore supplies its existing locked, stopped-writer operation so its
     # rollback archive does not open a nested maintenance window.
+    (state / "keypad-installations").mkdir(mode=0o700, exist_ok=True)
     with (maintenance.window("backup") if operation is None else nullcontext(operation)) as operation:
-        with tempfile.TemporaryDirectory(prefix="elderbrain-config-", dir=destination) as temp:
-            managed = Path(temp) / "service-config"
-            managed.mkdir(mode=0o700)
-            for name in ("appliance.env", "compose.yaml", "VERSION", "sway.conf"):
-                shutil.copy2(runtime / name, managed / name)
-            # Export policy only, never snapshot trees, pins or deletion journals.
-            # The maintenance lock excludes policy writes and restore activation.
-            from local_snapshots import Snapshots
-            policy = Snapshots(state, quiesce=None).read_retention()
-            save_record(managed / 'checkpoint-retention.json', policy)
-            units = managed / "systemd"
-            units.mkdir()
-            for name in ("elderbrain-stack.service", "elderbrain-management.service", "elderbrain-graphics.service", "elderbrain-backup.service"):
-                shutil.copy2(host_root / "etc/systemd/system" / name, units / name)
-            sources = {name: state / name for name in
-                       ("foundry", "elderbrain", "mindflayer", "firmware", "traefik", "browser")}
-            (state / "keypad-installations").mkdir(mode=0o700, exist_ok=True)
-            sources["keypad-installations"] = state / "keypad-installations"
-            sources["service-config"] = managed
-            sources["ssh-server"] = host_root / "etc/ssh"
-            for name, source in (("ssh-root", host_root / "root/.ssh"),
-                                 ("ssh-admin", host_root / "home/elderbrain-installer/.ssh")):
-                if source.exists():
-                    sources[name] = source
-            sources['admin-ca'] = state / 'host/admin-ca'
-            archive = destination / ("elderbrain-" + operation["id"] + ".tar.zst")
-            manifest = backup_archive.create(archive, sources, version=(runtime / "VERSION").read_text().strip(),
-                                             identity=(host_root / "etc/machine-id").read_text().strip())
+        result = create_archive(destination, state, state, runtime, operation, host_root=host_root,
+                                deadline=deadline)
     if passphrase is not None:
         from backup_crypto import transform
-        archive = transform(archive, Path(str(archive) + ".gpg"), passphrase)
-    return {"archive": str(archive), "preview": backup_archive.preview(manifest), "encrypted": passphrase is not None}
+        archive = transform(Path(result["archive"]), Path(result["archive"] + ".gpg"), passphrase)
+        result.update(archive=str(archive), encrypted=True)
+    return result
 
 
 def main():

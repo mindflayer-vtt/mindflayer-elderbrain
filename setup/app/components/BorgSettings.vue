@@ -3,9 +3,12 @@ defineProps<{ active: boolean }>();
 const emit = defineEmits<{ changed: [] }>();
 const { session } = useAdmin();
 const settings = reactive({ kind: "nfs", host: "", export: "", repository: "elderbrain", user: "borg", port: 22,
-  hostKey: "", passphrase: "", enabled: false, schedule: "03:00", retention: { daily: 7, weekly: 4, monthly: 6 } });
+  hostKey: "", passphrase: "", enabled: false, onBoot: false, onShutdown: false, beforeUpdate: false,
+  updateFailurePolicy: "continue", attemptTimeoutSeconds: 300, schedule: "03:00",
+  retention: { daily: 7, weekly: 4, monthly: 6 } });
 const configured = ref(false);
 const publicKey = ref("");
+const pendingBackup = ref<{ state: string; checkpoint?: string; lastFailureAt?: number; pendingCount?: number }>({ state: "none" });
 const busy = ref(false);
 const error = ref("");
 const saved = ref(false);
@@ -18,7 +21,11 @@ async function load() {
     const result = await $fetch<Record<string, unknown>>("/elderbrain/api/borg/settings");
     configured.value = result.configured === true;
     publicKey.value = String(result.sshPublicKey || "");
-    if (configured.value) Object.assign(settings, result, { passphrase: "" });
+    pendingBackup.value = (result.pendingBackup as typeof pendingBackup.value) || { state: "none" };
+    if (configured.value) {
+      const { pendingBackup: _pending, sshPublicKey: _key, configured: _configured, passphraseStored: _stored, ...savedSettings } = result;
+      Object.assign(settings, savedSettings, { passphrase: "" });
+    }
     markSaved();
   } catch { error.value = "Unable to load remote backup settings"; }
 }
@@ -27,7 +34,7 @@ async function save() {
   try {
     const result = await $fetch<{ sshPublicKey?: string }>("/elderbrain/api/borg/settings", { method: "PUT",
       headers: { "x-elderbrain-request": "1", "x-csrf-token": session.value.csrf },
-      body: { ...settings, port: Number(settings.port), retention: {
+      body: { ...settings, port: Number(settings.port), attemptTimeoutSeconds: Number(settings.attemptTimeoutSeconds), retention: {
         daily: Number(settings.retention.daily), weekly: Number(settings.retention.weekly), monthly: Number(settings.retention.monthly) } } });
     settings.passphrase = ""; configured.value = true; publicKey.value = result.sshPublicKey || ""; saved.value = true;
     markSaved();
@@ -49,7 +56,7 @@ onMounted(load);
 <template>
   <section class="space-y-4">
     <h3 class="text-lg font-semibold">Scheduled remote backups</h3>
-    <p class="text-sm text-muted">Borg encrypts remote archives. SSH destinations must support Borg 1, not just SFTP. Verify the remote host key through a trusted channel. Saving settings does not initialize a repository.</p>
+    <p class="text-sm text-muted">Borg encrypts remote archives. SSH destinations must support Borg 1, not just SFTP. Verify the remote host key through a trusted channel. Saving settings does not initialize a repository. Network operations are bounded by the configured timeout.</p>
     <form class="space-y-4" @submit.prevent="save">
       <UFormField label="Backup destination type"><USelect v-model="settings.kind" :items="[{ label: 'NFS share', value: 'nfs' }, { label: 'Borg over SSH', value: 'ssh' }]" /></UFormField>
       <UFormField label="Backup server hostname"><UInput v-model="settings.host" required class="w-full" /></UFormField>
@@ -68,9 +75,20 @@ onMounted(load);
       </div>
       <UFormField label="Daily backup time (appliance local time)"><UInput v-model="settings.schedule" type="time" required /></UFormField>
       <UCheckbox v-model="settings.enabled" label="Enable daily backups with temporary appliance downtime" />
+      <UCheckbox v-model="settings.onBoot" label="Back up after appliance boot" />
+      <UCheckbox v-model="settings.onShutdown" label="Protect and attempt a backup before reboot or shutdown" />
+      <UCheckbox v-model="settings.beforeUpdate" label="Attempt a remote backup before installing an update" />
+      <UFormField v-if="settings.beforeUpdate" label="If the pre-update remote backup fails">
+        <USelect v-model="settings.updateFailurePolicy" :items="[{ label: 'Record the failure and continue updating', value: 'continue' }, { label: 'Block the update', value: 'block' }]" />
+      </UFormField>
+      <UFormField label="Maximum time for one backup attempt (seconds)">
+        <UInput v-model="settings.attemptTimeoutSeconds" type="number" min="30" max="1800" required />
+      </UFormField>
       <UButton type="submit" :disabled="active" :loading="busy">Save remote backup settings</UButton>
     </form>
     <UAlert v-if="saved" color="success" title="Remote backup settings saved" />
+    <UAlert v-if="!['none', 'completed'].includes(pendingBackup.state)" color="warning" title="A pre-shutdown backup is pending"
+      :description="`${pendingBackup.pendingCount || 1} checkpoint${(pendingBackup.pendingCount || 1) === 1 ? ' is' : 's are'} pinned locally. The appliance retries each exact backup generation after boot without discarding newer shutdown captures.${pendingBackup.lastFailureAt ? ' The oldest attempt last failed ' + new Date(pendingBackup.lastFailureAt * 1000).toLocaleString() + '.' : ''}`" />
     <UAlert v-if="error" color="error" title="Remote backup operation failed" :description="error" />
     <div v-if="publicKey" class="space-y-2">
       <p class="text-sm">Install this client public key in the Borg server account’s authorized keys:</p>

@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 
 from backup_service import Maintenance
+from backup_pending import protect_update
 from release_activation import Activation
 from release_interlocks import update_admission
 from release_bootstrap import verify_active
@@ -23,7 +24,8 @@ from restore_service import persistent_identity
 
 def activate(prepared, public_key, allowed_paths, *, dependency_directory, bootstrap_tree,
              platform, configuration_schema, parent, host_root=Path('/'), run=subprocess.run, job_owner=None,
-             expected_manifest_sha256=None, active_recovery=None, candidate_bootstrap=None, recovery_api=None):
+             expected_manifest_sha256=None, active_recovery=None, candidate_bootstrap=None, recovery_api=None,
+             progress=lambda stage: None):
     root = Path(host_root).absolute()
     state, runtime = root / 'var/lib/mindflayer-elderbrain', root / 'opt/mindflayer-elderbrain'
     if Path(__file__).resolve().is_relative_to(runtime.resolve()):
@@ -61,10 +63,14 @@ def activate(prepared, public_key, allowed_paths, *, dependency_directory, boots
             if authenticated != release:
                 raise ValueError('Prepared release changed during activation admission')
             return sources(tree, root)
+        def before_switch(record):
+            progress('pre-update-backup')
+            protect_update(state, runtime, maintenance, record, host_root=root)
+            progress('activating')
         activation = Activation(maintenance, targets(root), checkpoint=checkpoints.checkpoint,
             restore_checkpoint=checkpoints.restore, release_checkpoint=checkpoints.release,
             refresh=checkpoints.guard, admission=lambda: update_admission(state, owner=job_owner),
             job_owner=job_owner, recovery_api=recovery_api, candidate_bootstrap=candidate_bootstrap,
-            commit_release=policy.commit)
+            commit_release=policy.commit, before_switch=before_switch)
         record = activation.activate(manifest, signature, public_key, prepare_sources)
-    return {key: record[key] for key in ('id', 'state', 'version')}
+    return {key: record[key] for key in ('id', 'state', 'version', 'remoteBackup') if key in record}

@@ -4,7 +4,7 @@ import os
 import stat
 
 
-SERVICES = ('elderbrain-admin-console', 'elderbrain-backup', 'elderbrain-display-watchdog',
+SERVICES = ('elderbrain-admin-console', 'elderbrain-backup-retry', 'elderbrain-backup', 'elderbrain-display-watchdog',
             'elderbrain-graphics', 'elderbrain-management', 'elderbrain-network-confirmation',
             'elderbrain-network-recovery', 'elderbrain-network-watchdog', 'elderbrain-stack',
             'elderbrain-storage')

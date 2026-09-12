@@ -14,6 +14,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+import time
 from datetime import datetime, timezone
 
 FORMAT = 1
@@ -37,9 +38,19 @@ class LimitedReader:
         return data
 
 
-def digest(stream):
+def remaining(deadline):
+    if deadline is None:
+        return None
+    value = deadline - time.monotonic()
+    if value <= 0:
+        raise TimeoutError("Backup attempt exceeded its configured time limit")
+    return value
+
+
+def digest(stream, *, deadline=None):
     value = hashlib.sha256()
     for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        remaining(deadline)
         value.update(chunk)
     return value.hexdigest()
 
@@ -104,7 +115,7 @@ def validate_link_graph(entries):
                     resolved.append(part)
 
 
-def create(destination, sources, *, version, identity):
+def create(destination, sources, *, version, identity, deadline=None):
     """sources maps logical roots to paths; no missing requested roots are ignored."""
     if not sources or not set(sources) <= ROOTS:
         raise ValueError("Unsupported backup roots")
@@ -127,6 +138,7 @@ def create(destination, sources, *, version, identity):
             for logical, source in sorted(sources.items()):
                 source = Path(source)
                 for path in [source, *sorted(source.rglob("*"))]:
+                    remaining(deadline)
                     name = logical if path == source else logical + "/" + path.relative_to(source).as_posix()
                     safe_name(name)
                     # Store hard-linked files independently; never create tar hardlinks.
@@ -140,7 +152,7 @@ def create(destination, sources, *, version, identity):
                     if info.isfile():
                         entry["type"] = "file"
                         with path.open("rb") as data:
-                            entry["sha256"] = digest(data)
+                            entry["sha256"] = digest(data, deadline=deadline)
                             data.seek(0)
                             archive.addfile(info, data)
                     elif info.isdir():
@@ -162,16 +174,17 @@ def create(destination, sources, *, version, identity):
             info.size, info.mode = len(encoded), 0o600
             archive.addfile(info, io.BytesIO(encoded))
         compressed = Path(work) / "archive.tar.zst"
-        subprocess.run(["zstd", "-q", "-T2", str(plain), "-o", str(compressed)], check=True)
+        subprocess.run(["zstd", "-q", "-T2", str(plain), "-o", str(compressed)], check=True,
+                       timeout=remaining(deadline))
         os.chmod(compressed, 0o600)
         # Detect files changing between hashing and reading, before publication.
-        validate(compressed)
+        validate(compressed, deadline=deadline)
         # Publish without overwriting any existing archive, including a raced symlink.
         os.link(compressed, destination)
     return manifest
 
 
-def validate(filename, *, max_bytes=1024 ** 4):
+def validate(filename, *, max_bytes=1024 ** 4, deadline=None):
     """Stream validation with a decompressed-size bound; no untrusted extraction."""
     seen = {}
     manifest = None
@@ -183,6 +196,7 @@ def validate(filename, *, max_bytes=1024 ** 4):
             reader = LimitedReader(process.stdout, max_bytes)
             with tarfile.open(fileobj=reader, mode="r|") as archive:
                 for info in archive:
+                    remaining(deadline)
                     consumed += info.size + 512
                     if consumed > max_bytes or len(seen) > 1000000:
                         raise ValueError("Archive exceeds restore limits")
@@ -199,7 +213,7 @@ def validate(filename, *, max_bytes=1024 ** 4):
                     entry = {"path": info.name, "mode": info.mode, "uid": info.uid,
                              "gid": info.gid, "mtime": info.mtime, "size": info.size}
                     if info.isfile():
-                        entry.update(type="file", sha256=digest(archive.extractfile(info)))
+                        entry.update(type="file", sha256=digest(archive.extractfile(info), deadline=deadline))
                     elif info.isdir():
                         entry["type"] = "directory"
                     elif info.issym():
@@ -212,6 +226,7 @@ def validate(filename, *, max_bytes=1024 ** 4):
                     seen[info.name] = entry
             # Drain to detect truncated/corrupted zstd frames after tar end markers.
             while chunk := reader.read(1024 * 1024):
+                remaining(deadline)
                 consumed += len(chunk)
                 if consumed > max_bytes:
                     raise ValueError("Archive exceeds restore limits")

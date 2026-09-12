@@ -11,7 +11,8 @@ const powerPending = ref(false);
 const notice = ref('');
 const powerAction = ref<'' | 'reboot' | 'shutdown'>('');
 const confirmPower = ref(false);
-const jobs = ref<{ id: string; kind: string; state: string; stage?: string; error?: string }[]>([]);
+const jobs = ref<{ id: string; kind: string; state: string; stage?: string; error?: string;
+  result?: { remoteBackup?: { state: string; failurePolicy?: string }; backup?: { state: string; checkpoint?: string } } }[]>([]);
 const active = computed(() => powerPending.value || jobs.value.some(job => ['queued', 'running'].includes(job.state)));
 let timer: ReturnType<typeof setInterval> | undefined;
 let refreshing = false;
@@ -128,7 +129,7 @@ async function check() {
       <template #header><h2 class="text-xl font-semibold">Power</h2></template>
       <div class="space-y-4">
         <p>Reboot or shut down the appliance through the protected host job queue. Active updates, restores and configuration transactions block power requests.</p>
-        <UAlert color="warning" title="Pre-shutdown backup is not available yet" description="Power requests currently enforce maintenance safety, but do not yet create the planned bounded local checkpoint or remote-backup attempt." />
+        <UAlert color="info" title="Pre-shutdown protection" description="Every accepted power request first creates a read-only local checkpoint. If enabled on the Backups page, the appliance also attempts a bounded remote backup; an offline destination leaves the exact local archive and checkpoint pinned for retry after boot." />
         <div class="flex flex-wrap gap-3">
           <UButton color="warning" variant="outline" :disabled="submitting || !jobsAvailable || active" @click="choosePower('reboot')">Reboot appliance</UButton>
           <UButton color="error" variant="outline" :disabled="submitting || !jobsAvailable || active" @click="choosePower('shutdown')">Shut down appliance</UButton>
@@ -154,6 +155,7 @@ async function check() {
         <li v-for="job in jobs.filter(job => job.kind === 'update')" :key="job.id">
           <p>Update: {{ job.state }}<span v-if="job.stage"> — {{ job.stage }}</span></p>
           <p class="text-sm break-all">Job {{ job.id }}</p>
+          <p v-if="job.result?.remoteBackup" class="text-sm">Pre-update remote backup: {{ job.result.remoteBackup.state }}<span v-if="job.result.remoteBackup.failurePolicy"> (failure policy: {{ job.result.remoteBackup.failurePolicy }})</span></p>
           <p v-if="job.error">{{ job.error }}</p>
         </li>
       </ul>
@@ -166,6 +168,7 @@ async function check() {
         <li v-for="job in jobs.filter(job => job.kind === 'power')" :key="job.id">
           <p>Power request: {{ job.state }}<span v-if="job.stage"> — {{ job.stage }}</span></p>
           <p class="text-sm break-all">Job {{ job.id }}</p>
+          <p v-if="job.result?.backup" class="text-sm">Data protection: {{ job.result.backup.state }}<span v-if="job.result.backup.checkpoint"> · checkpoint {{ job.result.backup.checkpoint }}</span></p>
           <p v-if="job.error">{{ job.error }}</p>
         </li>
       </ul>

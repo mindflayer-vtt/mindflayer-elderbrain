@@ -10,7 +10,7 @@ class UpdateServices(HostServices):
     # Stack is a completed oneshot, not a resident writer. Leave it active so
     # neither its legacy ExecStop nor startup/build commands run during switching.
     # The coordinator must install the offline release unit before the next boot.
-    UNITS = ('elderbrain-display-watchdog.service', 'elderbrain-network-watchdog.service',
+    UNITS = ('elderbrain-backup-retry.service', 'elderbrain-display-watchdog.service', 'elderbrain-network-watchdog.service',
              'elderbrain-network-confirmation.service', 'elderbrain-management.service',
              'elderbrain-admin-console.service')
 

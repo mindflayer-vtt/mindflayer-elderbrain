@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 
 spec = importlib.util.spec_from_file_location("backup_archive", Path(__file__).resolve().parents[1] / "appliance/lib/backup_archive.py")
@@ -75,6 +76,12 @@ class ArchiveTests(unittest.TestCase):
             backup.create(self.source / "archive.tar.zst", {"elderbrain": self.source}, version="t", identity="t")
         with self.assertRaises(ValueError):
             backup.create(self.archive, {"elderbrain": self.root / "missing"}, version="t", identity="t")
+
+    def test_expired_attempt_deadline_publishes_no_archive(self):
+        with self.assertRaisesRegex(TimeoutError, "time limit"):
+            backup.create(self.archive, {"elderbrain": self.source}, version="t", identity="t",
+                          deadline=time.monotonic() - 1)
+        self.assertFalse(self.archive.exists())
 
     def test_path_traversal_is_rejected(self):
         self.crafted([("elderbrain/../../outside", b"x", tarfile.REGTYPE, "")])

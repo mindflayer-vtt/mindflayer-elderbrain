@@ -61,6 +61,7 @@ class ActivationTests(unittest.TestCase):
         self.maintenance = Maintenance(self.root / 'maintenance', self.services)
         self.released = []
         self.restored = []
+        self.protected = []
         self.lock_held = False
         self.boot_quiescent = False
 
@@ -90,7 +91,8 @@ class ActivationTests(unittest.TestCase):
             restore_checkpoint=restore_checkpoint, release_checkpoint=lambda record: self.released.append(record['id']),
             refresh=lambda: None, exclusive=exclusive,
             candidate_bootstrap='c' * 64,
-            commit_release=lambda record: self.accepted.append(dict(record)))
+            commit_release=lambda record: self.accepted.append(dict(record)),
+            before_switch=lambda record: self.protected.append(record['rollbackCheckpoint']))
 
     def activate(self):
         bundle = self.fixture.bundle
@@ -109,6 +111,18 @@ class ActivationTests(unittest.TestCase):
         self.assertEqual(self.accepted[0]['releaseSequence'], 123)
         self.assertEqual(self.accepted[0]['state'], 'verifying-update')
         self.assertEqual(result['candidateBootstrap'], 'c' * 64)
+        self.assertEqual(self.protected, ['fixture-checkpoint'])
+
+    def test_required_pre_switch_protection_failure_never_installs_candidate(self):
+        def failed(record):
+            self.assertEqual(record['state'], 'backing-up')
+            raise RuntimeError('required backup failed')
+        self.activation.before_switch = failed
+        with self.assertRaisesRegex(RuntimeError, 'required backup failed'):
+            self.activate()
+        self.assertEqual((self.root / 'runtime/VERSION').read_text(), 'old')
+        self.assertEqual(self.maintenance.previous()['state'], 'rolled-back')
+        self.assertEqual(self.services.events, ['stop', 'stop', 'validate', 'start'])
 
     def test_owned_update_retains_exact_signed_digest_for_job_reconciliation(self):
         self.activation.job_owner = 'd' * 32

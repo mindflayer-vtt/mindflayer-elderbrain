@@ -67,7 +67,8 @@ def run_update(state, identity, selected, *, progress, host_root=Path('/')):
         result = activate(prepared, key, paths, dependency_directory=dependencies, bootstrap_tree=tree,
                           platform=current, configuration_schema=1, parent=staging, host_root=root, job_owner=identity,
                           expected_manifest_sha256=selected['manifestSha256'], active_recovery=recovery['active'],
-                          candidate_bootstrap=recovery['candidate'], recovery_api=release['recoveryApi'])
+                          candidate_bootstrap=recovery['candidate'], recovery_api=release['recoveryApi'],
+                          progress=progress)
         if result.get('state') != 'completed':
             raise RuntimeError('Activation did not commit the release')
         progress('committing-recovery')

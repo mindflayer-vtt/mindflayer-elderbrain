@@ -375,8 +375,8 @@ overwritten. The context removes its private candidate when finished.
 
 This verifies archive provenance and installed dependency behavior, not a bytewise
 attestation of every installed environment file. Deployment access permissions,
-fixed target selection, checkpoint integration and the stable recovery worker
-remain necessary before using this candidate in actual activation.
+fixed target selection, checkpoint integration and the stable recovery worker are
+enforced by the activation path described below.
 
 The kiosk must not traverse the private dependency prefix. Candidate construction
 therefore copies the relocatable browser JavaScript modules into the code tree,
@@ -389,7 +389,7 @@ credentials while allowing kiosk code access after runtime deployment.
 
 ## Fixed deployment targets
 
-`release_targets` defines the runtime directory, CLI, ten managed services, exact
+`release_targets` defines the runtime directory, CLI, eleven managed services, exact
 storage/network drop-ins, Chrome policy and cloud-init SSH-identity policy as a
 trusted code-owned mapping. No manifest field chooses a target. The same map is
 used for replacement and recovery. Sources come from the verified candidate;
@@ -400,9 +400,9 @@ Only individual managed configuration files are targets. User-created service
 overrides, SSH credentials/configuration, persistent data and runtime settings
 are not selected. The runtime carries its persistent settings aliases. Missing
 parents require explicit installation/migration work, not silent creation during
-activation. Chrome's managed policy is now included in the signed host inventory.
-Checkpoint integration and stable worker/boot recovery remain required before
-this map is used by a live update entry point.
+activation. Chrome's managed policy is included in the signed host inventory. The
+persistent update worker and boot recovery use this fixed map for live activation
+and rollback.
 
 ## Update checkpoint adapter
 
@@ -426,7 +426,15 @@ The adapter has passed real Btrfs checkpoint, interrupted rollback/retry, bind-a
 refresh and pin-cleanup qualification on an isolated filesystem in QEMU using
 `test/qemu/update-checkpoints.py`. Runtime metadata is simulated; actual
 whole-appliance update rollback still requires combined VM qualification.
-Stable worker/boot recovery and the live update entry point remain unconnected.
+
+After the mandatory checkpoint is durable and before deployment files are
+prepared or installed, activation runs the configured pre-update Borg policy.
+Archive creation and all remote operations share an explicit 30–1800 second
+attempt deadline. A failed `continue` policy
+is recorded in the maintenance/job result and activation proceeds; a failed
+`block` policy takes the normal pre-switch recovery path, restarts the old services
+and releases the update pin without installing candidate code. The remote service
+never replaces the mandatory local rollback checkpoint.
 
 ## Early-boot recovery phase
 

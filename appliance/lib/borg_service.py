@@ -13,23 +13,29 @@ from borg_repository import BorgRepository, private_text
 from borg_settings import BorgSettings
 
 
+def automatic_enabled(settings):
+    return settings is not None and (settings.get("enabled", False) or settings.get("onBoot", False))
+
+
 def activate_schedule(repository, *, unit_directory=Path("/etc/systemd/system")):
     settings = repository.settings.read()
     if settings is None:
         repository.run(["systemctl", "disable", "--now", "elderbrain-backup.timer"], check=False)
         return {"state": "unconfigured"}
+    if not automatic_enabled(settings):
+        repository.run(["systemctl", "disable", "--now", "elderbrain-backup.timer"], check=False)
+        return {"state": "disabled"}
     private_text(unit_directory / "elderbrain-backup.timer", repository.settings.timer())
     repository.run(["systemctl", "daemon-reload"])
-    if settings["enabled"]:
-        repository.run(["systemctl", "enable", "elderbrain-backup.timer"])
-        repository.run(["systemctl", "restart", "elderbrain-backup.timer"])
-    else:
-        repository.run(["systemctl", "disable", "--now", "elderbrain-backup.timer"])
-    return {"state": "enabled" if settings["enabled"] else "disabled"}
+    repository.run(["systemctl", "enable", "elderbrain-backup.timer"])
+    repository.run(["systemctl", "restart", "elderbrain-backup.timer"])
+    return {"state": "enabled"}
 
 
 def public_settings(repository):
     result = repository.settings.public()
+    from backup_pending import public_status
+    result["pendingBackup"] = public_status(repository.state)
     public_key = repository.settings.directory / "id_ed25519.pub"
     result["sshPublicKey"] = public_key.read_text().strip() if public_key.is_file() else ""
     return result
@@ -60,7 +66,9 @@ def execute(action, repository, *, archive=None):
         return {"state": "connected", "archives": archives}
     if action == "backup":
         maintenance = Maintenance(repository.state / "maintenance", HostServices(repository.runtime))
-        return repository.backup(lambda: create_backup(repository.state / "backups", repository.state, repository.runtime, maintenance))
+        return repository.backup(lambda deadline: create_backup(
+            repository.state / "backups", repository.state, repository.runtime, maintenance,
+            deadline=deadline))
     if action == "fetch":
         uploaded = repository.fetch_archive(archive)
         path, checksum = UploadStore(repository.state / "uploads").verify(uploaded["id"])
@@ -86,7 +94,7 @@ def main():
         result = configure(repository, json.loads(value))
     elif args.action == "scheduled":
         from host_jobs import JobStore
-        if not (repository.settings.read() or {}).get("enabled"):
+        if not automatic_enabled(repository.settings.read()):
             result = {"state": "disabled"}
         else:
             jobs = JobStore(state / "jobs")

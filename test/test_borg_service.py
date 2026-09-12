@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "appliance/lib"))
 from borg_repository import BorgRepository
-from borg_service import activate_schedule, configure, execute
+from borg_service import activate_schedule, automatic_enabled, configure, execute
 
 
 class BorgServiceTests(unittest.TestCase):
@@ -34,6 +34,23 @@ class BorgServiceTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0], ["systemctl", "disable", "--now", "elderbrain-backup.timer"])
             configure(self.repo, self.settings, unit_directory=self.units)
             self.assertEqual(run.call_args.args[0], ["systemctl", "disable", "--now", "elderbrain-backup.timer"])
+
+    def test_boot_trigger_activates_timer_without_daily_schedule(self):
+        with patch.object(self.repo, "run") as run:
+            configure(self.repo, {**self.settings, "onBoot": True}, unit_directory=self.units)
+            timer = (self.units / "elderbrain-backup.timer").read_text()
+            self.assertIn("OnBootSec=2min", timer)
+            self.assertNotIn("OnCalendar", timer)
+            self.assertEqual(run.call_args_list[-1].args[0], ["systemctl", "restart", "elderbrain-backup.timer"])
+        self.assertTrue(automatic_enabled({"enabled": False, "onBoot": True}))
+        self.assertFalse(automatic_enabled({"enabled": False, "onBoot": False}))
+
+    def test_remote_commands_use_configured_bounded_timeout(self):
+        self.repo.settings.configure({**self.settings, "attemptTimeoutSeconds": 45})
+        self.repo.config.parent.mkdir(parents=True, exist_ok=True)
+        with patch.object(self.repo, "run") as run:
+            self.repo.action("repo-list")
+        self.assertEqual(run.call_args.kwargs["timeout"], 45)
 
     def test_connection_test_returns_archives_and_does_not_initialize(self):
         with patch.object(self.repo, "list_archives", return_value=[{"name": "elderbrain-test"}]), patch.object(self.repo, "initialize") as initialize:

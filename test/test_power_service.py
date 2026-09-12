@@ -19,6 +19,8 @@ class PowerTests(unittest.TestCase):
         self.state = self.root / 'var/lib/mindflayer-elderbrain'
         self.state.mkdir(parents=True)
         self.storage = self.enterContext(patch('restore_service.persistent_identity', return_value='verified'))
+        self.protection = self.enterContext(patch('backup_pending.protect', return_value={
+            'state': 'local-checkpoint', 'checkpoint': 'b' * 32}))
         self.run = Mock()
 
     def power(self, action='reboot'):
@@ -64,6 +66,14 @@ class PowerTests(unittest.TestCase):
         self.assertFalse(pending(self.state))
         self.assertEqual(json.loads((self.state / 'power.json').read_text())['state'], 'failed')
 
+    def test_failed_local_protection_clears_power_interlock_without_powering_off(self):
+        self.protection.side_effect = RuntimeError('checkpoint failed')
+        with self.assertRaisesRegex(RuntimeError, 'checkpoint failed'):
+            self.power('shutdown')
+        self.assertFalse(pending(self.state))
+        self.assertEqual(json.loads((self.state / 'power.json').read_text())['state'], 'failed')
+        self.run.assert_not_called()
+
     def test_pending_settings_prevent_power_and_accepted_power_prevents_settings(self):
         from release_interlocks import settings_admission
         directory = self.state / 'network-transaction'
@@ -93,6 +103,14 @@ class PowerTests(unittest.TestCase):
             self.assertEqual(result['jobId'], 'a' * 32)
         finally:
             os.close(fd)
+
+    def test_power_records_bounded_data_protection_result(self):
+        protected = {'state': 'pending-upload', 'checkpoint': 'c' * 32, 'archive': '/private'}
+        with patch('backup_pending.protect', return_value=protected) as protect:
+            result = self.power('shutdown')
+        protect.assert_called_once_with(self.state, self.root / 'opt/mindflayer-elderbrain', None,
+                                        host_root=self.root)
+        self.assertEqual(result['backup'], {'state': 'pending-upload', 'checkpoint': 'c' * 32})
 
 
 if __name__ == '__main__':

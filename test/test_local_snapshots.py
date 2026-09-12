@@ -45,6 +45,20 @@ class SnapshotTests(unittest.TestCase):
                     store.unpin_owner('b' * 32, 'restore')
             self.assertTrue(pin.exists())
 
+    def test_pinned_records_validates_pins_and_checkpoints_under_one_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Snapshots(directory, guard=lambda: None, quiesce=None)
+            store.root.mkdir(mode=0o700)
+            checkpoint = {'id': 'a' * 32, 'reason': 'before-shutdown', 'createdAt': 1}
+            pin = {'id': checkpoint['id'], 'owner': 'b' * 32, 'purpose': 'pending-backup'}
+            with patch.object(store, 'prepare'), patch.object(store, 'records', return_value=[checkpoint]), \
+                    patch.object(store, 'pins', return_value=[pin]):
+                self.assertEqual(store.pinned_records('pending-backup'), [
+                    {'pin': pin, 'checkpoint': checkpoint}])
+            with patch.object(store, 'prepare'), patch.object(store, 'records', return_value=[]), \
+                    patch.object(store, 'pins', return_value=[pin]), self.assertRaisesRegex(ValueError, 'complete'):
+                store.pinned_records('pending-backup')
+
     def test_retention_settings_validation(self):
         self.assertEqual(validate_retention({'enabled': True, 'keep': 3}), {'enabled': True, 'keep': 3})
         for value in (None, {}, {'enabled': 1, 'keep': 3}, {'enabled': True, 'keep': True},

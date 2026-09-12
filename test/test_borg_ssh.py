@@ -76,9 +76,13 @@ class BorgSSHTests(unittest.TestCase):
                         source = root / "source"
                         source.mkdir()
                         (source / "fixture.json").write_text('{"setting":"preserve over SSH"}')
-                        archive = root / "manual.tar.zst"
-                        manifest = backup_archive.create(archive, {"elderbrain": source}, version="ssh-test-version", identity="ssh-fixture")
-                        repository.backup(lambda: {"archive": str(archive), "preview": backup_archive.preview(manifest)})
+                        (root / "backups").mkdir()
+                        archive = root / "backups" / ("elderbrain-" + "a" * 32 + ".tar.zst")
+                        repository.backup(lambda deadline: {
+                            "archive": str(archive), "preview": backup_archive.preview(
+                                backup_archive.create(archive, {"elderbrain": source},
+                                    version="ssh-test-version", identity="ssh-fixture",
+                                    deadline=deadline))})
                         archives = repository.list_archives()
                         self.assertEqual(len(archives), 1)
                         uploaded = repository.fetch_archive(archives[0]["name"])

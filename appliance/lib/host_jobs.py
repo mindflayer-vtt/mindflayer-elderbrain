@@ -239,7 +239,7 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             record['stage'] = 'requesting-power'
             save_record(path, record)
             result = run_job(store.directory.parent, identity, record['request'])
-            record['result'] = {key: result[key] for key in ('state', 'action')}
+            record['result'] = {key: result[key] for key in ('state', 'action', 'backup') if key in result}
             record['state'] = 'completed'  # Request accepted, not proof of physical shutdown.
             return
         if record['kind'] == 'update':
@@ -248,7 +248,7 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
                 record['stage'] = stage
                 save_record(path, record)
             result = run_update(store.directory.parent, identity, record['request'], progress=progress)
-            record['result'] = {key: result[key] for key in ('id', 'state', 'version')}
+            record['result'] = {key: result[key] for key in ('id', 'state', 'version', 'remoteBackup') if key in result}
             record['state'] = 'completed'
             return
         if record['kind'] == 'network-snapshot-restore':

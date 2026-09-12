@@ -25,7 +25,8 @@ from release_staging import inventory
 from restore_service import persistent_identity
 
 WRITERS = ('docker.service', 'docker.socket', 'containerd.service', 'elderbrain-stack.service',
-           'elderbrain-graphics.service', 'elderbrain-backup.service', 'elderbrain-management.service',
+           'elderbrain-graphics.service', 'elderbrain-backup.service',
+           'elderbrain-backup-retry.service', 'elderbrain-management.service',
            'elderbrain-display-watchdog.service', 'elderbrain-network-watchdog.service',
            'elderbrain-network-confirmation.service', 'elderbrain-network-recovery.service',
            'elderbrain-admin-console.service', 'etc-netplan.mount', 'etc-ssh.mount', 'root-.ssh.mount',

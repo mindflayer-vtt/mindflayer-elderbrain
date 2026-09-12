@@ -13,7 +13,7 @@ def pending(state):
     if not path.exists():
         return False
     value = json.loads(path.read_text())
-    return value.get('state') == 'requested' and value.get('bootId') == Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    return value.get('state') in ('protecting', 'requested') and value.get('bootId') == Path('/proc/sys/kernel/random/boot_id').read_text().strip()
 
 
 def request(value):
@@ -56,22 +56,30 @@ def operate(action, *, host_root=Path('/'), run=subprocess.run, owner=None):
                 raise ValueError('Power worker must own the matching live confirmed job')
         if pending(state) or any(job['id'] != owner for job in active):
             raise RuntimeError('A host job or power operation is active')
-        maintenance = Maintenance(state / 'maintenance', None)
-        with maintenance.locked(), stable_settings(state):
-            if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
-                raise RuntimeError('Recover interrupted maintenance before changing power state')
-            record = {'state': 'requested', 'action': action,
-                      'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
-            if owner is not None:
-                record['jobId'] = owner
-            save_record(state / 'power.json', record)
-            try:
+        boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        protecting = {'state': 'protecting', 'action': action, 'bootId': boot_id}
+        if owner is not None:
+            protecting['jobId'] = owner
+        save_record(state / 'power.json', protecting)
+        try:
+            from backup_pending import protect
+            protection = protect(state, root / 'opt/mindflayer-elderbrain', owner, host_root=root)
+            maintenance = Maintenance(state / 'maintenance', None)
+            with maintenance.locked(), stable_settings(state):
+                if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
+                    raise RuntimeError('Recover interrupted maintenance before changing power state')
+                record = {'state': 'requested', 'action': action,
+                          'bootId': boot_id,
+                          'backup': {key: protection[key] for key in ('state', 'checkpoint') if key in protection}}
+                if owner is not None:
+                    record['jobId'] = owner
+                save_record(state / 'power.json', record)
                 run(['systemctl', '--no-block', 'reboot' if action == 'reboot' else 'poweroff'], check=True,
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-            except Exception:
-                save_record(state / 'power.json', {**record, 'state': 'failed'})
-                raise
-            return record
+                return record
+        except Exception:
+            save_record(state / 'power.json', {**protecting, 'state': 'failed'})
+            raise
     finally:
         os.close(descriptor)
 

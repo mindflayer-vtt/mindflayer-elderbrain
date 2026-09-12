@@ -58,8 +58,14 @@ class BorgSettings:
         kind = data.get("kind")
         if kind not in ("nfs", "ssh"):
             raise ValueError("Select an NFS or Borg-over-SSH repository")
-        if type(data.get("enabled", False)) is not bool:
-            raise ValueError("Invalid schedule enable flag")
+        for field in ("enabled", "onBoot", "onShutdown", "beforeUpdate"):
+            if type(data.get(field, False)) is not bool:
+                raise ValueError("Invalid backup trigger flag")
+        failure_policy = data.get("updateFailurePolicy", "continue")
+        if failure_policy not in ("continue", "block"):
+            raise ValueError("Invalid pre-update backup failure policy")
+        attempt_timeout = bounded_number(data.get("attemptTimeoutSeconds", 300), 30, 1800,
+                                         "backup attempt timeout")
         schedule = data.get("schedule", "03:00")
         if not isinstance(schedule, str) or not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", schedule):
             raise ValueError("Schedule must be HH:MM in appliance local time")
@@ -72,6 +78,9 @@ class BorgSettings:
         if not isinstance(passphrase, str) or not 12 <= len(passphrase) <= 1024 or any(c in passphrase for c in "\r\n\x00"):
             raise ValueError("Repository passphrase must be 12–1024 characters without line breaks")
         settings = {"format": 1, "kind": kind, "enabled": data.get("enabled", False),
+                    "onBoot": data.get("onBoot", False), "onShutdown": data.get("onShutdown", False),
+                    "beforeUpdate": data.get("beforeUpdate", False),
+                    "updateFailurePolicy": failure_policy, "attemptTimeoutSeconds": attempt_timeout,
                     "schedule": schedule, "retention": retention, "passphrase": passphrase,
                     "host": host(data.get("host"))}
         if kind == "nfs":
@@ -121,6 +130,12 @@ class BorgSettings:
         settings = self.read()
         if settings is None:
             raise ValueError("Backup destination is not configured")
-        return ("[Unit]\nDescription=Scheduled Elderbrain backup\n\n[Timer]\n"
-                f'OnCalendar=*-*-* {settings["schedule"]}:00\n'
-                "Persistent=true\nRandomizedDelaySec=300\nUnit=elderbrain-backup.service\n\n[Install]\nWantedBy=timers.target\n")
+        triggers = ""
+        if settings.get("enabled", False):
+            triggers += f'OnCalendar=*-*-* {settings["schedule"]}:00\nPersistent=true\nRandomizedDelaySec=300\n'
+        if settings.get("onBoot", False):
+            triggers += "OnBootSec=2min\n"
+        if not triggers:
+            raise ValueError("No timer-based backup trigger is enabled")
+        return ("[Unit]\nDescription=Automatic Elderbrain backup\n\n[Timer]\n" + triggers
+                + "Unit=elderbrain-backup.service\n\n[Install]\nWantedBy=timers.target\n")

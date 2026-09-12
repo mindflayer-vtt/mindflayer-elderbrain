@@ -1,7 +1,7 @@
 [Unit]
 Description=Scheduled Elderbrain Borgmatic backup
 Wants=network-online.target
-After=network-online.target docker.service
+After=network-online.target docker.service elderbrain-backup-retry.service
 
 [Service]
 Type=oneshot

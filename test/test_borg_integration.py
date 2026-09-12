@@ -41,10 +41,12 @@ class BorgIntegrationTests(unittest.TestCase):
                     source.mkdir()
                     (source / "secret.json").write_text('{"testSecret":"preserve-me"}')
                     (source / "secret.json").chmod(0o600)
-                    archive = root / "manual.tar.zst"
+                    (root / "backups").mkdir()
+                    archive = root / "backups" / ("elderbrain-" + "a" * 32 + ".tar.zst")
 
-                    def snapshot():
-                        manifest = backup_archive.create(archive, {"elderbrain": source}, version="test-version", identity="test-appliance")
+                    def snapshot(deadline):
+                        manifest = backup_archive.create(archive, {"elderbrain": source},
+                            version="test-version", identity="test-appliance", deadline=deadline)
                         return {"archive": str(archive), "preview": backup_archive.preview(manifest)}
 
                     repository.backup(snapshot)

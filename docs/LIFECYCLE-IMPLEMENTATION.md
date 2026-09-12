@@ -1662,10 +1662,11 @@ the existing allowlisted power job. Browser/API tests cover anonymous and missin
 CSRF rejection, malformed requests, cancellation before confirmation, accepted
 submission and pending state after reload. Host-side tests continue to mock the
 systemd power command; 33 focused Python tests, Nuxt typecheck/build, all 39 Setup
-unit tests and all 40 production-server browser/API tests pass. The UI explicitly
-identifies the bounded pre-shutdown checkpoint/backup handling as not implemented
-yet. Boot outcome reporting and that data-protection workflow remain pending. No
-machine was rebooted or shut down, and no live appliance was changed.
+unit tests and all 40 production-server browser/API tests pass. At that milestone,
+the UI explicitly identified bounded pre-shutdown checkpoint/backup handling as
+not implemented; the later backup-protection milestone below completes it. Boot
+outcome reporting remained pending. No machine was rebooted or shut down, and no
+live appliance was changed.
 
 Split online recovery preparation from recovery authority publication. An
 authenticated candidate's recovery modules are now imported, verified and retained
@@ -1805,3 +1806,26 @@ CI-equivalent run passed all 588 host tests (5 explicit platform skips), 39 Setu
 tests, typechecking, static checks, Compose validation, the production Nuxt build
 and all 40 browser tests on Python 3.14. A hosted run remains unverified because
 the Elderbrain branch is intentionally local and has not been pushed.
+
+Implemented the backup trigger and power/update protection path. Borg settings
+now independently select daily, post-boot, pre-update and pre-power behavior, an
+explicit continue/block policy for pre-update failure, and a bounded 30–1800
+second whole-attempt timeout. Every accepted reboot/shutdown creates a
+read-only `before-shutdown` checkpoint before requesting power. Configured remote
+protection pins that checkpoint, archives its exact immutable data generation,
+and retains a private pending record plus local archive if the destination is
+offline. Each later offline shutdown adds another pinned generation to the
+durable queue. A boot-enabled systemd service retries the oldest exact generation;
+lost records are reconstructed from their complete purpose-bound pins. Successful
+upload is durably recorded before the pin is released, with an intermediate state
+making that release restart-safe. Update activation attempts its configured remote
+backup only after the mandatory rollback checkpoint and before transaction
+preparation; the result is exposed without private paths, and a required failure
+rolls back before candidate installation. UI settings/status and regression tests
+cover policy validation, timeout propagation, retry, interrupted local archive,
+lost-record reconstruction, pin retention/release, power interlocks, update
+ordering and failure behavior. The full local suites pass 608 host tests (5
+platform skips), 39 Setup tests, typechecking, static checks, Compose validation,
+the production Nuxt build and all 40 browser scenarios. Installed VM
+power/interruption qualification remains pending; no VM or physical appliance was
+changed for this milestone.

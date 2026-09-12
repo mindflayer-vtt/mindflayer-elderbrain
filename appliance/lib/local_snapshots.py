@@ -167,6 +167,23 @@ class Snapshots:
             result.append(value)
         return result
 
+    def pinned_records(self, purpose):
+        """Return fully validated purpose pins and checkpoints under one lock."""
+        validate_pin('0' * 32, '0' * 32, purpose)
+        self.prepare()
+        with open(self.root / '.lock', 'a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_SH)
+            records = {value['id']: value for value in self.records()}
+            result = []
+            for pin in self.pins():
+                if pin['purpose'] != purpose:
+                    continue
+                checkpoint = records.get(pin['id'])
+                if checkpoint is None:
+                    raise ValueError('Checkpoint pin has no complete checkpoint')
+                result.append({'pin': pin, 'checkpoint': checkpoint})
+            return result
+
     def write_pin(self, identifier, owner, purpose):
         """Caller holds exclusive lock; durable before publishing a checkpoint."""
         validate_pin(identifier, owner, purpose)

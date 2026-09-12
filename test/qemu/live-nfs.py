@@ -49,11 +49,13 @@ def main():
             source = root / "source"
             source.mkdir()
             (source / "configuration.json").write_text('{"fixture":"NFS roundtrip"}')
-            archive = root / "snapshot.tar.zst"
+            (state / "backups").mkdir()
+            archive = state / "backups" / ("elderbrain-" + "a" * 32 + ".tar.zst")
 
-            def snapshot():
+            def snapshot(deadline):
                 manifest = backup_archive.create(archive, {"elderbrain": source},
-                                                 identity="nfs-test", version="nfs-test")
+                                                 identity="nfs-test", version="nfs-test",
+                                                 deadline=deadline)
                 return {"archive": str(archive), "preview": backup_archive.preview(manifest)}
 
             repository.backup(snapshot)

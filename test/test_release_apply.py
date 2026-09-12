@@ -61,6 +61,7 @@ class ApplyTests(unittest.TestCase):
         self.assertIs(options['release_checkpoint'], self.checkpoints.release)
         self.assertIs(options['refresh'], self.checkpoints.guard)
         self.assertIs(options['commit_release'], self.policy.commit)
+        self.assertTrue(callable(options['before_switch']))
         self.assertEqual(options['candidate_bootstrap'], 'c' * 64)
 
     def test_missing_storage_prevents_maintenance_creation(self):

@@ -29,9 +29,18 @@ class BorgSettingsTests(unittest.TestCase):
         private = self.settings.read()["passphrase"]
         self.assertGreaterEqual(len(private), 32)
         self.assertEqual(self.settings.file.stat().st_mode & 0o777, 0o600)
-        self.settings.configure({**self.nfs, "schedule": "04:12"})
+        self.settings.configure({**self.nfs, "schedule": "04:12", "enabled": True})
         self.assertEqual(self.settings.read()["passphrase"], private)
         self.assertIn("OnCalendar=*-*-* 04:12:00", self.settings.timer())
+
+    def test_boot_shutdown_update_and_timeout_policy_are_explicit(self):
+        result = self.settings.configure({**self.nfs, "onBoot": True, "onShutdown": True,
+            "beforeUpdate": True, "updateFailurePolicy": "block", "attemptTimeoutSeconds": 90})
+        self.assertTrue(result["onBoot"])
+        self.assertTrue(result["onShutdown"])
+        self.assertEqual(result["updateFailurePolicy"], "block")
+        self.assertIn("OnBootSec=2min", self.settings.timer())
+        self.assertNotIn("OnCalendar", self.settings.timer())
 
     def test_ssh_config_enforces_host_key_check_and_no_arbitrary_commands(self):
         self.settings.configure(self.ssh)
@@ -44,7 +53,8 @@ class BorgSettingsTests(unittest.TestCase):
     def test_rejects_injection_and_invalid_paths(self):
         for update in ({"host": "$(whoami)"}, {"repository": "../escape"}, {"export": "/"},
                        {"repository": "repo/{hostname}"}, {"schedule": "03:00\nExecStart=evil"},
-                       {"retention": {"daily": 0, "weekly": 4, "monthly": 6}}):
+                       {"retention": {"daily": 0, "weekly": 4, "monthly": 6}},
+                       {"onBoot": 1}, {"updateFailurePolicy": "ignore"}, {"attemptTimeoutSeconds": 29}):
             with self.subTest(update=update), self.assertRaises(ValueError):
                 self.settings.configure({**self.nfs, **update})
         for update in ({"hostKey": ""}, {"user": "-oProxyCommand=evil"}, {"port": True}):

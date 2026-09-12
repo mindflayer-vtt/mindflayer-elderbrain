@@ -31,13 +31,42 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(run.call_args_list[1].args[0], ["mount", "-t", "nfs", "-o", "hard,nodev,nosuid,noexec", "nas:/backups", str(self.repo.mountpoint)])
 
     def test_backup_never_prunes_if_create_fails(self):
-        archive = self.root / "snapshot.tar.zst"
+        (self.root / "backups").mkdir()
+        archive = self.root / "backups" / ("elderbrain-" + "a" * 32 + ".tar.zst")
         archive.write_bytes(b"fixture")
-        with patch.object(self.repo, "prepare"), patch.object(self.repo, "action", side_effect=RuntimeError("repository unavailable")) as action:
+        manifest = {"format": 1, "applianceVersion": "test", "applianceIdentity": "test-id",
+                    "createdAt": "2026-01-01T00:00:00+00:00", "containsSecrets": True,
+                    "roots": ["foundry"], "entries": []}
+        with patch.object(self.repo, "prepare"), patch("borg_repository.backup_archive.validate", return_value=manifest), \
+                patch.object(self.repo, "action", side_effect=RuntimeError("repository unavailable")) as action:
             with self.assertRaises(RuntimeError):
-                self.repo.backup(lambda: {"archive": str(archive), "preview": {"files": 1}})
+                self.repo.backup(lambda deadline: {"archive": str(archive)})
             self.assertEqual(action.call_args_list[0].args, ("create",))
+            self.assertIn("deadline", action.call_args_list[0].kwargs)
             self.assertEqual(action.call_count, 1)
+
+    def test_transfer_revalidates_exact_local_archive_before_repository_write(self):
+        (self.root / "backups").mkdir()
+        archive = self.root / "backups" / ("elderbrain-" + "a" * 32 + ".tar.zst")
+        archive.write_bytes(b"corrupt")
+        with patch.object(self.repo, "prepare"), \
+                patch("borg_repository.backup_archive.validate", side_effect=ValueError("corrupt")), \
+                patch.object(self.repo, "action") as action:
+            with self.assertRaisesRegex(ValueError, "corrupt"):
+                self.repo.transfer({"archive": str(archive)})
+        action.assert_not_called()
+
+    def test_one_deadline_is_shared_by_prepare_capture_and_all_actions(self):
+        deadline = 1234.5
+        snapshot = {"archive": str(self.root / "backups" / ("elderbrain-" + "a" * 32 + ".tar.zst"))}
+        with patch.object(self.repo, "deadline", return_value=deadline), \
+                patch.object(self.repo, "prepare") as prepare, \
+                patch.object(self.repo, "transfer_locked", return_value={"state": "completed"}) as transfer:
+            seen = []
+            self.repo.backup(lambda value: seen.append(value) or snapshot)
+        prepare.assert_called_once_with(deadline=deadline)
+        transfer.assert_called_once_with(snapshot, deadline=deadline)
+        self.assertEqual(seen, [deadline])
 
     def test_initialize_requires_borg_one_and_requests_encryption(self):
         with patch.object(self.repo, "prepare"), patch.object(self.repo, "run", return_value=SimpleNamespace(stdout="borg 1.4.3")), patch.object(self.repo, "action") as action:

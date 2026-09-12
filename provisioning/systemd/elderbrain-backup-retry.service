@@ -1,0 +1,16 @@
+[Unit]
+Description=Retry pending Elderbrain backup upload
+Wants=network-online.target
+After=network-online.target elderbrain-update-finish.service
+Requires=elderbrain-storage.service
+BindsTo=var-lib-mindflayer\x2delderbrain.mount
+After=var-lib-mindflayer\x2delderbrain.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/mindflayer-elderbrain/backup_pending.py
+TimeoutStartSec=35min
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

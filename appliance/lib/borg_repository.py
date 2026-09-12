@@ -5,14 +5,15 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 
 from backup_service import save_record
+import backup_archive
 from backup_uploads import UploadStore
 from borg_settings import BorgSettings
 
@@ -50,17 +51,38 @@ class BorgRepository:
         return subprocess.run(command, check=check, text=True, capture_output=True,
                               stdin=subprocess.DEVNULL, timeout=timeout)
 
-    def ensure_nfs(self, settings):
+    def attempt_timeout(self):
+        settings = self.settings.read()
+        timeout = settings.get("attemptTimeoutSeconds", 300) if settings else 300
+        if type(timeout) is not int or not 30 <= timeout <= 1800:
+            raise ValueError("Invalid repository attempt timeout")
+        return timeout
+
+    def deadline(self):
+        return time.monotonic() + self.attempt_timeout()
+
+    @staticmethod
+    def remaining(deadline):
+        value = deadline - time.monotonic()
+        if value <= 0:
+            raise TimeoutError("Backup attempt exceeded its configured time limit")
+        return value
+
+    def ensure_nfs(self, settings, *, deadline=None):
         expected = settings["host"] + ":" + settings["export"]
         if self.mountpoint.resolve() != self.mountpoint:
             raise ValueError("NFS mountpoint cannot be a symbolic link")
         self.mountpoint.mkdir(mode=0o700, parents=True, exist_ok=True)
-        result = self.run(["findmnt", "--json", "--mountpoint", str(self.mountpoint)], check=False)
+        timeout = self.remaining(deadline) if deadline is not None else 180
+        result = self.run(["findmnt", "--json", "--mountpoint", str(self.mountpoint)], check=False,
+                          timeout=timeout)
         if result.returncode:
             if any(self.mountpoint.iterdir()):
                 raise ValueError("Refusing to cover non-empty local directory with an NFS mount")
-            self.run(["mount", "-t", "nfs", "-o", "hard,nodev,nosuid,noexec", expected, str(self.mountpoint)])
-            result = self.run(["findmnt", "--json", "--mountpoint", str(self.mountpoint)])
+            self.run(["mount", "-t", "nfs", "-o", "hard,nodev,nosuid,noexec", expected,
+                      str(self.mountpoint)], timeout=self.remaining(deadline) if deadline is not None else 180)
+            result = self.run(["findmnt", "--json", "--mountpoint", str(self.mountpoint)],
+                              timeout=self.remaining(deadline) if deadline is not None else 180)
         mounts = json.loads(result.stdout).get("filesystems", [])
         if (len(mounts) != 1 or mounts[0].get("fstype") not in ("nfs", "nfs4")
                 or mounts[0].get("source") != expected or mounts[0].get("target") != str(self.mountpoint)):
@@ -69,7 +91,7 @@ class BorgRepository:
         if repository.resolve() != repository or not repository.is_relative_to(self.mountpoint):
             raise ValueError("Repository path escapes its verified NFS mount")
 
-    def prepare(self):
+    def prepare(self, *, deadline=None):
         settings = self.settings.read()
         if settings is None:
             raise ValueError("Configure a backup destination first")
@@ -78,22 +100,25 @@ class BorgRepository:
             raise ValueError("Invalid Borg staging directory")
         staging.mkdir(mode=0o700, exist_ok=True)
         if settings["kind"] == "nfs":
-            self.ensure_nfs(settings)
+            self.ensure_nfs(settings, deadline=deadline)
         else:
             key = self.settings.directory / "id_ed25519"
             if not key.exists():
-                self.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)])
+                self.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
+                         timeout=self.remaining(deadline) if deadline is not None else 180)
             endpoint = settings["host"] if settings["port"] == 22 else f'[{settings["host"]}]:{settings["port"]}'
             private_text(self.settings.directory / "known_hosts", endpoint + " " + settings["hostKey"] + "\n")
         config = self.settings.render(settings, self.identity, (self.runtime / "VERSION").read_text().strip())
         if settings["kind"] == "nfs":
             config["repositories"][0]["path"] = str(self.mountpoint / settings["repository"])
         save_record(self.config, config)
-        self.run([self.executable, "--config", str(self.config), "config", "validate"])
+        self.run([self.executable, "--config", str(self.config), "config", "validate"],
+                 timeout=self.remaining(deadline) if deadline is not None else 180)
         return config
 
-    def action(self, *arguments):
-        return self.run([self.executable, "--config", str(self.config), *arguments], timeout=24 * 3600)
+    def action(self, *arguments, deadline=None):
+        timeout = self.remaining(deadline) if deadline is not None else self.attempt_timeout()
+        return self.run([self.executable, "--config", str(self.config), *arguments], timeout=timeout)
 
     def initialize(self):
         with self.locked():
@@ -124,31 +149,49 @@ class BorgRepository:
                                          "applianceVersion": parts[1] if len(parts) == 3 else "unknown"})
             return archives
 
+    def transfer_locked(self, snapshot, *, deadline):
+        archive = Path(snapshot["archive"])
+        if (archive.parent != self.state / "backups" or archive.resolve() != archive
+                or not re.fullmatch(r"elderbrain-[a-f0-9]{32}\.tar\.zst", archive.name)):
+            raise ValueError("Remote backup source is not a canonical local archive")
+        manifest = backup_archive.validate(archive, deadline=deadline)
+        preview = backup_archive.preview(manifest)
+        staging = self.state / "borg-staging"
+        if staging.is_symlink():
+            raise ValueError("Invalid Borg staging directory")
+        staging.mkdir(mode=0o700, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=".snapshot-", dir=staging)
+        incoming = Path(temporary)
+        try:
+            with os.fdopen(fd, "wb") as target, open(archive, "rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    self.remaining(deadline)
+                    target.write(chunk)
+                target.flush()
+                os.fsync(target.fileno())
+            os.replace(incoming, staging / "appliance.tar.zst")
+        finally:
+            incoming.unlink(missing_ok=True)
+        save_record(staging / "metadata.json", preview)
+        self.action("create", deadline=deadline)
+        # Never prune before a new archive has been successfully created.
+        self.action("prune", deadline=deadline)
+        self.action("compact", deadline=deadline)
+        return {"state": "completed", "preview": preview}
+
+    def transfer(self, snapshot, *, deadline=None):
+        """Retry one exact, already captured local archive."""
+        deadline = deadline or self.deadline()
+        with self.locked():
+            self.prepare(deadline=deadline)
+            return self.transfer_locked(snapshot, deadline=deadline)
+
     def backup(self, create_snapshot):
         """Capture a consistent local archive, then transfer after services resume."""
+        deadline = self.deadline()
         with self.locked():
-            self.prepare()
-            snapshot = create_snapshot()
-            staging = self.state / "borg-staging"
-            if staging.is_symlink():
-                raise ValueError("Invalid Borg staging directory")
-            staging.mkdir(mode=0o700, exist_ok=True)
-            fd, temporary = tempfile.mkstemp(prefix=".snapshot-", dir=staging)
-            incoming = Path(temporary)
-            try:
-                with os.fdopen(fd, "wb") as target, open(snapshot["archive"], "rb") as source:
-                    shutil.copyfileobj(source, target, 1024 * 1024)
-                    target.flush()
-                    os.fsync(target.fileno())
-                os.replace(incoming, staging / "appliance.tar.zst")
-            finally:
-                incoming.unlink(missing_ok=True)
-            save_record(staging / "metadata.json", snapshot["preview"])
-            self.action("create")
-            # Never prune before a new archive has been successfully created.
-            self.action("prune")
-            self.action("compact")
-            return {"state": "completed", "preview": snapshot["preview"]}
+            self.prepare(deadline=deadline)
+            return self.transfer_locked(create_snapshot(deadline), deadline=deadline)
 
     def fetch_archive(self, name):
         if not isinstance(name, str) or not re.fullmatch(r"elderbrain-[A-Za-z0-9_.:+-]{1,200}", name):

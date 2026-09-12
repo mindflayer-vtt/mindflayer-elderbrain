@@ -59,8 +59,19 @@ all through `elderbrain`. Configuration supports a verified NFS mount or a
 Borg-over-SSH repository; SSH requires a verified host public key and returns the
 generated client public key for installation on the remote. Initialization uses
 Borg 1 repokey-blake2 encryption. Never assume an arbitrary SFTP server supports Borg.
-An enabled daily schedule uses a systemd timer and persistent host jobs. The Borg
-GUI now provides destination settings, schedule/retention, connection testing,
+Automatic policy can independently enable a daily timer, a two-minute post-boot
+timer, pre-update attempts, and pre-reboot/pre-shutdown protection. Every Borg
+backup attempt—including local archive creation, validation, repository setup,
+upload, prune and compact—shares the configured 30–1800 second deadline. A
+pre-update failure either continues after recording the failure or blocks before
+runtime installation, according to the explicit policy. Every accepted power
+request first creates a read-only local checkpoint. When shutdown backup is
+enabled, that checkpoint is pinned until its exact local `.tar.zst` has reached
+the remote repository. Offline or interrupted uploads retain a private pending
+record and retry one queued generation after boot; later shutdowns add their own
+checkpoint instead of discarding or replacing earlier pending data. Retention
+cannot delete any queued checkpoint. The
+Borg GUI provides destination settings, trigger/timeout policy, schedule/retention, connection testing,
 explicit initialization, manual remote backup, archive listing and retrieval into
 the shared restore-preview workflow. Passphrases are cleared from the form after
 saving and not returned by settings reads. The separate recovery-kit download is
@@ -72,7 +83,7 @@ it when repository access changes. Normal job responses do not contain these
 secrets. A real local Borg 1.4.3/Borgmatic 2.1.7 round trip now verifies encrypted
 initialization, backup/list/fetch, restored file contents, key export/import, fresh-
 cache recovery and rejection of an incorrect passphrase. Real SSH/NFS transport
-and installed-appliance service orchestration remain unverified.
+and installed-appliance boot/power orchestration for the new trigger policy remain unverified.
 
 Backup creation temporarily stops the running Compose services and kiosk, records
 their previous state in a persistent maintenance journal, then restarts those

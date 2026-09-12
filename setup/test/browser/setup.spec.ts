@@ -687,7 +687,16 @@ test("remote backup settings save and archive selection produces a restore previ
   await page.getByLabel("Backup server hostname").fill("nas.example.com");
   await page.getByLabel("NFS export path").fill("/exports/backups");
   await page.getByLabel("Repository passphrase (blank: keep existing or generate)").fill("test-repository-passphrase");
+  await page.getByRole("checkbox", { name: "Back up after appliance boot" }).check();
+  await page.getByRole("checkbox", { name: "Protect and attempt a backup before reboot or shutdown" }).check();
+  await page.getByRole("checkbox", { name: "Attempt a remote backup before installing an update" }).check();
+  await page.getByLabel("If the pre-update remote backup fails").click();
+  await page.getByRole("option", { name: "Block the update" }).click();
+  await page.getByLabel("Maximum time for one backup attempt (seconds)").fill("90");
+  const settingsRequest = page.waitForRequest(request => request.url().endsWith("/api/borg/settings") && request.method() === "PUT");
   await page.getByRole("button", { name: "Save remote backup settings" }).click();
+  expect((await settingsRequest).postDataJSON()).toMatchObject({ onBoot: true, onShutdown: true,
+    beforeUpdate: true, updateFailurePolicy: "block", attemptTimeoutSeconds: 90 });
   await expect(page.getByText("Remote backup settings saved", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Repository passphrase (blank: keep existing or generate)")).toHaveValue("");
   expect(await (await request.get("/elderbrain/api/borg/settings")).text()).not.toContain("test-repository-passphrase");

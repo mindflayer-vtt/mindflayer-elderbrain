@@ -19,7 +19,8 @@ from snapshot_service import stable_settings
 class Activation:
     def __init__(self, maintenance, targets, *, checkpoint, restore_checkpoint,
                  release_checkpoint, refresh, exclusive=None, admission=None, job_owner=None,
-                 recovery_api=RECOVERY_API, candidate_bootstrap=None, commit_release=None):
+                 recovery_api=RECOVERY_API, candidate_bootstrap=None, commit_release=None,
+                 before_switch=None):
         self.maintenance = maintenance
         self.services = maintenance.services
         self.targets = targets
@@ -36,6 +37,7 @@ class Activation:
             raise ValueError('Invalid candidate bootstrap identity')
         self.candidate_bootstrap = candidate_bootstrap
         self.commit_release = commit_release or (lambda record: None)
+        self.before_switch = before_switch or (lambda record: None)
         state = maintenance.directory.parent
         self.exclusive = exclusive or (lambda: stable_settings(state))
         self.admission = admission or (lambda: update_admission(state))
@@ -84,6 +86,8 @@ class Activation:
                     self.checkpoint(record)  # Must be durable and pinned by operation ID.
                     if not record.get('rollbackCheckpoint'):
                         raise ValueError('Update requires a durable recovery checkpoint')
+                    self.write(record, 'backing-up')
+                    self.before_switch(record)
                     self.write(record, 'preparing-update')
                     transaction.prepare(sources)
                     self.write(record, 'installing-update')

@@ -60,6 +60,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/backup_pending.py",
+    "path": "runtime/backup_pending.py",
+    "mode": 420
+  },
+  {
     "source": "appliance/lib/backup_service.py",
     "path": "runtime/backup_service.py",
     "mode": 420
@@ -487,6 +492,11 @@
   {
     "source": "provisioning/systemd/elderbrain-admin-console.service",
     "path": "units/elderbrain-admin-console.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-backup-retry.service",
+    "path": "units/elderbrain-backup-retry.service",
     "mode": 420
   },
   {

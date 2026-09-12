@@ -8,7 +8,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 BOOT = ROOT / 'provisioning/update'
 WRITERS = ('docker.service', 'docker.socket', 'containerd.service', 'elderbrain-stack.service',
-           'elderbrain-graphics.service', 'elderbrain-backup.service', 'elderbrain-management.service',
+           'elderbrain-graphics.service', 'elderbrain-backup.service',
+           'elderbrain-backup-retry.service', 'elderbrain-management.service',
            'elderbrain-display-watchdog.service', 'elderbrain-network-watchdog.service',
            'elderbrain-network-confirmation.service', 'elderbrain-network-recovery.service',
            'elderbrain-admin-console.service')
