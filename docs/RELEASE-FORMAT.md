@@ -258,8 +258,8 @@ and file inventory, and matches the input hashes against the staged host's seria
 and borgmatic requirements and browser lockfile. It retains both the exact
 authenticated archive and extracted inputs in the atomically published release.
 
-The preparation receipt reports `dependencyInputsVerified`, but still leaves
-`dependenciesPrepared` and `activationReady` false. A builder's
+Without an installation directory, preparation reports `dependencyInputsVerified`
+but leaves `dependenciesPrepared` and `activationReady` false. A builder's
 `offlineInstallVerified` claim cannot override this: matching input hashes does
 not prove that wheels satisfy those requirements or install on the current host.
 Offline installation and runtime checks must succeed before activation eligibility.
@@ -286,3 +286,18 @@ not an authorization to activate and does not qualify OS packages or images.
 Dependency archives use PAX only where needed for long wheel filenames. Staging
 accepts only an exact `path` extension matching an allowlisted signed name, not
 other PAX metadata. Host-code archives retain their stricter no-PAX contract.
+
+Pass `dependency_directory` to `release_prepare.prepare` to connect preparation
+to the offline installer. This must be a separate stable directory, not inside
+or containing the prepared-release directory. After image and Compose checks,
+preparation passes its retained authenticated archives to the installer and links
+the generated runtime's Python environments and browser `node_modules` to the
+completed version prefix. It does not move installed environments or copy live
+settings. Only then does it publish `state: runtime-prepared` and
+`dependenciesPrepared: true`, with the dependency prefix recorded explicitly.
+
+An installation failure leaves no published prepared runtime. The installer's
+partial or completed prefix remains for recovery/inspection if a later preparation
+step fails; it is never silently reused. Activation still must attach persistent
+settings, set deployment access permissions, checkpoint, switch code/units and
+perform health/rollback handling. `activationReady` remains false.

@@ -52,11 +52,13 @@ def sync_directory(path):
 
 def prepare(archive, manifest, signature, public_key, allowed_paths, *, directory,
             platform, configuration_schema, environment_file, allow_download=False,
-            dependency_archive=None, run=subprocess.run):
+            dependency_archive=None, dependency_directory=None, run=subprocess.run):
     release = verify(manifest, signature, public_key)
     require_compatible(release, platform=platform, configuration_schema=configuration_schema)
     if ('dependencies' in release) != (dependency_archive is not None):
         raise ValueError('Dependency archive must be supplied exactly when signed by the release')
+    if dependency_directory is not None and dependency_archive is None:
+        raise ValueError('Offline installation requires signed dependency inputs')
     paths = inventory(allowed_paths)
     if not {'runtime/VERSION', 'templates/compose.yaml'} <= set(paths) or 'runtime/compose.yaml' in paths:
         raise ValueError('Release inventory must separate templates from generated runtime configuration')
@@ -65,6 +67,11 @@ def prepare(archive, manifest, signature, public_key, allowed_paths, *, director
     if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077
             or directory.resolve() != directory.absolute()):
         raise ValueError('Prepared releases require a private canonical parent')
+    if dependency_directory is not None:
+        dependency_directory = Path(dependency_directory).absolute()
+        if (dependency_directory.is_relative_to(directory.absolute())
+                or directory.absolute().is_relative_to(dependency_directory)):
+            raise ValueError('Stable dependency prefixes must be separate from prepared release trees')
     descriptor = os.open(directory / '.prepare.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -80,6 +87,7 @@ def prepare(archive, manifest, signature, public_key, allowed_paths, *, director
             work = Path(temporary)
             prepared = work / 'prepared'
             prepared.mkdir(mode=0o700)
+            installed = None
             with stage(archive, manifest, signature, public_key, paths, parent=work) as (checked, tree):
                 if (tree / 'runtime/VERSION').read_text() != checked['host']['version'] + '\n':
                     raise ValueError('Host package version differs from signed manifest')
@@ -104,17 +112,42 @@ def prepare(archive, manifest, signature, public_key, allowed_paths, *, director
                 # future activator can reverify/re-extract, not trust a receipt alone.
                 shutil.copyfile(tree.parent / 'host.tar.zst', prepared / 'elderbrain-host.tar.zst')
                 verify_host(prepared / 'elderbrain-host.tar.zst', checked)
+                if dependency_directory is not None:
+                    # Import here: the standalone installer reuses the input
+                    # binding checks above, but preparation never runs on import.
+                    from release_dependencies import install
+                    installed = install(prepared / 'elderbrain-host.tar.zst',
+                        prepared / 'elderbrain-dependencies.tar.zst', manifest, signature,
+                        public_key, paths, directory=dependency_directory,
+                        configuration_schema=configuration_schema, run=run)
+                    prefix = dependency_directory / release['version']
+                    if (installed.get('manifestSha256') != hashlib.sha256(manifest).hexdigest()
+                            or installed.get('version') != release['version']
+                            or installed.get('prefix') != str(prefix)
+                            or installed.get('dependenciesPrepared') is not True):
+                        raise ValueError('Offline installer did not complete this release')
+                    for name, target in {'serial-venv': prefix / 'serial-venv',
+                                         'borgmatic-venv': prefix / 'borgmatic-venv',
+                                         'beamer/node_modules': prefix / 'beamer/node_modules'}.items():
+                        # Stable absolute links survive code-tree publication and
+                        # activation; the dependency prefix itself is never moved.
+                        os.symlink(str(target), prepared / 'tree/runtime' / name)
             (prepared / 'manifest.json').write_bytes(manifest)
             (prepared / 'manifest.sig').write_bytes(signature)
-            receipt = {'state': 'code-and-images-prepared', 'version': release['version'],
+            receipt = {'state': 'runtime-prepared' if installed else 'code-and-images-prepared', 'version': release['version'],
                        'manifestSha256': hashlib.sha256(manifest).hexdigest(), 'images': images['images'],
                        'dependencyInputsVerified': dependency_archive is not None,
-                       'dependenciesPrepared': False, 'activationReady': False}
+                       'dependenciesPrepared': installed is not None, 'activationReady': False}
+            if installed:
+                receipt['dependencyPrefix'] = installed['prefix']
             (prepared / 'preparation.json').write_text(json.dumps(receipt, sort_keys=True))
             # Persist all generated files and directory entries before publication.
             for parent, _directories, files in os.walk(prepared, topdown=False):
                 for name in files:
-                    with (Path(parent) / name).open('rb') as stream:
+                    file = Path(parent) / name
+                    if file.is_symlink():
+                        continue
+                    with file.open('rb') as stream:
                         os.fsync(stream.fileno())
                 sync_directory(parent)
             os.rename(prepared, destination)  # Version absent under exclusive lock.

@@ -182,6 +182,56 @@ class ReleasePrepareTests(unittest.TestCase):
             self.prepare(dependency_archive=archive)
         self.assertEqual(self.calls, [])
 
+    def test_offline_installation_links_stable_prefix_without_live_settings(self):
+        archive = self.signed_dependencies()
+        dependency_directory = self.root / 'dependencies-installed'
+        dependency_directory.mkdir(mode=0o700)
+        prefix = dependency_directory / '1.2.3'
+
+        def installed(host_archive, dependency_archive, manifest, signature, public_key, paths, **options):
+            self.assertEqual(host_archive.read_bytes(), (self.bundle / 'elderbrain-host.tar.zst').read_bytes())
+            self.assertEqual(dependency_archive.read_bytes(), archive.read_bytes())
+            self.assertEqual(options['directory'], dependency_directory)
+            for name in ('serial-venv', 'borgmatic-venv', 'beamer/node_modules'):
+                (prefix / name).mkdir(parents=True, exist_ok=True)
+            return {'prefix': str(prefix), 'version': '1.2.3', 'dependenciesPrepared': True,
+                    'manifestSha256': hashlib.sha256(manifest).hexdigest()}
+
+        with patch('release_dependencies.install', side_effect=installed) as installer:
+            receipt = self.prepare(dependency_archive=archive, dependency_directory=dependency_directory)
+        installer.assert_called_once()
+        final = self.destination / '1.2.3/tree/runtime'
+        self.assertEqual(receipt['state'], 'runtime-prepared')
+        self.assertTrue(receipt['dependenciesPrepared'])
+        self.assertFalse(receipt['activationReady'])
+        self.assertEqual(receipt['dependencyPrefix'], str(prefix))
+        for name in ('serial-venv', 'borgmatic-venv', 'beamer/node_modules'):
+            self.assertTrue((final / name).is_symlink())
+            self.assertEqual((final / name).resolve(), prefix / name)
+        self.assertFalse((final / 'appliance.env').exists())
+        self.assertFalse((final / 'sway.conf').exists())
+        self.assertEqual(self.environment.read_text(), 'PRIVATE_SETTING=keep-current\n')
+
+    def test_offline_installation_failure_does_not_publish_runtime(self):
+        archive = self.signed_dependencies()
+        with patch('release_dependencies.install', side_effect=RuntimeError('offline check failed')):
+            with self.assertRaisesRegex(RuntimeError, 'offline check failed'):
+                self.prepare(dependency_archive=archive, dependency_directory=self.root / 'dependencies-installed')
+        self.assertFalse((self.destination / '1.2.3').exists())
+
+    def test_dependency_prefix_cannot_be_nested_in_preparation_tree(self):
+        archive = self.signed_dependencies()
+        with self.assertRaisesRegex(ValueError, 'separate'):
+            self.prepare(dependency_archive=archive, dependency_directory=self.destination / 'dependencies')
+        self.assertEqual(self.calls, [])
+
+    def test_installer_receipt_mismatch_does_not_publish_runtime(self):
+        archive = self.signed_dependencies()
+        with patch('release_dependencies.install', return_value={'dependenciesPrepared': True}):
+            with self.assertRaisesRegex(ValueError, 'did not complete'):
+                self.prepare(dependency_archive=archive, dependency_directory=self.root / 'dependencies-installed')
+        self.assertFalse((self.destination / '1.2.3').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

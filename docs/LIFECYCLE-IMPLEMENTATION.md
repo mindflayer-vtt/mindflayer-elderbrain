@@ -1086,3 +1086,17 @@ under the exact signed allowlist and separate empty npm configuration files.
 Added four installer tests, one long-filename archive regression and the reusable
 QEMU signed-dependency qualification. The full host suite runs 426 tests with five
 skipped; the focused post-npm-fix tests pass as well.
+
+Release preparation now optionally drives the authenticated offline installer
+using a separate stable dependency directory. After image/Compose validation it
+passes the retained verified archives, checks the returned release/manifest/prefix,
+and creates stable runtime links for both Python environments and browser modules.
+Only successful installation publishes runtime-prepared/dependenciesPrepared=true;
+activationReady stays false. User configuration remains absent from the code tree.
+Nested dependency/preparation directories are rejected; installation or receipt
+failure publishes no runtime, and installer evidence remains at its stable path.
+Four integration regressions cover links/settings preservation, failed installs,
+overlapping directories and mismatched receipts. The combined preparation/installer
+suite passes 21 tests. This turn did not modify the VM or physical appliance.
+Live settings aliases, service/unit switching, deployment permissions and durable
+update recovery remain unimplemented.
