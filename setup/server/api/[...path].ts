@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { randomBytes, createHash } from 'node:crypto';
 import path from "node:path";
 import { Readable } from "node:stream";
 import { command, backupDownload, backupUpload } from "../utils/management";
@@ -28,6 +29,21 @@ export default defineEventHandler(async (event) => {
     return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as unknown;
   }
   try {
+    if (route === 'snapshots/restore-network' && method === 'POST') {
+      const input = await body() as { checkpoint?: unknown; interface?: unknown; confirmRestore?: unknown; confirmDowntime?: unknown };
+      if (input?.confirmRestore !== true || input.confirmDowntime !== true)
+        throw new Error('Confirm network replacement and service downtime');
+      if (typeof input.checkpoint !== 'string' || !/^[a-f0-9]{32}$/.test(input.checkpoint)
+          || typeof input.interface !== 'string' || !/^[A-Za-z0-9_.:-]{1,15}$/.test(input.interface))
+        throw new Error('Choose a checkpoint and active network interface');
+      const token = randomBytes(32).toString('base64url');
+      const digest = createHash('sha256').update(token).digest('hex');
+      const result = await command(socket, `network-snapshot-restore-start ${input.checkpoint} ${input.interface} ${digest}`);
+      if (!result.ok) throw new Error('Network restore was not accepted. Check active jobs and maintenance status.');
+      // Only the initiator receives the capability. Persistent jobs hold its
+      // hash and return the network transaction ID after service resumption.
+      return { job: JSON.parse(result.output || '{}'), token };
+    }
     if (route === 'snapshots/retention' && ['GET', 'PUT'].includes(method)) {
       let action = 'snapshots-retention';
       if (method === 'PUT') {

@@ -153,6 +153,13 @@ class Handler(socketserver.StreamRequestHandler):
                 result = {'ok': True, 'output': json.dumps(retention_settings(value))}
             elif action in ("snapshot-create-start", "snapshot-recover-start"):
                 result = {"ok": True, "output": json.dumps(JOBS.submit(action.removesuffix("-start")))}
+            elif action.startswith('network-snapshot-restore-start '):
+                parts = action.split(' ')
+                if len(parts) != 4:
+                    raise ValueError('Invalid network checkpoint restore request')
+                result = {'ok': True, 'output': json.dumps(JOBS.submit('network-snapshot-restore', {
+                    'checkpoint': parts[1], 'interface': parts[2], 'confirmationDigest': parts[3],
+                    'confirmRestore': True, 'confirmDowntime': True}))}
             elif action.startswith('snapshot-restore-start '):
                 parts = action.split(' ')
                 if len(parts) != 3:

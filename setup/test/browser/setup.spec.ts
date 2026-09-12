@@ -1,4 +1,5 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
+import { createHash } from 'node:crypto';
 let cookies: Awaited<ReturnType<BrowserContext["cookies"]>>;
 test.beforeAll(async ({ playwright, baseURL }) => {
   const request = await playwright.request.newContext({ baseURL });
@@ -11,6 +12,26 @@ test.beforeAll(async ({ playwright, baseURL }) => {
   await request.dispose();
 });
 test.use({ storageState: async ({}, use) => { await use({ cookies, origins: [] }); } });
+
+test('network checkpoint restore requires authentication and consent and persists only token hash', async ({ request, playwright, baseURL }) => {
+  const url = '/elderbrain/api/snapshots/restore-network';
+  const data = { checkpoint: 'e'.repeat(32), interface: 'ens3', confirmRestore: true, confirmDowntime: true };
+  const anonymous = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  try { expect((await anonymous.post(url, { headers: { 'x-elderbrain-request': '1' }, data })).status()).toBe(401); }
+  finally { await anonymous.dispose(); }
+  expect((await request.post(url, { data })).status()).toBe(403);
+  const session = await (await request.get('/elderbrain/api/auth/session')).json();
+  const headers = { 'x-elderbrain-request': '1', 'x-csrf-token': session.csrf };
+  for (const changes of [{ confirmRestore: false }, { confirmDowntime: false }, { checkpoint: '../data' }, { interface: 'ens3;reboot' }])
+    expect((await request.post(url, { headers, data: { ...data, ...changes } })).ok()).toBe(false);
+  const response = await request.post(url, { headers, data });
+  expect(response.ok()).toBe(true);
+  const result = await response.json();
+  expect(result.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(result.job.request.confirmationDigest).toBe(createHash('sha256').update(result.token).digest('hex'));
+  expect(JSON.stringify(await (await request.get('/elderbrain/api/jobs')).json())).not.toContain(result.token);
+  expect(response.headers()['cache-control']).toBe('no-store');
+});
 
 test('checkpoint restore requires consent and supported components in API and UI', async ({ page, request, playwright, baseURL }) => {
   const data = { checkpoint: 'e'.repeat(32), components: ['preferences'], confirmRestore: true, confirmDowntime: true };

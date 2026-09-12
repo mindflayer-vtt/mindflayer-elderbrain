@@ -24,6 +24,7 @@ COMMANDS["keypad-install"] = []
 COMMANDS["snapshot-create"] = ["snapshot-create"]
 COMMANDS["snapshot-recover"] = ["snapshot-recover"]
 COMMANDS["snapshot-restore"] = ["snapshot-restore"]
+COMMANDS['network-snapshot-restore'] = []
 
 
 class JobStore:
@@ -100,6 +101,9 @@ class JobStore:
         elif kind == 'snapshot-restore':
             from checkpoint_restore import request
             details['request'] = request(source)
+        elif kind == 'network-snapshot-restore':
+            from network_checkpoint_restore import request
+            details['request'] = request(source)
         elif kind in ("restore-preview", "restore-preview-encrypted"):
             UploadStore(self.directory.parent / "uploads").path(source)
             details["uploadId"] = source
@@ -174,6 +178,15 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
     record.update(state="running", startedAt=time.time())
     save_record(path, record)
     try:
+        if record['kind'] == 'network-snapshot-restore':
+            from network_checkpoint_restore import request, coordinator
+            selected = request(record['request'])
+            runtime = Path(os.environ.get('ELDERBRAIN_COMPOSE_DIR', '/opt/mindflayer-elderbrain'))
+            result = coordinator(store.directory.parent, runtime).start(
+                selected['checkpoint'], selected['interface'], confirmation_digest=selected['confirmationDigest'])
+            record['result'] = {key: result[key] for key in ('id', 'phase', 'deadline', 'interface')}
+            record['state'] = 'completed'
+            return
         if record["kind"] == "keypad-install":
             from installation_job import run_installation
             from installation_backend import InstallationBackend

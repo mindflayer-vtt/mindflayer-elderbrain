@@ -28,6 +28,15 @@ let checkpointRetention = { enabled: false, keep: 10 };
 const management = net.createServer({ allowHalfOpen: true }, (socket) => {
   socket.once("data", (data) => {
     const action = data.toString().trim();
+    if (action.startsWith('network-snapshot-restore-start ')) {
+      const [, checkpoint, networkInterface, digest] = action.split(' ');
+      if (!/^[a-f0-9]{64}$/.test(digest || '')) throw new Error('Expected confirmation hash only');
+      const job = { id: 'a'.repeat(32), kind: 'network-snapshot-restore', state: 'queued',
+        createdAt: Date.now() / 1000, request: { checkpoint, interface: networkInterface, confirmationDigest: digest } };
+      jobs.unshift(job);
+      socket.end(JSON.stringify({ ok: true, output: JSON.stringify(job) }) + '\n');
+      return;
+    }
     if (action === 'snapshots-retention' || action.startsWith('snapshots-retention-set ')) {
       if (action.startsWith('snapshots-retention-set ')) {
         const [, enabled, keep] = action.split(' ');

@@ -1,5 +1,6 @@
 """Restricted management operations; never confirm through the proxy bridge."""
 import json
+import re
 from pathlib import Path
 import subprocess
 import time
@@ -37,12 +38,15 @@ def start(values):
     return {**result, 'token': token, 'warnings': candidate['warnings']}
 
 
-def restore_files(archived, interface, *, restore_owner=None):
+def restore_files(archived, interface, *, restore_owner=None, confirmation_digest=None):
     """Private entry point for a verified checkpoint coordinator, not a raw API.
 
     Caller owns source pin/compatibility, rollback checkpoint and maintenance
     exclusion. The independent network worker still owns activation/deadline.
     """
+    if confirmation_digest is not None and (not isinstance(confirmation_digest, str)
+            or not re.fullmatch(r'[a-f0-9]{64}', confirmation_digest)):
+        raise ValueError('Invalid network confirmation digest')
     request({'interface': interface, 'mode': 'dhcp'})  # Validate interface syntax.
     available()
     links = [link for link in discover()['interfaces'] if link['name'] == interface and not link['internal']]
@@ -53,9 +57,11 @@ def restore_files(archived, interface, *, restore_owner=None):
     settings = confirmation_settings(candidate['configuration'], interface, mac)
     available()
     token, binding = issue(settings)
+    if confirmation_digest is not None:
+        binding['digest'] = confirmation_digest
     result = transaction().stage(candidate['changes'], interface,
         fingerprint=candidate['fingerprint'], confirmation=binding, restore_owner=restore_owner)
-    return {**result, 'token': token, 'warnings': [
+    return {**result, **({'token': token} if confirmation_digest is None else {}), 'warnings': [
         'The complete archived Netplan configuration will replace current network settings.',
         'Confirm through the selected interface before the deadline or all network changes will roll back.']}
 

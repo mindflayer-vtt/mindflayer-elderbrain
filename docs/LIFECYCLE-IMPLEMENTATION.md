@@ -844,3 +844,26 @@ directory ownership/access and storage service dependency checks on that guest.
 This qualifies the populated BIOS preserve case for the b3213854c772 ISO, not
 UEFI, missing-data boot, offline startup or newer network-restore code. General
 installed-service/browser checks are running through exec session 29808.
+
+General installed-guest qualification (session 29808) completed successfully:
+stack/management/graphics, Sway/Chrome, all three expected healthy containers,
+the pinned server image and v3 capabilities, serial tooling, private installation
+journals, routing/TLS probes, and the Setup container's actual host bridge access.
+This VM has no running licensed Foundry instance, so this does not qualify actual
+Foundry restore. The immutable SSH-fix preservation baseline remains available.
+
+Authenticated `POST snapshots/restore-network` now admits a durable independent
+host job after explicit replacement/downtime consent and checkpoint/interface
+validation. Setup generates a random confirmation capability, returns it once
+to the caller, and sends only its SHA-256 digest through the host bridge/job.
+The worker repeats admission validation, starts the verified coordinator and
+exposes only transaction ID/phase/deadline/interface, never raw staging output.
+The archived candidate determines the address binding; the supplied digest only
+binds the initiating browser's capability. A lost response still results in timed
+rollback, not an unauthenticated confirmation route.
+
+Thirty-seven focused host tests pass. Setup typecheck/build and a production API
+test pass, including anonymous 401, CSRF 403, missing consent/invalid selection,
+no-store response and verification that job history contains only the token hash.
+The host bridge is syntax-checked; real systemd job/network restore and UI flows
+remain to qualify. No network-restore UI control has been added yet.

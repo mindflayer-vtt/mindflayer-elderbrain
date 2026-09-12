@@ -6,6 +6,7 @@ state. Recovery must use the same persistent network journal, never infer that
 a failed request means staging did not happen.
 """
 import json
+import re
 from contextlib import nullcontext
 from pathlib import Path
 import time
@@ -17,6 +18,20 @@ from local_snapshots import validate_pin
 
 
 TERMINAL = (None, 'completed', 'failed', 'recovered', 'rolled-back')
+
+
+def request(value):
+    if (not isinstance(value, dict)
+            or set(value) != {'checkpoint', 'interface', 'confirmationDigest', 'confirmRestore', 'confirmDowntime'}
+            or value['confirmRestore'] is not True or value['confirmDowntime'] is not True):
+        raise ValueError('Confirm network checkpoint replacement and service downtime')
+    validate_pin(value['checkpoint'], '0' * 32, 'restore')
+    from network_config import request as network_request
+    network_request({'interface': value['interface'], 'mode': 'dhcp'})
+    digest = value['confirmationDigest']
+    if not isinstance(digest, str) or not re.fullmatch(r'[a-f0-9]{64}', digest):
+        raise ValueError('Invalid network confirmation digest')
+    return dict(value)
 
 
 def coordinator(state='/var/lib/mindflayer-elderbrain', runtime='/opt/mindflayer-elderbrain',
@@ -86,10 +101,13 @@ class NetworkCheckpointRestore:
         validate_pin('0' * 32, owner, 'restore')
         return self.maintenance.directory / f'network-restore-{owner}.json'
 
-    def start(self, identifier, interface):
+    def start(self, identifier, interface, *, confirmation_digest=None):
         validate_pin(identifier, '0' * 32, 'restore')
         from network_config import request
         request({'interface': interface, 'mode': 'dhcp'})
+        if confirmation_digest is not None and (not isinstance(confirmation_digest, str)
+                or not re.fullmatch(r'[a-f0-9]{64}', confirmation_digest)):
+            raise ValueError('Invalid network confirmation digest')
         self.compatible(identifier)
         with self.maintenance.locked():
             if self.maintenance.previous().get('state') not in TERMINAL:
@@ -113,7 +131,10 @@ class NetworkCheckpointRestore:
                 # Durable before stage: the worker may apply immediately and
                 # the caller may die before stage returns. No token is journaled.
                 self.save(record, 'awaiting-network')
-                return self.stage(archived, interface, restore_owner=record['id'])
+                options = {'restore_owner': record['id']}
+                if confirmation_digest is not None:
+                    options['confirmation_digest'] = confirmation_digest
+                return self.stage(archived, interface, **options)
             except Exception:
                 # A stage error can follow a durable handoff. Never release its
                 # pins or mark maintenance terminal while networking is pending.

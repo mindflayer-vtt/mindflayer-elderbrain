@@ -14,6 +14,33 @@ from backup_service import save_record
 
 
 class JobTests(unittest.TestCase):
+    def test_network_restore_admission_requires_consent_and_digest(self):
+        valid = {'checkpoint': 'b' * 32, 'interface': 'ens3', 'confirmationDigest': 'a' * 64,
+                 'confirmRestore': True, 'confirmDowntime': True}
+        for changes in ({'confirmRestore': False}, {'confirmDowntime': False}, {'checkpoint': '../data'},
+                        {'interface': 'ens3;reboot'}, {'confirmationDigest': 'token'}, {'token': 'private'}):
+            with self.assertRaises(ValueError):
+                self.store.submit('network-snapshot-restore', {**valid, **changes})
+        self.assertEqual(self.store.list(), [])
+
+    def test_network_restore_worker_returns_only_transaction_status(self):
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        selected = {'checkpoint': 'b' * 32, 'interface': 'ens3', 'confirmationDigest': 'a' * 64,
+                    'confirmRestore': True, 'confirmDowntime': True}
+        record.update(kind='network-snapshot-restore', request=selected)
+        save_record(path, record)
+        with patch('network_checkpoint_restore.coordinator') as coordinator:
+            coordinator.return_value.start.return_value = {'id': 'c' * 32, 'phase': 'staged',
+                'deadline': 1234, 'interface': 'ens3', 'token': 'never-expose', 'files': 'private'}
+            worker(self.store.directory, self.identity, fd)
+            coordinator.return_value.start.assert_called_once_with('b' * 32, 'ens3', confirmation_digest='a' * 64)
+        saved = self.store.read(self.identity)
+        self.assertEqual(saved['state'], 'completed')
+        self.assertEqual(set(saved['result']), {'id', 'phase', 'deadline', 'interface'})
+        self.assertNotIn('never-expose', json.dumps(saved))
+
     def test_worker_launch_uses_independent_scope_and_inherited_lock(self):
         with patch('host_jobs.subprocess.Popen', return_value=SimpleNamespace(wait=lambda: None)) as launch:
             record = self.store.submit('snapshot-create')

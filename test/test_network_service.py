@@ -32,6 +32,9 @@ class NetworkServiceTests(unittest.TestCase):
         self.assertNotIn(result['token'], str(call.kwargs))
         self.assertNotIn('private-', str(result))
         self.assertEqual(available.call_count, 2)
+        deferred = service.restore_files(archived, 'ens3', restore_owner='c' * 32, confirmation_digest='d' * 64)
+        self.assertNotIn('token', deferred)
+        self.assertEqual(transaction.return_value.stage.call_args.kwargs['confirmation']['digest'], 'd' * 64)
         prepare.return_value['configuration']['network']['ethernets']['ens3']['dhcp4'] = True
         transaction.reset_mock()
         with self.assertRaises(ValueError):
