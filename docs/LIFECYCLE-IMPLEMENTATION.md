@@ -530,3 +530,14 @@ Package recovery completed successfully. Provisioning recovery is still running
 as elderbrain-test-provision-recovery.service, currently installing remaining
 dependencies. It uses the original ISO payload, not newer local source. The
 preserve-reinstall baseline helper still awaits a healthy starting installation.
+
+Added pure selective-restore projections in checkpoint_components.py. Explicit
+component selection rejects arbitrary Foundry subpaths, requires network alone,
+and requires explicit consent for security/device identities. Preference merging
+preserves current onboarding/controller state. Keypad preference merging retains
+current device identities and installation history, avoids resurrecting absent
+devices, advances revision and invalidates old applied proofs/expectations.
+Three boundary tests pass. These are private staging primitives only; they are
+not yet wired to checkpoint reads, transaction activation or an API/UI. Full
+selective rollback remains incomplete, including security, network and Foundry
+activation paths. Provisioning recovery remains active on VM2232.
