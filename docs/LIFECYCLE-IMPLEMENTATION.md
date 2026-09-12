@@ -1717,3 +1717,18 @@ host inventory includes the policy implementation. All 163 release tests, Nuxt
 typecheck/build and five production-server System/API browser tests pass. Initial
 signed-sequence seeding in a clean ISO baseline and destructive reboot/interruption
 qualification remain pending. No VM or physical appliance was changed.
+
+Replaced the production ISO's exclusion-blacklist worktree copy with a clean,
+tracked-commit input path. `iso/tracked-payload.py` rejects staged or modified
+tracked files, exports the exact Git commit, rejects archive links/special entries,
+and excludes untracked files by construction. Builds now require an explicit
+semantic `APPLIANCE_VERSION`; generated `VERSION` no longer contains a Git hash.
+`build-metadata.json` records version, source commit/tree, input mode and a canonical
+SHA-256 source identity, while ISO filenames include semantic version and commit.
+The previous rsync/exclusion path exists only behind
+`DEV_ALLOW_DIRTY_WORKTREE=1`, records `development-worktree`, and adds `-dirty` to
+the filename. SSH, SMTP and update-trust inputs remain deliberate post-archive
+additions. Six focused payload/SMTP tests, three update-trust tests, shell syntax,
+static checks and whitespace checks pass. No ISO was built or copied, and no VM,
+Ventoy device or physical appliance was changed. A signed immutable first-runtime
+baseline still needs integration before production ISO qualification.

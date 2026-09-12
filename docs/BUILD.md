@@ -1,15 +1,15 @@
 # Build
 
-Install `bash curl gpg xorriso rsync squashfs-tools coreutils`, then run:
+Install `bash curl git gpg xorriso rsync tar squashfs-tools coreutils`, then run:
 
 ```sh
-make iso SSH_PUBLIC_KEY=/absolute/path/to/id_ed25519.pub
+make iso APPLIANCE_VERSION=1.0.0 SSH_PUBLIC_KEY=/absolute/path/to/id_ed25519.pub
 ```
 
 For example, to use your server administration key for a hardware test:
 
 ```sh
-make iso SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub"
+make iso APPLIANCE_VERSION=1.0.0 SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub"
 ```
 
 The key is selected at build time, not hard-coded. Choose another public-key
@@ -17,7 +17,22 @@ path for another deployment; the corresponding private key is never embedded.
 Copy the resulting ISO as a regular file onto Ventoy's data partition; do not
 write it over the USB device or format the existing Ventoy installation.
 
-The builder downloads and caches the pinned Ubuntu 26.04.1 live-server amd64 image, verifies Ubuntu's signed checksum and the ISO checksum, embeds the current checkout plus commit marker, supplies NoCloud autoinstall data, and recreates the hybrid BIOS/UEFI ISO. It does not embed or build Mindflayer server source. `cache/` and `out/` are ignored. `local.mk` may set `SSH_PUBLIC_KEY`; it is ignored. Only a public key is accepted. `DEV_ALLOW_NO_SSH_KEY=1` is an explicit test-only escape hatch.
+The builder downloads and caches the pinned Ubuntu 26.04.1 live-server amd64
+image, verifies Ubuntu's signed checksum and the ISO checksum, then embeds only
+the files in the clean, committed Git tree. Staged or modified tracked files make
+a production build fail; untracked files are not archive inputs. A generated
+`build-metadata.json` binds the semantic appliance version, source commit, source
+tree and a SHA-256 source identity. `VERSION` contains only the supplied semantic
+version, and both version and commit appear in the ISO filename. The builder then
+adds deliberately selected configuration inputs and recreates the hybrid BIOS/UEFI
+ISO. It does not embed or build Mindflayer server source. `local.mk` may set the
+build variables and is ignored. Only an SSH public key is accepted.
+
+`DEV_ALLOW_DIRTY_WORKTREE=1` explicitly selects the old exclusion-filtered
+worktree copy for development media. Such artifacts include `-dirty` in their
+filename and record `development-worktree` as their input mode. This escape hatch
+must not be used for production releases. `DEV_ALLOW_NO_SSH_KEY=1` remains a
+separate test-only escape hatch.
 
 The base installer is self-contained and does not clone this repository. Internet access is required during target provisioning for Ubuntu/Docker/Chrome packages and public runtime container pulls. Foundry also downloads its runtime after an owner supplies supported credentials or a timed URL. A registry or package failure leaves `elderbrain-stack.service` failed/retrying with diagnostics in `journalctl -u elderbrain-stack`; it is never reported healthy.
 
@@ -50,7 +65,8 @@ your SMTP server, port, TLS mode, sender and optional credentials. The private
 directory is Git-ignored and excluded from the ISO unless explicitly selected:
 
 ```sh
-make iso SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" SMTP_CONFIG=config/private/smtp.json
+make iso APPLIANCE_VERSION=1.0.0 SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" \
+  SMTP_CONFIG=config/private/smtp.json
 ```
 
 You can instead set `SMTP_CONFIG` in the ignored `local.mk`. There is no built-in
@@ -66,10 +82,8 @@ Anyone with the ISO can extract included credentials, regardless of file modes.
 Use a dedicated, restricted sending account and treat the ISO and backups as
 sensitive. Do not distribute them publicly.
 
-The payload copy uses `iso/payload.exclude` to exclude local `.env` variants,
-secret files, SSH/NSS directories, agent state, build caches and disposable VM
-data. Default runtime files such as `config/defaults/appliance.env`, public
-signing keys and package lockfiles remain included. The selected `SMTP_CONFIG`
-and `SSH_PUBLIC_KEY` are added explicitly after that copy. These exclusions are
-tested with a real rsync fixture; they are not a general-purpose secret scanner,
-so do not place credentials in ordinary source files.
+Production payloads come from `git archive` of the exact recorded commit. The
+selected `SMTP_CONFIG`, update trust files and `SSH_PUBLIC_KEY` are added explicitly
+afterward. `iso/payload.exclude` applies only to the opt-in dirty development mode;
+its exclusions remain tested but are not treated as a production allowlist or a
+general-purpose secret scanner.

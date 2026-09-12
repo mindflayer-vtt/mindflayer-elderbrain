@@ -5,17 +5,20 @@ SHELL := /bin/bash
 help:
 	@printf '%s\n' \
 	  'Mindflayer Elderbrain' \
-	  '  make iso SSH_PUBLIC_KEY=~/.ssh/id_ed25519.pub  Build Ubuntu 26.04 appliance ISO' \
+	  '  make iso APPLIANCE_VERSION=1.0.0 SSH_PUBLIC_KEY=~/.ssh/id_ed25519.pub  Build appliance ISO' \
 	  '  make test                                      Run unit/static tests' \
 	  '  make compose-check                             Validate Compose configuration' \
 	  '  make setup-image                               Build setup service image' \
 	  '  make test-iso                                  Destructive QEMU test on a temporary disk' \
 	  '' \
-	  'Build dependencies: bash, curl, gpg, xorriso, rsync, unsquashfs, sha256sum' \
+	  'Build dependencies: bash, curl, git, gpg, xorriso, rsync, tar, unsquashfs, sha256sum' \
 	  'QEMU dependencies: qemu-system-x86_64, qemu-img, ssh, ssh-keygen'
 
 iso:
-	@SSH_PUBLIC_KEY="$(SSH_PUBLIC_KEY)" SMTP_CONFIG="$(SMTP_CONFIG)" DEV_ALLOW_NO_SSH_KEY="$(DEV_ALLOW_NO_SSH_KEY)" ./iso/build.sh
+	@APPLIANCE_VERSION="$(APPLIANCE_VERSION)" SSH_PUBLIC_KEY="$(SSH_PUBLIC_KEY)" \
+	  SMTP_CONFIG="$(SMTP_CONFIG)" UPDATE_SOURCE_CONFIG="$(UPDATE_SOURCE_CONFIG)" \
+	  UPDATE_PUBLIC_KEY="$(UPDATE_PUBLIC_KEY)" DEV_ALLOW_NO_SSH_KEY="$(DEV_ALLOW_NO_SSH_KEY)" \
+	  DEV_ALLOW_DIRTY_WORKTREE="$(DEV_ALLOW_DIRTY_WORKTREE)" ./iso/build.sh
 
 test:
 	@cd setup && npm test

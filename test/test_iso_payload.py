@@ -1,13 +1,19 @@
+import importlib.util
+import hashlib
+import json
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('tracked_payload', ROOT / 'iso/tracked-payload.py')
+tracked = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tracked)
 
 
 class IsoPayloadTests(unittest.TestCase):
-    def test_real_rsync_excludes_development_secrets_and_keeps_runtime_inputs(self):
+    def test_opt_in_development_rsync_excludes_secrets_and_keeps_runtime_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'source'
             target = Path(directory) / 'payload'
@@ -33,3 +39,63 @@ class IsoPayloadTests(unittest.TestCase):
             for name in public:
                 with self.subTest(included=name):
                     self.assertEqual((target / name).read_text(), 'runtime-input')
+
+    def test_production_payload_contains_only_clean_tracked_commit_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository, payload = root / 'repository', root / 'payload'
+            repository.mkdir(); payload.mkdir()
+            subprocess.run(['git', 'init', '-q'], cwd=repository, check=True)
+            subprocess.run(['git', 'config', 'user.name', 'Fixture'], cwd=repository, check=True)
+            subprocess.run(['git', 'config', 'user.email', 'fixture@example.test'], cwd=repository, check=True)
+            (repository / 'tracked.txt').write_text('reviewed\n')
+            subprocess.run(['git', 'add', 'tracked.txt'], cwd=repository, check=True)
+            subprocess.run(['git', 'commit', '-qm', 'fixture'], cwd=repository, check=True)
+            (repository / 'untracked-secret.txt').write_text('must-not-be-copied')
+            result = tracked.stage(repository, payload, '1.2.3')
+            self.assertEqual((payload / 'tracked.txt').read_text(), 'reviewed\n')
+            self.assertFalse((payload / 'untracked-secret.txt').exists())
+            self.assertEqual((payload / 'VERSION').read_text(), '1.2.3\n')
+            self.assertEqual(json.loads((payload / 'build-metadata.json').read_text()), result)
+            self.assertEqual(result['inputMode'], 'tracked-commit')
+            identity = result.pop('sourceIdentity')
+            encoded = json.dumps(result, sort_keys=True, separators=(',', ':')).encode()
+            self.assertEqual(identity, hashlib.sha256(encoded).hexdigest())
+
+    def test_production_payload_rejects_dirty_or_unsupported_tracked_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = root / 'repository'
+            repository.mkdir()
+            subprocess.run(['git', 'init', '-q'], cwd=repository, check=True)
+            subprocess.run(['git', 'config', 'user.name', 'Fixture'], cwd=repository, check=True)
+            subprocess.run(['git', 'config', 'user.email', 'fixture@example.test'], cwd=repository, check=True)
+            file = repository / 'tracked.txt'
+            file.write_text('first\n')
+            subprocess.run(['git', 'add', 'tracked.txt'], cwd=repository, check=True)
+            subprocess.run(['git', 'commit', '-qm', 'fixture'], cwd=repository, check=True)
+            file.write_text('changed\n')
+            (root / 'dirty').mkdir()
+            with self.assertRaisesRegex(ValueError, 'clean tracked'):
+                tracked.stage(repository, root / 'dirty', '1.0.0')
+            file.write_text('first\n')
+            (repository / 'link').symlink_to('tracked.txt')
+            subprocess.run(['git', 'add', 'link'], cwd=repository, check=True)
+            subprocess.run(['git', 'commit', '-qm', 'symlink'], cwd=repository, check=True)
+            (root / 'linked').mkdir()
+            with self.assertRaisesRegex(ValueError, 'unsupported entries'):
+                tracked.stage(repository, root / 'linked', '1.0.0')
+
+    def test_semantic_build_identity_rejects_implicit_or_git_versions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            for version in ('', 'abc123', '1.0', '01.0.0'):
+                with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'stable semantic'):
+                    tracked.metadata(destination, version, 'a' * 40, 'b' * 40)
+
+    def test_iso_builder_uses_tracked_payload_by_default_and_labels_dirty_opt_in(self):
+        builder = (ROOT / 'iso/build.sh').read_text()
+        self.assertIn('python3 "$ROOT/iso/tracked-payload.py"', builder)
+        self.assertIn('DEV_ALLOW_DIRTY_WORKTREE', builder)
+        self.assertIn('suffix=-dirty', builder)
+        self.assertIn('APPLIANCE_VERSION must be a stable semantic version', builder)
