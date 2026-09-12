@@ -44,7 +44,7 @@ capabilities = json.load(sys.stdin)
 assert 3 in capabilities["deviceProtocolVersions"]
 assert capabilities["configurationProof"] == "sha256-canonical-envelope-v2"
 '
-"$runtime/serial-venv/bin/python" "$runtime/esptool-runner.py" version
+"$runtime/serial-venv/bin/python" "$runtime/esptool-runner.py" version < /dev/null
 python3 -c '
 from pathlib import Path
 import stat
@@ -64,7 +64,7 @@ curl --noproxy '*' -fsS -H 'Host: mindflayer.elderbrain.local' http://127.0.0.1/
 # the scoped host bridge; UID 1000 alone is not the authority.
 [[ $(getent group elderbrain-management | cut -d: -f3) == 31338 ]]
 [[ $(stat -c '%U:%G:%a' /run/elderbrain/management.sock) == root:elderbrain-management:660 ]]
-[[ $("${compose[@]}" exec -T elderbrain-setup id -g) == 31338 ]]
+[[ $("${compose[@]}" exec -T elderbrain-setup id -g < /dev/null) == 31338 ]]
 "${compose[@]}" exec -T elderbrain-setup node --input-type=module -e '
 import net from "node:net";
 const socket = net.createConnection("/run/elderbrain/management.sock");

@@ -1858,3 +1858,26 @@ publication imports both entry points before selection. Thirty-five focused
 baseline/bootstrap/bundle tests, including direct `runpy` execution under `-I`,
 pass. The failed VM and ISO are diagnostic evidence only; a rebuilt ISO must repeat
 clean installation before the baseline is qualified.
+
+The corrected `02e9322` BIOS ISO then passed isolated recovery-module loading and
+reached baseline image resolution, revealing that clean startup had not cached the
+profile-gated Foundry container image. Baseline preparation correctly refused to
+leave that future service mutable or to pull during its offline transaction, again
+before policy publication or dependent service startup. Initial bootstrap startup
+now includes the Foundry profile only for `pull --ignore-buildable`; the normal `up`
+command remains profile-free, so Foundry is cached but not started before owner
+configuration. Static coverage requires this exact distinction. Another clean ISO
+build and installation are required to qualify the correction.
+
+After manually caching that image, the finalizer reached migration and exposed an
+omitted mandatory subprocess runner at its production call site. Preparation and
+migration now receive the same explicit real or injected runner, with a regression
+asserting the real default. Diagnostic completion on that retained VM then produced
+immutable local SHA-256
+references for all four services, committed sequence 1 and started management and
+graphics. While rerunning the standard guest harness, its `esptool version` probe
+was found able to consume the remaining SSH-streamed shell program from stdin,
+creating a false early success before private keypad storage and management-bridge
+checks. That probe and the Setup-group `compose exec` probe now receive `/dev/null`.
+The corrected diagnostic harness reached its final explicit bridge-verification
+marker; a clean unmodified-ISO run is still required.

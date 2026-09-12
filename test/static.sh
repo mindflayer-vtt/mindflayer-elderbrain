@@ -58,7 +58,7 @@ grep -q -- '--providers.file.directory=' "$root/compose/compose.yaml"
 grep -q 'host/admin-ca' "$root/provisioning/prepare-admin"
 ! grep -q -- '-keyout "$tls/ca.key"' "$root/provisioning/prepare-admin"
 ! grep -q -- '-CAkey "$tls/ca.key"' "$root/provisioning/prepare-admin"
-grep -q 'pull --ignore-buildable' "$root/provisioning/systemd/elderbrain-stack.service"
+grep -q -- '--profile foundry pull --ignore-buildable' "$root/provisioning/systemd/elderbrain-stack.service"
 grep -q 'up -d --no-build.*--wait' "$root/provisioning/systemd/elderbrain-stack.service"
 ! rg -n --glob '!test/static.sh' 'BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|FOUNDRY_PASSWORD=.+' "$root"
 published=$(awk '/^[[:space:]]+ports:/{ports=1;next} ports && /^[[:space:]]+- "/{print} ports && !/^[[:space:]]+- /{ports=0}' "$root/compose/compose.yaml")

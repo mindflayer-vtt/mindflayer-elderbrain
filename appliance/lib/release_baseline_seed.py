@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 
 # The stable launcher executes this file with isolated Python startup from the
@@ -98,8 +99,8 @@ def finalize(*, host_root=Path("/"), run=None):
     if (directory.resolve() != directory or info.st_uid != os.geteuid()
             or not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o077):
         raise ValueError("Install baseline staging must be private")
-    options = {} if run is None else {"run": run}
-    prepared = prepare(runtime, state=state, directory=directory, host_root=root, **options)
+    runner = subprocess.run if run is None else run
+    prepared = prepare(runtime, state=state, directory=directory, host_root=root, run=runner)
     services = UpdateServices(runtime, health_check=lambda saved: health(
         saved, state, management_socket=root / "run/elderbrain/management.sock"))
     maintenance = Maintenance(state / "maintenance", services)
@@ -108,10 +109,9 @@ def finalize(*, host_root=Path("/"), run=None):
         generation = active_generation(directory=root / "usr/lib/elderbrain-recovery")
         verify_active(generation["bundle"], generation["recoveryApi"], host_root=root)
 
-    migration_options = {} if run is None else {"run": run}
     migrated = Migration(maintenance, host_root=root).install(
         Path(prepared["directory"]), runtime / "baseline-stack.service",
-        require_bootstrap=recovery_ready, **migration_options)
+        require_bootstrap=recovery_ready, run=runner)
     if migrated["state"] != "completed":
         raise RuntimeError("Install baseline migration did not complete")
     policy.install_baseline({"releaseSequence": metadata["releaseSequence"],

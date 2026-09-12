@@ -61,7 +61,12 @@ It does not change the appliance's configured backup destination. This test pass
 on the clean-installed disposable VM on 2026-09-10. The test creates `/etc/exports.d`
 when the distribution package has not created it; no production code was patched.
 
-Pull failure is intentionally simple and observable: the stack unit runs `docker compose pull --ignore-buildable` before startup, propagates a nonzero pull exit, records Docker's registry error in the journal, and retries after 30 seconds. An unreachable or nonexistent image therefore cannot produce an active stack.
+Pull failure is intentionally simple and observable: the initial stack unit runs
+`docker compose --profile foundry pull --ignore-buildable` before startup. This
+caches every coordinated image needed by immutable baseline finalization without
+starting the profile-gated Foundry container. A nonzero pull is propagated, Docker's
+registry error remains in the journal, and systemd retries after 30 seconds. An
+unreachable or nonexistent image therefore cannot produce an active stack.
 
 ## Real-hardware checklist
 

@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -47,6 +48,8 @@ class BaselineSeedTests(unittest.TestCase):
         self.assertEqual(result["releaseSequence"], 2)
         self.assertEqual(ReleasePolicy(self.state).current()["highestSequence"], 2)
         self.migration.install.assert_called_once()
+        self.assertIs(self.prepare.call_args.kwargs["run"], subprocess.run)
+        self.assertIs(self.migration.install.call_args.kwargs["run"], subprocess.run)
         prerequisite = self.migration.install.call_args.kwargs["require_bootstrap"]
         prerequisite()
         self.active.assert_called_once_with("c" * 64, 1, host_root=self.root)
