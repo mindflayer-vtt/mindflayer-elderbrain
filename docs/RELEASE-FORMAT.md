@@ -53,3 +53,26 @@ check operation locks and free space, checkpoint user state, install atomically,
 health-check, and retain the previous release for rollback. Signed older metadata
 is still cryptographically valid: update ordering, rollback authorization and
 replay policy belong in the release-selection/activation coordinator.
+
+## Private host package staging
+
+`release_staging.stage` verifies the signature itself, copies the compressed host
+archive into a fresh private directory, and verifies the copy's signed size/hash
+before decompression. The caller supplies an exact trusted file inventory and
+normalized modes (`0644` or `0755`). Package metadata cannot expand that inventory
+or choose live destinations. The production inventory/builder is still pending.
+
+Packages contain regular file entries only, without directory entries, links,
+special files, sparse/PAX metadata or privileged mode bits. Paths must be canonical
+relative POSIX names. Missing, duplicate and unexpected entries are errors. Parent
+directories are created privately by the stager, not extracted from the archive.
+
+Current host-code limits are 4,096 files, 64 MiB per file and 512 MiB for the
+decompressed tar. Decompression has a 120-second deadline and kernel-enforced
+output-size limit; core dumps are disabled. These are code-package limits, not
+container-image limits. Container blobs require their own verified import path.
+
+The staging context yields only the private tree and verified manifest, with no
+service operation or live filesystem replacement. On success or error it removes
+its own temporary tree. Activation must copy verified staged files to a durable
+versioned release directory and record that transition before this context exits.

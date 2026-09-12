@@ -935,3 +935,15 @@ See `RELEASE-FORMAT.md` for the contract and remaining activation/trust boundari
 No production signing key/release was created. Packaging, trusted download,
 migration/checkpoint/activation/rollback and replacing ordinary boot builds/pulls
 remain implementation work; this verifier alone does not enable updates.
+
+Host release staging now authenticates metadata, copies the compressed artifact
+privately and verifies that exact copy before bounded decompression. A trusted
+caller inventory determines every accepted file and normalized mode. Regular-file
+only extraction rejects traversal, duplicates, missing/unexpected files, links,
+devices, sparse/PAX entries and privileged mode bits. Kernel output-size and
+process-time limits constrain decompression; files/count/total have separate
+bounds. No live install path or service is touched. Sixteen release/staging tests
+pass, including real signed zstd extraction, hash-before-decompression ordering,
+private-directory cleanup and an actual kernel-enforced decompression failure.
+The production inventory/builder and durable activation coordinator remain next;
+this private staging helper is not yet installed or exposed through the updater.
