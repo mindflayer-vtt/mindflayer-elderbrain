@@ -766,3 +766,11 @@ tests pass. The checkpoint coordinator must still supply verified/pinned files,
 compatibility checks, recovery checkpoint and maintenance exclusion before this
 private entry point can be exposed; no new network-restore API/UI exists yet.
 The same fixed-ISO preserve install has reached kernel installation.
+
+Checkpoint staging now reads network YAML only from fixed host/netplan, with
+descriptor-relative no-follow traversal through both directories and files,
+bounded regular-file reads, filename validation and no live/empty fallback.
+Credential-bearing contents remain private and require a caller-held source pin.
+Thirteen checkpoint tests pass, including missing scope, directory/file symlinks
+and FIFO rejection. This supplies the source reader for the pending checkpoint
+network coordinator; it does not expose network restore on its own.

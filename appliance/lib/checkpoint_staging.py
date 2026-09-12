@@ -21,6 +21,45 @@ DEFAULT_CONFIG = {'version': 1, 'configured': False, 'domain': 'elderbrain.local
 DEFAULT_KEYPADS = {'revision': 0, 'ssid': '', 'psk': '', 'serverHost': '', 'serverPort': 10443}
 
 
+def network_files(checkpoint):
+    """Read only the fixed persistent Netplan scope of a verified checkpoint.
+
+    No fallback to live files or empty configuration. The caller retains the
+    checkpoint pin while reading and keeps these credential-bearing bytes private.
+    """
+    from network_transaction import NetworkTransaction
+    checkpoint = Path(checkpoint)
+    if not checkpoint.is_absolute() or checkpoint.resolve() != checkpoint:
+        raise ValueError('Checkpoint requires a canonical path')
+    descriptor = os.open(checkpoint, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in ('host', 'netplan'):
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        result = {}
+        for name in sorted(os.listdir(descriptor)):
+            if not name.endswith('.yaml'):
+                continue
+            NetworkTransaction.filename(name)
+            if len(result) >= 64:
+                raise ValueError('Too many archived Netplan files')
+            file = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor)
+            with os.fdopen(file, 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size > 2 * 1024 * 1024:
+                    raise ValueError('Invalid archived Netplan source')
+                content = stream.read(2 * 1024 * 1024 + 1)
+                if len(content) > 2 * 1024 * 1024:
+                    raise ValueError('Archived Netplan source exceeds limit')
+                result[name] = content
+        if not result:
+            raise ValueError('Checkpoint contains no persistent Netplan configuration')
+        return result
+    finally:
+        os.close(descriptor)
+
+
 def read_json(root, relative, *, fallback, limit=1024 * 1024):
     """Do not follow links in any path segment, even within the checkpoint."""
     parts = Path(relative).parts

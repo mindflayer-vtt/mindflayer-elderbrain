@@ -1,14 +1,47 @@
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'appliance/lib'))
-from checkpoint_staging import stage, read_json, DEFAULT_CONFIG
+from checkpoint_staging import stage, read_json, network_files, DEFAULT_CONFIG
 
 
 class StagingTests(unittest.TestCase):
+    def test_network_reads_only_fixed_scope_and_never_uses_empty_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(FileNotFoundError):
+                network_files(root)
+            source = root / 'host/netplan'
+            source.mkdir(parents=True)
+            with self.assertRaises(ValueError):
+                network_files(root)
+            (source / '50-config.yaml').write_bytes(b'private-network-fixture')
+            (source / 'notes.txt').write_text('ignored')
+            self.assertEqual(network_files(root), {'50-config.yaml': b'private-network-fixture'})
+
+    def test_network_rejects_parent_links_file_links_and_special_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'real/netplan').mkdir(parents=True)
+            (root / 'host').symlink_to(root / 'real')
+            with self.assertRaises(OSError):
+                network_files(root)
+            (root / 'host').unlink()
+            (root / 'real').rename(root / 'host')
+            source = root / 'host/netplan/50-config.yaml'
+            (root / 'outside').write_text('must not follow')
+            source.symlink_to(root / 'outside')
+            with self.assertRaises(OSError):
+                network_files(root)
+            source.unlink()
+            os.mkfifo(source)
+            with self.assertRaises(ValueError):
+                network_files(root)
+
     def test_preferences_are_private_and_do_not_change_live_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
