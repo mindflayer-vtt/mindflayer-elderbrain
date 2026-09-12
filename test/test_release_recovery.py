@@ -118,7 +118,7 @@ class RecoveryEntryTests(unittest.TestCase):
             patches.enter_context(patch('release_recovery.persistent_identity', return_value='fixture'))
             maintenance = patches.enter_context(patch('release_recovery.Maintenance')).return_value
             outcome = {'operation': 'update', 'id': 'a' * 32, 'state': 'completed',
-                       'recoveryApi': 1, 'candidateBootstrap': 'c' * 64}
+                       'recoveryApi': 1, 'candidateBootstrap': 'c' * 64, 'jobId': 'b' * 32}
             maintenance.previous.return_value = outcome
             patches.enter_context(patch('release_recovery.UpdateCheckpoints'))
             activation = patches.enter_context(patch('release_recovery.Activation')).return_value
@@ -126,7 +126,7 @@ class RecoveryEntryTests(unittest.TestCase):
             selected = patches.enter_context(patch('release_recovery.commit_candidate'))
             recover('finish', host_root=root)
             selected.assert_called_once_with('c' * 64,
-                state=root / 'var/lib/mindflayer-elderbrain', host_root=root, job_owner=None)
+                state=root / 'var/lib/mindflayer-elderbrain', host_root=root)
 
     def test_baseline_recovery_routes_to_fixed_migration_before_update_adapter(self):
         with patch('release_recovery.persistent_identity', return_value='fixture'), \

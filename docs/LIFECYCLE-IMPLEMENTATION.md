@@ -2094,3 +2094,39 @@ and shutdown paths, bounded local pre-power protection, physical VM power effect
 and truthful next-boot job convergence. They do not claim a configured remote
 repository was exercised; remote pending/retry behavior remains unit- and earlier
 live-NFS-qualified separately.
+
+The first live post-activation/pre-job-completion interruption exposed a final
+recovery admission defect. A guarded guest watcher killed only update scope
+`dfc9cfdb1a6043669dfb07914c6a1e0e` when its durable stage became
+`committing-recovery`. Before reboot, signed 1.0.4 and sequence 4 were committed,
+maintenance operation `acd9a0635ee9443e8d5cf999d4d34c94` was completed and the
+worker-held lock was gone, while the raw job deliberately remained running. After
+an abrupt QEMU reset, early file recovery succeeded but final recovery passed that
+dead job ID to admission as though it still owned a live lock. Admission correctly
+refused, leaving `elderbrain-update-finish.service` failed and the job interrupted.
+
+Boot recovery now invokes candidate selection through ordinary update admission.
+That admission first observes the unlocked old job as interrupted, rejects any
+actually live/new job, and permits the independently ordered recovery service to
+finish the authenticated candidate. Exact maintenance ID/job/version/digest
+correlation then converts only that old job to its truthful terminal result. A
+regression includes a completed journal carrying a job ID and proves recovery does
+not claim its dead worker lock. Running the corrected source recovery entry point
+against the retained failed VM converged the exact operation and job without data
+repair or a new update.
+
+The fix was then installed normally as signed 1.0.5, sequence 5, manifest
+`71343bbb1be24af6ef8d4cb64246da76c04e6eb93ff4615d961c704b4e6419ab`.
+Because `release_recovery.py` is independently retained recovery code, successful
+commit moved the active bootstrap generation to `56189f6e...` and recovery bundle
+to `4396cb53...`. A second guarded job,
+`6848fb81feeb4f0c94118ae1d0a00781`, installed signed 1.0.6/sequence 6 and was
+killed at the identical committing-recovery boundary. Raw pre-reset evidence in
+`/root/elderbrain-update-stage-interrupt-0sjfqsky` proved maintenance completed,
+the anti-replay policy advanced, the worker lock released and the job still
+running. An abrupt QEMU reset changed boot ID. This time final recovery succeeded,
+the fresh HTTPS client observed `completed / recovery-finished`, sequence 6 and
+its exact manifest digest remained installed, no systemd unit failed, and all four
+runtime, storage, ready-admin HTTPS/authentication and physical UI suites passed.
+This qualifies process loss after activation commit but before job completion,
+followed by abrupt reboot and deterministic boot/job convergence.
