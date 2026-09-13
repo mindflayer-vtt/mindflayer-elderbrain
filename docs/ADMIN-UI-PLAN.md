@@ -72,7 +72,7 @@ without coordinating with the user.
 - File-configured SMTP defaults selected with `SMTP_CONFIG` when building the ISO,
   private installation and optional custom SMTP fields. No actual provider or
   credentials have been supplied. Updated ISOs were built without SMTP defaults;
-  see `ISO-CANDIDATE-2026-09-11.md` for exact image qualification. Physical
+  see the lifecycle implementation record for prior VM qualification. Physical
   deployment of the broader upgrade remains pending.
 - Beamer creation/explicit adoption, copyable pairing IDs, private credentials,
   automatic local Foundry login, per-view process cleanup and live status are

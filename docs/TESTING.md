@@ -18,7 +18,7 @@ The installed Ubuntu 26.04 disposable VM also passed the branded Plymouth reboot
 graphical handoff and post-boot unit-health check. No production permission changes
 were needed for local test sandbox limitations. Live network tests and their
 remaining gates are in `NETWORK-SAFETY.md`; the separately approved physical
-repair is recorded in `LENOVO-BROWSER-REPAIR.md`.
+repair is summarized in the lifecycle implementation record.
 
 ## Commands and scope
 

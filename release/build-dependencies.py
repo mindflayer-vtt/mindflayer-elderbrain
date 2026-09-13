@@ -65,8 +65,9 @@ def build(source, output):
     wheels.mkdir(mode=0o700)
     node.mkdir(mode=0o700)
     # Pin every runtime package and do not resolve additional runtime versions.
-    # Building source distributions is a release-builder operation, not appliance
-    # startup. Build-isolation dependencies may still be fetched by pip here.
+    # Some pins (including esptool for Python 3.14) have no compatible wheel, so
+    # pip build isolation and its upstream build inputs remain a documented
+    # release-runner trust boundary rather than an appliance runtime operation.
     command = [sys.executable, '-m', 'pip', 'wheel', '--no-deps', '--no-cache-dir', '--wheel-dir', str(wheels)]
     for file in locks:
         command += ['-r', str(file)]

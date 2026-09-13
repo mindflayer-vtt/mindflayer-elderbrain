@@ -146,7 +146,7 @@ Local snapshots and same-disk backups do not protect against physical disk loss.
 ## Storage ISO candidate and live test
 
 Built candidate (not qualified, not on Ventoy):
-`/mnt/local-hdd-Stores2/elderbrain-storage-iso-PGYvkyS4/mindflayer-elderbrain-e57c24f58122.iso`
+`<external-artifact-dir>/mindflayer-elderbrain-e57c24f58122.iso`
 SHA256 `b68707b599958bc40a8bd8976e57f4db193b699c6428c98b936a8da946c8961f`.
 Ubuntu signature/checksum verified; build session 26683 completed successfully.
 Host regression: 276 tests, 5 optional skips, no failures.
@@ -155,7 +155,7 @@ First QEMU launch exited before boot because serial was passed to the block
 format rather than virtio device; harness corrected to explicit virtio-blk-pci.
 Replacement harness session 20835 is running with SSH 2228/VNC 5904, work root
 `/tmp/elderbrain-storage-vm-2xOWp33T`, fresh disk
-`/mnt/local-hdd-Stores2/elderbrain-storage-iso-PGYvkyS4/elderbrain-disk.jgJFQQvB/disk.qcow2`.
+`<external-artifact-dir>/disk.qcow2`.
 VM runtime is `/tmp/elderbrain-storage-vm-2xOWp33T/run.NszwZp`, QEMU PID 1414650.
 Console selection ran, but early commands terminated with
 `ValueError: Expected an autoinstall document`: Subiquity normalizes
@@ -176,13 +176,13 @@ Corrected selector accepted the real live `/autoinstall.yaml` and freshly probed
 Prompt waiting now reclaims tty3 only when Subiquity switches to tty1; operator
 diagnostic consoles remain accessible. Error tracebacks go to tty3. Storage
 tests: 49 passing. Corrected ISO build started in
-`/mnt/local-hdd-Stores2/elderbrain-storage-fixed-Jncwa4Ve`; qualification pending.
+an external artifact directory; qualification pending.
 
 Corrected build session 34669 completed. Candidate SHA256:
 `3fad5c99ded1edab53dd51588ffc05dbe05fe953232b46ed41cb0b95e2a94fcd`.
 New clean VM harness session **88308**, SSH **2230**, VNC **5905**, PID **1419374**,
 runtime `/tmp/elderbrain-storage-fixed-vm-TaScAsTI/run.7tYCh3`, disk
-`/mnt/local-hdd-Stores2/elderbrain-storage-fixed-Jncwa4Ve/elderbrain-disk.PXKhCTRa/disk.qcow2`.
+`<external-artifact-dir>/disk.qcow2`.
 Latest observed screen: booting live installer, no selection submitted yet.
 Full host regression passed: 280 tests, 5 optional skips.
 
@@ -201,13 +201,13 @@ do not restart or treat slow package installation as terminal failure.
 
 ## Foundry ownership repair on physical appliance
 
-User confirmed the reinstalled Lenovo is at **10.0.96.126**. Read-only checks
+Read-only checks on the reinstalled physical appliance
 confirmed container `2410daa2498b` bound `/var/lib/mindflayer-elderbrain/foundry`
 to `/data` writable, but the empty directory was `root:root 0755`. Corrected
 only that directory to `1000:1000`, retained 0755, and restarted only Foundry.
 It passed the volume check, completed startup, and is **healthy**, with local
 HTTP **302** responding on port 30000. No software deployment or OS reboot.
-Dedicated SSH known-hosts: `/tmp/elderbrain-hardware-126-known-hosts`.
+used a dedicated temporary SSH known-hosts file.
 
 Local provisioning now applies Foundry ownership explicitly, with a guest
 access check. Real temporary-fixture test on VM 2226 reproduced the original
@@ -267,16 +267,16 @@ under `/root/sway-storage-fix`) verified Sway active without restarts, Chrome
 running, projected file root:kiosk0640, private runtime still root0700.
 This is diagnostic repair, NOT clean-ISO qualification.
 
-Intermediate ISO build `/mnt/local-hdd-Stores2/elderbrain-storage-next-stmJuYri`
+An intermediate ISO build in external artifact storage
 completed but predates the compositor repair; do not install it for qualification.
 Corrected build session **54561** uses
-`/mnt/local-hdd-Stores2/elderbrain-storage-sway-bmduDTGg`; completion and a new
+an external artifact directory; completion and a new
 clean test remain pending. No new ISO has been placed on Ventoy.
 
 Corrected build 54561 completed successfully. New clean harness session
 **25376**, SSH **2232**, VNC **5906**, work root
 `/tmp/elderbrain-storage-clean-AFS69C37`, disposable disk
-`/mnt/local-hdd-Stores2/elderbrain-storage-sway-bmduDTGg/elderbrain-disk.8HbY3j8v/disk.qcow2`.
+`<external-artifact-dir>/disk.qcow2`.
 Boot launched; storage selection and qualification pending. Existing VM2230
 passed the general guest checks after its explicitly documented runtime Sway
 repair (container pins, private management bridge, serial/v3 tooling).
@@ -429,7 +429,7 @@ reinstall and absent-partition boot tests remain, along with UEFI qualification.
 The user has powered off the Lenovo; leave it untouched until they report it on.
 VM2232 preserve-reinstall baseline was seeded once and copied privately to the
 host at `/tmp/elderbrain-storage-clean-AFS69C37/preserve-baseline.json` (27 files).
-New ISO at `/mnt/local-hdd-Stores2/elderbrain-preserve-iso-wIGsVkGC/`
+New ISO in `<external-artifact-dir>/`
 `mindflayer-elderbrain-e57c24f58122.iso` is readable, includes snapshot_service,
 and has SHA256 `5c0427b507b79b9656eca96c86f6ae228a26499344296ab0b4ca827fbfed1b5b`.
 Inserted it into VM2232's unused virtual CD and gracefully rebooted, selected
@@ -573,7 +573,7 @@ is the old ISO payload; newer restore hooks are not deployed there.
 
 New preserve-test ISO built successfully from 4d07fc3008ac (working-tree dirty
 marker reflects the user's unrelated .gitignore edit):
-`/mnt/local-hdd-Stores2/elderbrain-preserve-current-CLRYutzI/mindflayer-elderbrain-4d07fc3008ac.iso`
+`<external-artifact-dir>/mindflayer-elderbrain-4d07fc3008ac.iso`
 SHA256 `fb2d327f223a4b7101464430ea49593cc5430e40c61a9517b34db15b4eb2e805`.
 Verified the persistent baseline checksum, inserted the ISO into the empty
 virtual CD, gracefully rebooted VM2232, selected the Elderbrain installer and
@@ -714,7 +714,7 @@ evidence remains untouched. New baseline OS UUID is
 SHA256:EkwA/FqKM4IDJd5cmOt1Ob4c1iYl+S0DY/2cmKO6gwk.
 Fixed ISO built successfully from b3213854c772 (dirty marker only the unrelated
 user .gitignore edit):
-`/mnt/local-hdd-Stores2/elderbrain-ssh-preserve-xGN4gEA1/mindflayer-elderbrain-b3213854c772.iso`
+`<external-artifact-dir>/mindflayer-elderbrain-b3213854c772.iso`
 SHA256 a03d8bd0c5dab3f91a246cda1867ca6a3c4afeb0d70ea3628316f862edead3ae.
 Verified Ubuntu signature/checksum, changed the VM's ide1-cd0 to the new ISO,
 set next boot to CD and requested a graceful reboot. Installer selection and

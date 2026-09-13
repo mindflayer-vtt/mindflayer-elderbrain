@@ -34,6 +34,15 @@ class PublicGovernanceTests(unittest.TestCase):
         self.assertIn("release_sequence: 2", document)
         self.assertIn("actual public GitHub Release artifacts", document)
 
+    def test_public_docs_state_non_hermetic_install_and_release_boundaries(self):
+        build = (ROOT / "docs/BUILD.md").read_text()
+        release = (ROOT / "docs/RELEASE-FORMAT.md").read_text()
+        self.assertIn("may resolve newer packages from authenticated Ubuntu", build)
+        self.assertIn("not a fully offline Linux distribution", build)
+        self.assertIn("not a hermetic or bit-reproducible release build", release)
+        self.assertIn("pip may therefore resolve upstream build-isolation inputs", release)
+        self.assertIn("appliances install that bundle offline", release)
+
 
 if __name__ == "__main__":
     unittest.main()

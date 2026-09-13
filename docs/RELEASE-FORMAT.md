@@ -212,11 +212,20 @@ python release/build-dependencies.py OUTPUT_NEW_DIRECTORY
 ```
 
 The builder downloads/builds each exact pinned Python runtime package with
-`pip wheel --no-deps`, and packs the exact browser-helper package without running
-NPM lifecycle scripts. Its tarball must match the lockfile SHA-512 integrity.
-The serial requirements now include the transitive versions qualified in the VM;
-borgmatic already had a complete pinned runtime set. Pip's isolated *build*
-dependencies may still be downloaded during this release-builder operation.
+`pip wheel --no-deps`. It packs the exact browser-helper package without running
+NPM lifecycle scripts, and that tarball must match the lockfile SHA-512 integrity.
+The serial and borgmatic files pin their complete qualified runtime sets. Some
+Python pins, including esptool on Python 3.14, do not publish a compatible wheel;
+pip may therefore resolve upstream build-isolation inputs while constructing the
+offline wheel.
+
+This is not a hermetic or bit-reproducible release build. Python artifact hashes
+are recorded after retrieval rather than predeclared, so the release runner's TLS
+trust, PyPI, npm registry, pinned GitHub Actions and Ubuntu runner image remain in
+the release-construction trust boundary. The signed manifest authenticates the
+resulting fixed bundle, and appliances install that bundle offline without
+contacting package indexes. Review runner logs and dependency changes before
+approving production signing.
 
 `dependencies.json` records input hashes, target/Python version, runtime pins and
 artifact sizes/SHA-256 digests. It currently declares `offlineInstallVerified:

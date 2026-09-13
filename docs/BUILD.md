@@ -11,7 +11,7 @@ For example, to use your server administration key for a hardware test:
 
 ```sh
 make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
-  SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub"
+  SSH_PUBLIC_KEY="$HOME/.ssh/elderbrain-admin.pub"
 ```
 
 The key is selected at build time, not hard-coded. Choose another public-key
@@ -24,7 +24,7 @@ independent public verification key:
 
 ```sh
 make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
-  SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" \
+  SSH_PUBLIC_KEY="$HOME/.ssh/elderbrain-admin.pub" \
   UPDATE_SOURCE_CONFIG=config/releases/github-releases.json \
   UPDATE_PUBLIC_KEY=config/releases/appliance-release-public.pem
 ```
@@ -51,6 +51,13 @@ must not be used for production releases. `DEV_ALLOW_NO_SSH_KEY=1` remains a
 separate test-only escape hatch.
 
 The base installer is self-contained and does not clone this repository. Internet access is required during target provisioning for Ubuntu/Docker/Chrome packages and public runtime container pulls. Foundry also downloads its runtime after an owner supplies supported credentials or a timed URL. A registry or package failure leaves `elderbrain-stack.service` failed/retrying with diagnostics in `journalctl -u elderbrain-stack`; it is never reported healthy.
+
+The Elderbrain ISO identifies the appliance code and release baseline, but a
+clean installation may resolve newer packages from authenticated Ubuntu, Docker
+and Chrome repositories. It does not uniquely identify every installed OS/vendor
+package byte and is not a fully offline Linux distribution. The coordinated
+Elderbrain application update path is separate: its manifest and fixed offline
+dependency bundle are independently signed and verified before activation.
 
 Set `ISO_OUT_DIR` to a separate output directory to preserve an earlier ISO or
 avoid filling the workspace disk. It defaults to `out/`; the verified Ubuntu
@@ -89,7 +96,7 @@ directory is Git-ignored and excluded from the ISO unless explicitly selected:
 
 ```sh
 make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
-  SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" \
+  SSH_PUBLIC_KEY="$HOME/.ssh/elderbrain-admin.pub" \
   SMTP_CONFIG=config/private/smtp.json
 ```
 

@@ -65,7 +65,7 @@ Build production installation media with the same reviewed channel and key:
 
 ```sh
 make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
-  SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" \
+  SSH_PUBLIC_KEY="$HOME/.ssh/elderbrain-admin.pub" \
   UPDATE_SOURCE_CONFIG=config/releases/github-releases.json \
   UPDATE_PUBLIC_KEY=config/releases/appliance-release-public.pem
 ```
