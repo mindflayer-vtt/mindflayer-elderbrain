@@ -1,12 +1,14 @@
 import { AuthError, type AuthStore } from "../../utils/auth";
 import { smallBody } from "../../utils/request-body";
+import { clientAddress } from "../../utils/client-address";
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as AuthStore;
   const action = getRouterParam(event, "action");
   const id = getCookie(event, "elderbrain-session");
-  const client = event.node.req.socket.remoteAddress || "unknown";
   try {
+    const client = clientAddress(event.node.req.socket.remoteAddress, getHeader(event, "x-forwarded-for"),
+      process.env.ELDERBRAIN_DEV_HTTP === "1", process.env.ELDERBRAIN_TRUSTED_PROXY_IP);
     if (action === "session" && event.method === "GET") return auth.session(id);
     if (event.method !== "POST") throw new AuthError("Not found", 404);
     const body = await smallBody(event);

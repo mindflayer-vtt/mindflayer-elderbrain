@@ -108,6 +108,14 @@ Implemented foundations:
   routes. HTTP permanently redirects to HTTPS, Foundry is proxy-TLS aware, and
   neither the CA key nor a Docker socket is mounted in Traefik. The kiosk NSS
   database trusts the local CA; other clients must install its public certificate.
+- Setup authentication accepts `X-Forwarded-For` only when the backend TCP peer
+  is Traefik's fixed address on the private Compose network. Traefik is explicitly
+  configured to append the socket client, making the strictly parsed rightmost
+  address authoritative; attacker-controlled leading values cannot select a rate
+  bucket. Missing/malformed metadata and direct production access fail closed.
+  Local HTTP development instead uses only the direct socket peer and ignores
+  forwarding headers. Global authentication limits remain independent of these
+  per-client buckets.
 - External host ingress passed using a temporary loopback-only QEMU port forward
   through the guest's ens3 interface and UFW rule. The host TLS client verified the
   appliance CA and exact guest IP, then confirmed the pending DHCP transaction.
