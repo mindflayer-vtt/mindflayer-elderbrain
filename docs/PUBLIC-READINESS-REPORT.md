@@ -7,18 +7,19 @@ and no production GitHub Release was created.
 ## History and repository audit
 
 - Scanner: gitleaks 8.30.1, invoked by `make public-audit`.
-- Audited commit: `92a2c9496dc6aa98497cb3139505970d8ecbe12d`.
+- Audited release-control commit: `c5d7b181ad8cdb370c72775f664d54e4e53e18dc`.
 - Scope: every remote branch and tag, all reachable Git history, and current
-  tracked files (143 commits at the time of the recorded run).
+  tracked files (153 commits at the time of the recorded run).
 - Result: pass; no leaks were found and no secret values were retained in audit
   output.
 - Remediation: no genuine credential was found, so no credential rotation,
   revocation, or history rewrite was required. Public-facing documentation was
   separately reviewed and maintainer-specific paths and obsolete LAN handoff
-  records were removed or generalized.
+  records were removed or generalized. The final release-control changes add no
+  secret material and retain the private key solely as an Environment secret.
 
-Run the audit again after any later documentation-only readiness commit and
-record the resulting commit in the maintainer handoff before changing
+This evidence-recording commit changes only this report. Scan that final remote
+tip again and record its exact SHA in the maintainer handoff before changing
 visibility.
 
 ## Exact private baseline ISO
@@ -82,9 +83,9 @@ limitation does not weaken the signed Elderbrain update-path qualification.
 
 ## Validation state
 
-The final functional baseline commit passed GitHub CI, including actionlint,
+The final release-control commit passed GitHub CI run `34773700308`, including actionlint,
 Python/static tests, Setup tests and typechecking, Compose validation, production
-Setup build, and browser tests. Local validation additionally passed 662 Python
+Setup build, and browser tests. Local validation additionally passed 673 Python
 and static tests (5 opt-in skips), 43 Setup tests, and 42 production browser
 tests. The release workflow remains `workflow_dispatch`-only, and no production
 release workflow was dispatched.
