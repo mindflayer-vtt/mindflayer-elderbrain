@@ -71,6 +71,23 @@ class ArchiveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.create()
 
+    def test_browser_runtime_singletons_are_excluded_but_profile_data_is_preserved(self):
+        browser = self.root / "browser"
+        profile = browser / "profile-0-admin"
+        profile.mkdir(parents=True)
+        (profile / "Preferences").write_text('{"configured":true}')
+        (profile / "SingletonLock").symlink_to("elderbrain-123")
+        (profile / "SingletonSocket").symlink_to("/tmp/com.google.Chrome.test/SingletonSocket")
+        (profile / "SingletonCookie").symlink_to("123456")
+        manifest = backup.create(self.archive, {"browser": browser}, version="test", identity="fixture")
+        paths = {entry["path"] for entry in manifest["entries"]}
+        self.assertIn("browser/profile-0-admin/Preferences", paths)
+        for name in backup.BROWSER_RUNTIME_ENTRIES:
+            self.assertNotIn("browser/profile-0-admin/" + name, paths)
+        with backup.stage(self.archive, parent=self.root) as (contents, _):
+            self.assertEqual((contents / "browser/profile-0-admin/Preferences").read_text(),
+                             '{"configured":true}')
+
     def test_no_recursive_backup_or_missing_source(self):
         with self.assertRaises(ValueError):
             backup.create(self.source / "archive.tar.zst", {"elderbrain": self.source}, version="t", identity="t")

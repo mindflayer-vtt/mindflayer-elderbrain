@@ -22,6 +22,7 @@ ROOTS = {"foundry", "elderbrain", "mindflayer", "traefik", "firmware",
          "service-config", "ssh-root", "ssh-admin", "ssh-server", "admin-ca",
          "browser", "keypad-installations"}
 MAX_MANIFEST = 32 * 1024 * 1024
+BROWSER_RUNTIME_ENTRIES = {"SingletonCookie", "SingletonLock", "SingletonSocket"}
 
 
 class LimitedReader:
@@ -139,6 +140,12 @@ def create(destination, sources, *, version, identity, deadline=None):
                 source = Path(source)
                 for path in [source, *sorted(source.rglob("*"))]:
                     remaining(deadline)
+                    # Chromium recreates these process-coordination markers for
+                    # every browser session. SingletonSocket is an absolute link
+                    # into /tmp and is neither portable configuration nor safe to
+                    # restore; the related cookie and lock are equally ephemeral.
+                    if logical == "browser" and path != source and path.name in BROWSER_RUNTIME_ENTRIES:
+                        continue
                     name = logical if path == source else logical + "/" + path.relative_to(source).as_posix()
                     safe_name(name)
                     # Store hard-linked files independently; never create tar hardlinks.
