@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       release_sequence:
-        description: Monotonic integer greater than every published release
+        description: Monotonic integer greater than every production release
         required: true
         type: string
       notes:
@@ -16,27 +16,166 @@ on:
         required: true
         type: string
 
-permissions:
-  actions: read
-  contents: write
-  packages: write
-
 concurrency:
   group: appliance-release
   cancel-in-progress: false
 
 jobs:
-  publish:
+  prepare:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
-    timeout-minutes: 90
-    environment:
-      name: appliance-release
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      receipt-sha256: ${{ steps.prepared-inputs.outputs.receipt-sha256 }}
     env:
       VERSION: ${{ inputs.version }}
       RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
       RELEASE_NOTES: ${{ inputs.notes }}
-      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Require a public production channel
+        if: github.event.repository.private
+        run: |
+          echo 'The appliance stores no GitHub credential; make the repository public before publishing.' >&2
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Configure isolated preparation paths
+        run: |
+          {
+            echo "DEPENDENCY_DIRECTORY=$RUNNER_TEMP/elderbrain-dependencies"
+            echo "PREPARED_DIRECTORY=$RUNNER_TEMP/elderbrain-prepared"
+            echo "NOTES_FILE=$RUNNER_TEMP/release-notes-input.md"
+            echo "AUTH_DOCKER_CONFIG=$RUNNER_TEMP/docker-release-auth"
+            echo "ANONYMOUS_DOCKER_CONFIG=$RUNNER_TEMP/docker-anonymous"
+          } >> "$GITHUB_ENV"
+      - name: Verify exact source identity
+        run: |
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$GITHUB_SHA"
+          git diff --quiet
+          git diff --cached --quiet
+          source_tree=$(git rev-parse --verify 'HEAD^{tree}')
+          [[ $source_tree =~ ^[0-9a-f]{40}$ ]]
+          echo "SOURCE_TREE=$source_tree" >> "$GITHUB_ENV"
+      - name: Install preparation tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y zstd
+      - name: Validate release identity, baseline and notes
+        run: |
+          printf '%s\n' "$RELEASE_NOTES" > "$NOTES_FILE"
+          python3 release/production-metadata.py \
+            --version "$VERSION" \
+            --sequence "$RELEASE_SEQUENCE" \
+            --setup-image "ghcr.io/mindflayer-vtt/mindflayer-elderbrain-setup:validation@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+            --notes-file "$NOTES_FILE" \
+            "$RUNNER_TEMP/metadata-validation.json"
+          python3 release/verify-sequence.py \
+            --baseline config/releases/production-baseline.json \
+            --public-key config/releases/appliance-release-public.pem \
+            --version "$VERSION" --proposed "$RELEASE_SEQUENCE"
+      - name: Build and publish immutable Setup image
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -m 700 "$AUTH_DOCKER_CONFIG"
+          cleanup_registry_credentials() {
+            DOCKER_CONFIG="$AUTH_DOCKER_CONFIG" docker logout ghcr.io >/dev/null 2>&1 || true
+            rm -f "$AUTH_DOCKER_CONFIG/config.json"
+          }
+          trap cleanup_registry_credentials EXIT
+          setup_tag="ghcr.io/mindflayer-vtt/mindflayer-elderbrain-setup:${VERSION}-${GITHUB_SHA}"
+          printf '%s' "$GHCR_TOKEN" | DOCKER_CONFIG="$AUTH_DOCKER_CONFIG" docker login \
+            ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          DOCKER_CONFIG="$AUTH_DOCKER_CONFIG" docker build --pull --platform linux/amd64 \
+            --build-arg "SETUP_VERSION=$VERSION" \
+            --build-arg HOST_API_MIN=1 --build-arg HOST_API_MAX=1 \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "$setup_tag" setup
+          DOCKER_CONFIG="$AUTH_DOCKER_CONFIG" docker push "$setup_tag"
+          manifest=$(DOCKER_CONFIG="$AUTH_DOCKER_CONFIG" docker buildx imagetools inspect \
+            "$setup_tag" --format '{{json .Manifest}}')
+          digest=$(printf '%s' "$manifest" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "SETUP_IMAGE=$setup_tag@$digest" >> "$GITHUB_ENV"
+          cleanup_registry_credentials
+          trap - EXIT
+      - name: Verify Setup image anonymously by exact digest
+        run: |
+          mkdir -m 700 "$ANONYMOUS_DOCKER_CONFIG"
+          anonymous=$(DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG" docker buildx imagetools inspect \
+            "$SETUP_IMAGE" --format '{{json .Manifest}}') || {
+              echo 'The immutable Setup image is not anonymously readable from GHCR' >&2
+              exit 1
+            }
+          anonymous_digest=$(printf '%s' "$anonymous" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          test "${SETUP_IMAGE##*@}" = "$anonymous_digest" || {
+            echo 'Anonymous GHCR inspection resolved a different Setup image digest' >&2
+            exit 1
+          }
+      - name: Verify public runtime images
+        run: |
+          while IFS= read -r image; do
+            DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG" docker buildx imagetools inspect "$image" >/dev/null
+          done < <(sed -nE 's/^(TRAEFIK_IMAGE|MINDFLAYER_SERVER_IMAGE|FOUNDRY_IMAGE)=//p' config/defaults/appliance.env)
+      - name: Build offline dependencies
+        run: python3 release/build-dependencies.py "$DEPENDENCY_DIRECTORY"
+      - name: Build unsigned release inputs and preparation receipt
+        id: prepared-inputs
+        run: |
+          python3 release/prepared-inputs.py create \
+            --dependencies "$DEPENDENCY_DIRECTORY" \
+            --notes-file "$NOTES_FILE" \
+            --version "$VERSION" --sequence "$RELEASE_SEQUENCE" \
+            --setup-image "$SETUP_IMAGE" \
+            --source-commit "$GITHUB_SHA" --source-tree "$SOURCE_TREE" \
+            "$PREPARED_DIRECTORY"
+          receipt_sha256=$(sha256sum "$PREPARED_DIRECTORY/preparation-receipt.json" | cut -d ' ' -f1)
+          [[ $receipt_sha256 =~ ^[0-9a-f]{64}$ ]]
+          echo "receipt-sha256=$receipt_sha256" >> "$GITHUB_OUTPUT"
+      - name: Upload fixed prepared release inputs
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: appliance-release-inputs
+          path: |
+            ${{ env.PREPARED_DIRECTORY }}/preparation-receipt.json
+            ${{ env.PREPARED_DIRECTORY }}/release-metadata.json
+            ${{ env.PREPARED_DIRECTORY }}/release-notes.md
+            ${{ env.PREPARED_DIRECTORY }}/elderbrain-host.tar.zst
+            ${{ env.PREPARED_DIRECTORY }}/elderbrain-dependencies.tar.zst
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+      - name: Remove registry credentials
+        if: always()
+        run: rm -f "$AUTH_DOCKER_CONFIG/config.json"
+
+  sign-and-publish:
+    if: github.ref == 'refs/heads/main'
+    needs: prepare
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment:
+      name: appliance-release
+    permissions:
+      actions: read
+      contents: write
+      packages: read
+    env:
+      VERSION: ${{ inputs.version }}
+      RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
     steps:
       - name: Require a public production channel
         if: github.event.repository.private
@@ -44,11 +183,13 @@ jobs:
           echo 'The appliance stores no GitHub credential; make the repository public before publishing.' >&2
           exit 1
       - name: Require protected release authority
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/appliance-release")
           reviewers=$(printf '%s' "$environment" | jq '[.protection_rules[] | select(.type == "required_reviewers") | .reviewers[]] | length')
           test "$reviewers" -ge 1 || {
-            echo 'appliance-release must require an approving reviewer' >&2
+            echo 'appliance-release must require deliberate maintainer approval' >&2
             exit 1
           }
           branch_policy=$(printf '%s' "$environment" | jq -r '.deployment_branch_policy.custom_branch_policies')
@@ -58,130 +199,131 @@ jobs:
           test "$(printf '%s' "$policies" | jq -r '.branch_policies[0].name')" = main
           test "$(printf '%s' "$policies" | jq -r '.branch_policies[0].type')" = branch
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: "3.14"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      - name: Configure private release paths
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Configure protected release paths
         run: |
           {
+            echo "PREPARED_DIRECTORY=$RUNNER_TEMP/elderbrain-prepared"
+            echo "RELEASE_DIRECTORY=$RUNNER_TEMP/elderbrain-release"
             echo "SIGNING_KEY=$RUNNER_TEMP/appliance-release-private.pem"
             echo "GENERATED_PUBLIC_KEY=$RUNNER_TEMP/appliance-release-public.pem"
-            echo "RELEASE_DIRECTORY=$RUNNER_TEMP/elderbrain-release"
-            echo "DEPENDENCY_DIRECTORY=$RUNNER_TEMP/elderbrain-dependencies"
-            echo "NOTES_FILE=$RUNNER_TEMP/release-notes.md"
             echo "ANONYMOUS_DOCKER_CONFIG=$RUNNER_TEMP/docker-anonymous"
           } >> "$GITHUB_ENV"
-      - name: Install release tooling
+      - name: Verify exact source identity and signing tools
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y zstd
-      - name: Validate release identity and notes
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$GITHUB_SHA"
+          source_tree=$(git rev-parse --verify 'HEAD^{tree}')
+          [[ $source_tree =~ ^[0-9a-f]{40}$ ]]
+          echo "SOURCE_TREE=$source_tree" >> "$GITHUB_ENV"
+          command -v openssl
+          command -v zstd
+      - name: Download prepared release inputs
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: appliance-release-inputs
+          path: ${{ env.PREPARED_DIRECTORY }}
+      - name: Revalidate every prepared byte
+        id: prepared
+        env:
+          EXPECTED_RECEIPT_SHA256: ${{ needs.prepare.outputs.receipt-sha256 }}
         run: |
-          printf '%s\n' "$RELEASE_NOTES" > "$NOTES_FILE"
-          python3 release/production-metadata.py \
-            --version "$VERSION" \
-            --sequence "$RELEASE_SEQUENCE" \
-            --setup-image "ghcr.io/mindflayer-vtt/mindflayer-elderbrain-setup:validation@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
-            --notes-file "$NOTES_FILE" \
-            "$RUNNER_TEMP/metadata-validation.json"
-      - name: Require a new tag and release sequence
+          [[ $EXPECTED_RECEIPT_SHA256 =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum "$PREPARED_DIRECTORY/preparation-receipt.json" | cut -d ' ' -f1)" = \
+            "$EXPECTED_RECEIPT_SHA256"
+          python3 release/prepared-inputs.py verify \
+            --source-commit "$GITHUB_SHA" --source-tree "$SOURCE_TREE" \
+            --version "$VERSION" --sequence "$RELEASE_SEQUENCE" \
+            --github-output "$GITHUB_OUTPUT" "$PREPARED_DIRECTORY"
+      - name: Reverify Setup image anonymously by exact digest
+        env:
+          SETUP_IMAGE: ${{ steps.prepared.outputs.setup-image }}
+        run: |
+          mkdir -m 700 "$ANONYMOUS_DOCKER_CONFIG"
+          anonymous=$(DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG" docker buildx imagetools inspect \
+            "$SETUP_IMAGE" --format '{{json .Manifest}}') || {
+              echo 'The signed release would reference a credential-only Setup image' >&2
+              exit 1
+            }
+          digest=$(printf '%s' "$anonymous" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          test "${SETUP_IMAGE##*@}" = "$digest"
+      - name: Reverify fixed runtime image digests
+        run: |
+          while IFS= read -r image; do
+            DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG" docker buildx imagetools inspect "$image" >/dev/null
+          done < <(sed -nE 's/^(TRAEFIK_IMAGE|MINDFLAYER_SERVER_IMAGE|FOUNDRY_IMAGE)=//p' config/defaults/appliance.env)
+      - name: Require available tag and authenticated sequence advance
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           tag="v$VERSION"
+          error="$RUNNER_TEMP/tag-check-error"
           set +e
-          git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>"$error"
           status=$?
           set -e
           if [[ $status -eq 0 ]]; then
             echo "Tag already exists: $tag" >&2
             exit 1
-          elif [[ $status -ne 2 ]]; then
+          elif ! grep -q '(HTTP 404)' "$error"; then
             echo 'Could not verify release tag availability' >&2
+            cat "$error" >&2
             exit 1
           fi
+
           prior="$RUNNER_TEMP/prior-release"
           error="$RUNNER_TEMP/latest-release-error"
           set +e
           prior_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>"$error")
           status=$?
           set -e
+          sequence_args=()
           if [[ $status -eq 0 ]]; then
             [[ $prior_tag =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
             mkdir -m 700 "$prior"
             gh release download "$prior_tag" --pattern manifest.json --pattern manifest.sig --dir "$prior"
-            python3 release/verify-sequence.py \
-              --manifest "$prior/manifest.json" \
-              --signature "$prior/manifest.sig" \
-              --public-key config/releases/appliance-release-public.pem \
-              --proposed "$RELEASE_SEQUENCE"
+            sequence_args=(--manifest "$prior/manifest.json" --signature "$prior/manifest.sig")
           elif ! grep -q '(HTTP 404)' "$error"; then
             echo 'Could not authenticate the current production release sequence' >&2
             cat "$error" >&2
             exit 1
           fi
-      - name: Build and publish immutable Setup image
-        run: |
-          setup_tag="ghcr.io/mindflayer-vtt/mindflayer-elderbrain-setup:${VERSION}-${GITHUB_SHA}"
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker build --pull --platform linux/amd64 \
-            --build-arg "SETUP_VERSION=$VERSION" \
-            --build-arg HOST_API_MIN=1 --build-arg HOST_API_MAX=1 \
-            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-            --tag "$setup_tag" setup
-          docker push "$setup_tag"
-          manifest=$(docker buildx imagetools inspect "$setup_tag" --format '{{json .Manifest}}')
-          digest=$(printf '%s' "$manifest" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
-          [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "SETUP_IMAGE=$setup_tag@$digest" >> "$GITHUB_ENV"
-          docker logout ghcr.io
-          mkdir -m 700 "$ANONYMOUS_DOCKER_CONFIG"
-          anonymous=$(DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG" docker buildx imagetools inspect \
-            "$setup_tag@$digest" --format '{{json .Manifest}}') || {
-              echo 'The immutable Setup image is not anonymously readable from GHCR' >&2
-              exit 1
-            }
-          anonymous_digest=$(printf '%s' "$anonymous" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
-          test "$anonymous_digest" = "$digest" || {
-            echo 'Anonymous GHCR inspection resolved a different Setup image digest' >&2
-            exit 1
-          }
-      - name: Verify public runtime images
-        run: |
-          while IFS= read -r image; do
-            docker buildx imagetools inspect "$image" >/dev/null
-          done < <(sed -nE 's/^(TRAEFIK_IMAGE|MINDFLAYER_SERVER_IMAGE|FOUNDRY_IMAGE)=//p' config/defaults/appliance.env)
-      - name: Build offline dependencies and release metadata
-        run: |
-          python3 release/build-dependencies.py "$DEPENDENCY_DIRECTORY"
-          python3 release/production-metadata.py \
-            --version "$VERSION" \
-            --sequence "$RELEASE_SEQUENCE" \
-            --setup-image "$SETUP_IMAGE" \
-            --notes-file "$NOTES_FILE" \
-            "$RUNNER_TEMP/release-metadata.json"
-      - name: Validate protected signing key and sign artifacts
+          python3 release/verify-sequence.py \
+            --baseline config/releases/production-baseline.json \
+            --public-key config/releases/appliance-release-public.pem \
+            --version "$VERSION" --proposed "$RELEASE_SEQUENCE" \
+            "${sequence_args[@]}"
+      - name: Materialize key, sign prepared inputs, and immediately erase key
         env:
           APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY }}
         run: |
           test -n "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY"
           umask 077
+          cleanup_signing_material() { rm -f "$SIGNING_KEY" "$GENERATED_PUBLIC_KEY"; }
+          trap cleanup_signing_material EXIT
           printf '%s\n' "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY" > "$SIGNING_KEY"
           openssl pkey -in "$SIGNING_KEY" -check -noout
           openssl pkey -in "$SIGNING_KEY" -pubout -out "$GENERATED_PUBLIC_KEY"
           cmp "$GENERATED_PUBLIC_KEY" config/releases/appliance-release-public.pem
-          python3 release/assemble.py \
-            --metadata "$RUNNER_TEMP/release-metadata.json" \
+          python3 release/sign-prepared.py \
+            --source-commit "$GITHUB_SHA" --source-tree "$SOURCE_TREE" \
+            --version "$VERSION" --sequence "$RELEASE_SEQUENCE" \
             --signing-key "$SIGNING_KEY" \
             --public-key config/releases/appliance-release-public.pem \
-            --dependencies "$DEPENDENCY_DIRECTORY" \
+            --inputs "$PREPARED_DIRECTORY" "$RELEASE_DIRECTORY"
+          cleanup_signing_material
+          trap - EXIT
+      - name: Verify signed release after key removal
+        run: |
+          test ! -e "$SIGNING_KEY"
+          test ! -e "$GENERATED_PUBLIC_KEY"
+          python3 release/verify-artifacts.py \
+            --public-key config/releases/appliance-release-public.pem \
             "$RELEASE_DIRECTORY"
-      - name: Remove transient signing material
-        if: always()
-        run: rm -f "$SIGNING_KEY" "$GENERATED_PUBLIC_KEY"
       - name: Publish complete release atomically
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           tag="v$VERSION"
           gh release create "$tag" \
@@ -190,7 +332,10 @@ jobs:
             "$RELEASE_DIRECTORY/manifest.sig" \
             "$RELEASE_DIRECTORY/manifest.json" \
             --draft --target "$GITHUB_SHA" --title "Elderbrain $VERSION" \
-            --notes-file "$NOTES_FILE"
+            --notes-file "$PREPARED_DIRECTORY/release-notes.md"
           assets=$(gh release view "$tag" --json assets --jq '[.assets[].name] | sort | join(" ")')
           test "$assets" = 'elderbrain-dependencies.tar.zst elderbrain-host.tar.zst manifest.json manifest.sig'
           gh release edit "$tag" --draft=false --prerelease=false --latest
+      - name: Remove transient signing material
+        if: always()
+        run: rm -f "$SIGNING_KEY" "$GENERATED_PUBLIC_KEY"
