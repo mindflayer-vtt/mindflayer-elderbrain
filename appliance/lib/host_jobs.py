@@ -1,9 +1,12 @@
 """Persistent, allowlisted host jobs. Live state is proven by a worker-held lock."""
 import fcntl
+import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -31,6 +34,115 @@ COMMANDS["snapshot-restore"] = ["snapshot-restore"]
 COMMANDS['network-snapshot-restore'] = []
 COMMANDS['update'] = []
 COMMANDS['power'] = []
+
+FOUNDRY_STATE = Path(os.environ.get('ELDERBRAIN_STATE_DIR', '/var/lib/mindflayer-elderbrain'))
+FOUNDRY_WORDLIST = Path(os.environ.get(
+    'ELDERBRAIN_BOOTSTRAP_WORDS', '/opt/mindflayer-elderbrain/bootstrap-words.json'))
+FOUNDRY_SECRET_KEYS = {
+    'foundry_release_url', 'foundry_username', 'foundry_password', 'foundry_admin_key'}
+
+
+def _foundry_read_json(path):
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return {}
+    if not stat.S_ISREG(info.st_mode) or info.st_size > 65536:
+        raise ValueError('Unsafe Foundry secret file')
+    value = json.loads(path.read_text())
+    if (not isinstance(value, dict) or set(value) - FOUNDRY_SECRET_KEYS
+            or any(not isinstance(item, str) for item in value.values())):
+        raise ValueError('Invalid Foundry secret file')
+    return value
+
+
+def _foundry_words():
+    words = json.loads(FOUNDRY_WORDLIST.read_text())
+    if (not isinstance(words, list) or len(words) != 256 or len(set(words)) != 256
+            or any(not isinstance(word, str) or not word.isascii() or not word.isalpha()
+                   or not word.islower() or not 3 <= len(word) <= 8 for word in words)):
+        raise ValueError('Invalid bootstrap word list')
+    return words
+
+
+def _generate_foundry_key():
+    words = _foundry_words()
+    return '-'.join(secrets.choice(words) for _ in range(12))
+
+
+def _valid_foundry_key(key):
+    selected = key.split('-')
+    allowed = set(_foundry_words())
+    return len(selected) == 12 and all(word in allowed for word in selected)
+
+
+def _write_foundry_secret(path, value):
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+    try:
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'w') as stream:
+            json.dump(value, stream, separators=(',', ':'))
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chown(temporary, 1000, 1000)
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _existing_foundry_admin_file():
+    path = FOUNDRY_STATE / 'foundry/Config/admin.txt'
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError('Unsafe Foundry administrator file')
+    return path
+
+
+def _foundry_key_matches(path, key):
+    if path.stat().st_size > 512:
+        return False
+    actual = path.read_text().strip()
+    expected = hashlib.pbkdf2_hmac(
+        'sha512', key.encode(), b'17c4f39053ac5a50d5797c665ad1f4e6', 1000, 64).hex()
+    return hmac.compare_digest(actual, expected)
+
+
+def foundry_access_key(operation='status'):
+    """Manage the recoverable Foundry administrator access key."""
+    if operation not in ('status', 'ensure', 'reset'):
+        raise ValueError('Invalid Foundry administrator operation')
+    secret = FOUNDRY_STATE / 'elderbrain/secrets/foundry-config.json'
+    lock = secret.with_suffix('.lock')
+    lock.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    descriptor = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        value = _foundry_read_json(secret)
+        key = value.get('foundry_admin_key')
+        existing = _existing_foundry_admin_file()
+        if key and operation != 'reset':
+            if not _valid_foundry_key(key):
+                return {'managed': False, 'resetRequired': True}
+            if existing is not None and not _foundry_key_matches(existing, key):
+                return {'managed': False, 'resetRequired': True}
+            return {'managed': True, 'accessKey': key, 'resetRequired': False}
+        if operation == 'status' or (operation == 'ensure' and existing is not None):
+            return {'managed': False, 'resetRequired': existing is not None}
+        key = _generate_foundry_key()
+        _write_foundry_secret(secret, {**value, 'foundry_admin_key': key})
+        if operation == 'reset' and existing is not None:
+            existing.unlink()
+        return {'managed': True, 'accessKey': key, 'resetRequired': False}
+    finally:
+        os.close(descriptor)
 
 
 def _boot_id():

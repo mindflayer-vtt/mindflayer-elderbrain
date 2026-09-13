@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("foundry_admin", ROOT / "appliance/lib/foundry_admin.py")
+SPEC = importlib.util.spec_from_file_location("foundry_admin", ROOT / "appliance/lib/host_jobs.py")
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
@@ -23,8 +23,9 @@ class FoundryAdministratorTests(unittest.TestCase):
         self.words = ROOT / "setup/shared/bootstrap-words.json"
 
     def operate(self, operation):
-        with patch.object(MODULE, "STATE", self.state), patch.object(MODULE, "WORDLIST", self.words), patch.object(MODULE.os, "chown"):
-            return MODULE.access_key(operation)
+        with patch.object(MODULE, "FOUNDRY_STATE", self.state), patch.object(
+                MODULE, "FOUNDRY_WORDLIST", self.words), patch.object(MODULE.os, "chown"):
+            return MODULE.foundry_access_key(operation)
 
     def test_ensure_generates_durable_key_and_preserves_download_credentials(self):
         self.secret.write_text(json.dumps({"foundry_username": "owner", "foundry_password": "private"}))
@@ -41,9 +42,9 @@ class FoundryAdministratorTests(unittest.TestCase):
 
     def test_generation_uses_twelve_independent_csprng_choices(self):
         words = json.loads(self.words.read_text())
-        with patch.object(MODULE, "WORDLIST", self.words), patch.object(
+        with patch.object(MODULE, "FOUNDRY_WORDLIST", self.words), patch.object(
                 MODULE.secrets, "choice", side_effect=words[:12]) as choice:
-            generated = MODULE._generate()
+            generated = MODULE._generate_foundry_key()
         self.assertEqual(generated, "-".join(words[:12]))
         self.assertEqual(choice.call_count, 12)
 

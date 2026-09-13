@@ -17,7 +17,7 @@ class ManagementRuntimeTests(unittest.TestCase):
     def test_clean_install_release_catalog_has_an_isolated_import_closure(self):
         root = Path(__file__).resolve().parents[1]
         installer = (root / 'provisioning/install.sh').read_text()
-        modules = ('appliance_release', 'release_policy', 'release_recovery_status', 'release_catalog', 'foundry_admin')
+        modules = ('appliance_release', 'release_policy', 'release_recovery_status', 'release_catalog')
         for name in modules:
             self.assertIn(f'appliance/lib/{name}.py" "$RUNTIME/{name}.py', installer)
         with tempfile.TemporaryDirectory() as directory:
@@ -37,8 +37,11 @@ class ManagementRuntimeTests(unittest.TestCase):
         handler = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'Handler')
         jobs = Mock()
         jobs.submit.return_value = {'id': 'a' * 32, 'state': 'queued'}
+        foundry_access_key = Mock(return_value={
+            'managed': True, 'accessKey': 'amber-cabin-maple-river', 'resetRequired': False})
         namespace = dict(socketserver=socketserver, socket=socket, struct=struct, json=json,
-                         subprocess=subprocess, JOBS=jobs, MANAGEMENT_GID=31338)
+                         subprocess=subprocess, JOBS=jobs, MANAGEMENT_GID=31338,
+                         foundry_access_key=foundry_access_key)
         exec(compile(ast.Module(body=[handler], type_ignores=[]), str(source), 'exec'), namespace)
         def send(data, uid=1000, gid=31338):
             instance = object.__new__(namespace['Handler'])
@@ -68,14 +71,11 @@ class ManagementRuntimeTests(unittest.TestCase):
         jobs.submit.assert_called_once_with('power', selected)
         jobs.submit.reset_mock()
 
-        foundry_admin = types.SimpleNamespace(access_key=Mock(return_value={
-            'managed': True, 'accessKey': 'amber-cabin-maple-river', 'resetRequired': False}))
-        with patch.dict(sys.modules, {'foundry_admin': foundry_admin}), patch.object(
-                subprocess, 'run', return_value=types.SimpleNamespace(returncode=0)) as restart:
+        with patch.object(subprocess, 'run', return_value=types.SimpleNamespace(returncode=0)) as restart:
             foundry = send(b'foundry-admin-key-reset\n')
         self.assertTrue(foundry['ok'])
         self.assertEqual(json.loads(foundry['output'])['accessKey'], 'amber-cabin-maple-river')
-        foundry_admin.access_key.assert_called_once_with('reset')
+        foundry_access_key.assert_called_once_with('reset')
         restart.assert_called_once_with(['/usr/local/sbin/elderbrain', 'restart-foundry'], text=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
 

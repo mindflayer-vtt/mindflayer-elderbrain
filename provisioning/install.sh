@@ -110,7 +110,6 @@ python3 "$PAYLOAD_DIR/provisioning/initialize-default.py" "$STATE/traefik/dynami
 cp "$PAYLOAD_DIR/appliance/lib/management-server" "$RUNTIME/management-server"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/release_interlocks.py" "$RUNTIME/release_interlocks.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_metrics.py" "$RUNTIME/host_metrics.py"
-install -m 0644 "$PAYLOAD_DIR/appliance/lib/foundry_admin.py" "$RUNTIME/foundry_admin.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/beamer_runtime.py" "$RUNTIME/beamer_runtime.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/host_network.py" "$RUNTIME/host_network.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/network_config.py" "$RUNTIME/network_config.py"

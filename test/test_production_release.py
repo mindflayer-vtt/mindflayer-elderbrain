@@ -19,6 +19,10 @@ spec = importlib.util.spec_from_file_location(
     'verify_sequence', ROOT / 'release/verify-sequence.py')
 sequence = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sequence)
+spec = importlib.util.spec_from_file_location(
+    'build_host', ROOT / 'release/build-host.py')
+host = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(host)
 
 
 class ProductionReleaseTests(unittest.TestCase):
@@ -85,6 +89,19 @@ class ProductionReleaseTests(unittest.TestCase):
         for version in ('0.1.0', '0.0.9'):
             with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'version'):
                 sequence.require_new(configured, version, 2)
+
+    def test_host_targets_remain_compatible_with_installed_production_baseline(self):
+        baseline = json.loads((
+            ROOT / 'config/releases/production-host-inventory.json').read_text())
+        self.assertEqual(set(baseline), {'format', 'files', 'sha256'})
+        self.assertEqual(baseline['format'], 1)
+        paths = {entry['path']: entry['mode'] for entry in host.entries(
+            ROOT / 'release/host-files.json')}
+        paths['runtime/VERSION'] = 0o644
+        encoded = json.dumps(
+            paths, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
+        self.assertEqual(len(paths), baseline['files'])
+        self.assertEqual(hashlib.sha256(encoded).hexdigest(), baseline['sha256'])
 
     def test_authenticated_latest_release_and_baseline_form_maximum_floor(self):
         configured = {'format': 1, 'version': '0.1.0', 'releaseSequence': 1}

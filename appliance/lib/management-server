@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import grp, json, os, socket, socketserver, subprocess, struct, shutil
-from host_jobs import JobStore
+from host_jobs import JobStore, foundry_access_key
 from backup_uploads import UploadStore
 from keypad_inventory import registered_keypads, usb_serial_devices, installation_receipts
 from host_metrics import Metrics
@@ -78,9 +78,8 @@ class Handler(socketserver.StreamRequestHandler):
             elif action == "host-metrics":
                 result = {"ok": True, "output": json.dumps(METRICS.snapshot())}
             elif action in ("foundry-admin-key", "foundry-admin-key-ensure", "foundry-admin-key-reset"):
-                from foundry_admin import access_key
                 operation = action.removeprefix("foundry-admin-key").removeprefix("-") or "status"
-                value = access_key(operation)
+                value = foundry_access_key(operation)
                 restarted = None
                 if operation == "reset":
                     proc = subprocess.run(["/usr/local/sbin/elderbrain", "restart-foundry"], text=True,

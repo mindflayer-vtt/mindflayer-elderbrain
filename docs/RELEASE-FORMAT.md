@@ -105,6 +105,14 @@ cannot expand that inventory or choose live destinations.
 inventory used by `release/build-host.py`; include generated `runtime/VERSION`
 with mode `0644` when constructing the staging allowlist.
 
+Production media installs that allowlist as a fixed update trust boundary.
+`config/releases/production-host-inventory.json` pins the target count and
+canonical mapping digest used by the installed `0.1.0` baseline. Online releases
+must retain that mapping: new behavior must fit an already trusted component, or
+ship through new installation media with an explicitly designed inventory
+migration. Never add a destination to an online release and expect an older
+appliance to trust it merely because the new manifest is signed.
+
 Packages contain regular file entries only, without directory entries, links,
 special files, sparse/PAX metadata or privileged mode bits. Paths must be canonical
 relative POSIX names. Missing, duplicate and unexpected entries are errors. Parent
