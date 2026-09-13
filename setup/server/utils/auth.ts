@@ -16,10 +16,16 @@ export class AuthError extends Error {
   constructor(message: string, public statusCode = 400) { super(message); }
 }
 const token = () => randomBytes(32).toString("base64url");
-// Keep machine/session tokens unchanged; bootstrap passwords get 64 random bits.
-export const bootstrapPassword = () => Array.from({ length: 8 }, () => bootstrapWords[randomInt(bootstrapWords.length)]).join("-");
+// Keep machine/session tokens unchanged; this rate-limited, one-time bootstrap
+// password is short enough to transfer from the appliance console.
+export const bootstrapPassword = () => Array.from({ length: 4 }, () => bootstrapWords[randomInt(bootstrapWords.length)]).join("-");
 // Long-lived, single-use offline recovery codes carry 128 independent random bits.
 export const offlineRecoveryCode = () => Array.from({ length: 16 }, () => bootstrapWords[randomInt(bootstrapWords.length)]).join("-");
+const bootstrapCredential = (value: string) => {
+  const words = value.split("-");
+  // Eight-word credentials from already installed signed baselines remain valid.
+  return (words.length === 4 || words.length === 8) && words.every(word => bootstrapWords.includes(word));
+};
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export function passwordHash(value: string) {
   const salt = randomBytes(16).toString("hex");
@@ -57,7 +63,7 @@ export class AuthStore {
         if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
         initial = "";
       }
-      if (initial.length < 24 || initial.length > 256) {
+      if (!bootstrapCredential(initial)) {
         initial = bootstrapPassword();
         const temporary = this.file("initial-password." + token() + ".tmp");
         const descriptor = fs.openSync(temporary, "wx", 0o600);
@@ -85,7 +91,7 @@ export class AuthStore {
   private checkRootReset() {
     if (!fs.existsSync(this.file("admin-reset.request"))) return;
     const initial = fs.readFileSync(this.file("initial-password"), "utf8").trim();
-    if (initial.length < 24 || initial.length > 256) throw new AuthError("Root recovery credential is incomplete. Run the root reset command again.", 503);
+    if (!bootstrapCredential(initial)) throw new AuthError("Root recovery credential is incomplete. Run the root reset command again.", 503);
     this.account.password = passwordHash(initial);
     this.account.mustChange = true;
     delete this.account.reset;

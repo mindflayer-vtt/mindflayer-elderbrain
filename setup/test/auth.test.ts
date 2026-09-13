@@ -6,16 +6,16 @@ import path from "node:path";
 import { AuthStore, AuthError, passwordHash, bootstrapPassword, offlineRecoveryCode } from "../server/utils/auth.ts";
 import bootstrapWords from "../shared/bootstrap-words.json";
 
-test("bootstrap passphrases have eight independently selected words", () => {
+test("bootstrap passphrases have four independently selected words", () => {
   assert.equal(bootstrapWords.length, 256);
   assert.equal(new Set(bootstrapWords).size, 256);
   assert.ok(bootstrapWords.every(word => /^[a-z]{3,8}$/.test(word)));
   const samples = Array.from({ length: 100 }, bootstrapPassword);
   assert.equal(new Set(samples).size, 100);
   for (const value of samples) {
-    assert.equal(value.split("-").length, 8);
+    assert.equal(value.split("-").length, 4);
     assert.ok(value.split("-").every(word => bootstrapWords.includes(word)));
-    assert.ok(value.length >= 24 && value.length <= 256);
+    assert.ok(value.length >= 15 && value.length <= 35);
   }
 });
 
@@ -71,7 +71,7 @@ test("interrupted bootstrap files never create an empty-password account", (t) =
   fs.writeFileSync(path.join(state, "secrets/initial-password"), "");
   const store = new AuthStore(state);
   const initial = fs.readFileSync(path.join(state, "secrets/initial-password"), "utf8").trim();
-  assert.ok(initial.length >= 24);
+  assert.equal(initial.split("-").length, 4);
   assert.throws(() => store.login("admin", "", "test"), /Invalid/);
   assert.equal(store.login("admin", initial, "test").mustChange, true);
   fs.writeFileSync(path.join(state, "secrets/initial-password"), "");
@@ -89,7 +89,7 @@ test("a legacy empty-password hash cannot authenticate", (t) => {
 
 test("bootstrap is unique, stored privately and never sufficient for administrative access", (t) => {
   const { store, state, initial } = fixture(t);
-  assert.ok(initial.length >= 24);
+  assert.equal(initial.split("-").length, 4);
   const session = store.login("admin", initial, "local");
   assert.equal(session.mustChange, true);
   assert.equal(session.ready, false);
@@ -149,8 +149,9 @@ test("failed delivery does not change recovery configuration; login throttles", 
 test("root reset invalidates sessions and forces another password change", (t) => {
   const { store, state, initial } = fixture(t);
   const session = store.login("admin", initial, "local");
-  fs.writeFileSync(path.join(state, "secrets/initial-password"), "root-generated-temporary-password", { mode: 0o600 });
+  const reset = bootstrapPassword();
+  fs.writeFileSync(path.join(state, "secrets/initial-password"), reset, { mode: 0o600 });
   fs.writeFileSync(path.join(state, "secrets/admin-reset.request"), "", { mode: 0o600 });
   assert.equal(store.session(session.id).authenticated, false);
-  assert.equal(store.login("admin", "root-generated-temporary-password", "local").mustChange, true);
+  assert.equal(store.login("admin", reset, "local").mustChange, true);
 });

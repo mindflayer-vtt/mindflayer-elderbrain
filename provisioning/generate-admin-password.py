@@ -12,8 +12,9 @@ def generate(wordlist):
                    or not word.isalpha() or not word.islower()
                    or not 3 <= len(word) <= 8 for word in words)):
         raise ValueError("Invalid bootstrap word list")
-    # Eight independent uniform choices from 256 words provide 64 bits.
-    return "-".join(secrets.choice(words) for _ in range(8))
+    # Four independent uniform choices provide 32 bits for this one-time,
+    # rate-limited local bootstrap credential. Durable recovery stays longer.
+    return "-".join(secrets.choice(words) for _ in range(4))
 
 
 if __name__ == "__main__":

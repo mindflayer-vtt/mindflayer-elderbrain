@@ -7,6 +7,7 @@ import time
 
 PASSWORD = Path('/var/lib/mindflayer-elderbrain/elderbrain/secrets/initial-password')
 CLEAR = '\033[3J\033[2J\033[H'
+BOOTSTRAP = re.compile(r'(?:[a-z]{3,8}-){3}[a-z]{3,8}|(?:[a-z]{3,8}-){7}[a-z]{3,8}')
 
 
 def read_password(path=PASSWORD, owners=(0, 1000)):
@@ -14,10 +15,11 @@ def read_password(path=PASSWORD, owners=(0, 1000)):
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor) as source:
             info = os.fstat(source.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_uid not in owners or info.st_mode & 0o077 or not 24 <= info.st_size <= 257:
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid not in owners
+                    or info.st_mode & 0o077 or not 16 <= info.st_size <= 257):
                 return None
             value = source.read(258).strip()
-            return value if re.fullmatch(r'[A-Za-z0-9_+/=-]{24,256}', value) else None
+            return value if BOOTSTRAP.fullmatch(value) else None
     except (OSError, UnicodeError):
         return None
 

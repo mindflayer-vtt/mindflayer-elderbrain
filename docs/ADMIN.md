@@ -245,11 +245,12 @@ previously saved credentials; Chrome may still use those if a pre-existing profi
 contains any. The policy is installed at
 `/etc/opt/chrome/policies/managed/elderbrain.json`.
 
-New first-login and root-reset passwords use eight lowercase random words
+New first-login and root-reset passwords use four lowercase random words
 separated by hyphens. Each word is independently selected using the operating
 system's cryptographic random generator from a bundled list of 256 words
-(64 bits of randomness). Existing passwords are preserved. First-login password
-change remains mandatory. New offline recovery codes use sixteen words from the
-same list (128 bits of randomness). They remain single-use and only their hash is
-stored. Existing offline codes continue to work until consumed or replaced;
-session tokens and emailed recovery tokens are unchanged.
+(32 bits of randomness). This credential is one-time, locally displayed,
+rate-limited and forces an immediate password change. Existing eight-word
+bootstrap passwords remain valid. New offline recovery codes use sixteen words
+from the same list (128 bits of randomness). They remain single-use and only
+their hash is stored. Existing offline codes continue to work until consumed or
+replaced; session tokens and emailed recovery tokens are unchanged.

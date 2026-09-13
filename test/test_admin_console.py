@@ -15,12 +15,15 @@ class AdminConsoleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'password'
             self.assertIsNone(module.read_password(path))
-            value = 'apple-river-tree-stone-light-moon-green-field'
+            value = 'apple-river-tree-stone'
             path.write_text(value + '\n')
             path.chmod(0o600)
             owners = (os.getuid(),)
             self.assertEqual(module.read_password(path, owners), value)
             self.assertIn(value, module.render(module.read_password(path, owners)))
+            legacy = 'apple-river-tree-stone-light-moon-green-field'
+            path.write_text(legacy + '\n')
+            self.assertEqual(module.read_password(path, owners), legacy)
             path.chmod(0o644)
             self.assertIsNone(module.read_password(path, owners))
             path.chmod(0o600)

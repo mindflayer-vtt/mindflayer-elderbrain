@@ -19,7 +19,9 @@ info = admin.lstat()
 assert stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600
 current = json.loads(admin.read_text())
 assert current.get('schema') == 1 and current.get('mustChange') is True and current.get('verified') is False
-assert 24 <= len(initial.read_text().strip()) <= 256
+bootstrap = initial.read_text().strip().split('-')
+assert len(bootstrap) in (4, 8) and all(3 <= len(word) <= 8 and word.islower()
+                                         and word.isalpha() for word in bootstrap)
 
 password = secrets.token_urlsafe(24)
 salt = secrets.token_hex(16)

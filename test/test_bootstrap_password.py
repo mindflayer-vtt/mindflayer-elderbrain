@@ -21,9 +21,9 @@ class BootstrapPasswordTests(unittest.TestCase):
         samples = [generator.generate(vocabulary) for _ in range(100)]
         self.assertEqual(len(set(samples)), 100)
         for sample in samples:
-            self.assertEqual(len(sample.split("-")), 8)
+            self.assertEqual(len(sample.split("-")), 4)
             self.assertTrue(all(word in words for word in sample.split("-")))
-            self.assertTrue(24 <= len(sample) <= 256)
+            self.assertTrue(15 <= len(sample) <= 35)
 
     def test_invalid_word_list_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
