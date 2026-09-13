@@ -72,21 +72,12 @@ jobs:
             echo "RELEASE_DIRECTORY=$RUNNER_TEMP/elderbrain-release"
             echo "DEPENDENCY_DIRECTORY=$RUNNER_TEMP/elderbrain-dependencies"
             echo "NOTES_FILE=$RUNNER_TEMP/release-notes.md"
+            echo "ANONYMOUS_DOCKER_CONFIG=$RUNNER_TEMP/docker-anonymous"
           } >> "$GITHUB_ENV"
       - name: Install release tooling
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y zstd
-      - name: Validate protected signing key
-        env:
-          APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY }}
-        run: |
-          test -n "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY"
-          umask 077
-          printf '%s\n' "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY" > "$SIGNING_KEY"
-          openssl pkey -in "$SIGNING_KEY" -check -noout
-          openssl pkey -in "$SIGNING_KEY" -pubout -out "$GENERATED_PUBLIC_KEY"
-          cmp "$GENERATED_PUBLIC_KEY" config/releases/appliance-release-public.pem
       - name: Validate release identity and notes
         run: |
           printf '%s\n' "$RELEASE_NOTES" > "$NOTES_FILE"
@@ -146,13 +137,23 @@ jobs:
           [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
           echo "SETUP_IMAGE=$setup_tag@$digest" >> "$GITHUB_ENV"
           docker logout ghcr.io
-          docker buildx imagetools inspect "$setup_tag@$digest" >/dev/null
+          mkdir -m 700 "$ANONYMOUS_DOCKER_CONFIG"
+          anonymous=$(DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG" docker buildx imagetools inspect \
+            "$setup_tag@$digest" --format '{{json .Manifest}}') || {
+              echo 'The immutable Setup image is not anonymously readable from GHCR' >&2
+              exit 1
+            }
+          anonymous_digest=$(printf '%s' "$anonymous" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          test "$anonymous_digest" = "$digest" || {
+            echo 'Anonymous GHCR inspection resolved a different Setup image digest' >&2
+            exit 1
+          }
       - name: Verify public runtime images
         run: |
           while IFS= read -r image; do
             docker buildx imagetools inspect "$image" >/dev/null
           done < <(sed -nE 's/^(TRAEFIK_IMAGE|MINDFLAYER_SERVER_IMAGE|FOUNDRY_IMAGE)=//p' config/defaults/appliance.env)
-      - name: Build offline dependencies and signed artifacts
+      - name: Build offline dependencies and release metadata
         run: |
           python3 release/build-dependencies.py "$DEPENDENCY_DIRECTORY"
           python3 release/production-metadata.py \
@@ -161,12 +162,25 @@ jobs:
             --setup-image "$SETUP_IMAGE" \
             --notes-file "$NOTES_FILE" \
             "$RUNNER_TEMP/release-metadata.json"
+      - name: Validate protected signing key and sign artifacts
+        env:
+          APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY"
+          umask 077
+          printf '%s\n' "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY" > "$SIGNING_KEY"
+          openssl pkey -in "$SIGNING_KEY" -check -noout
+          openssl pkey -in "$SIGNING_KEY" -pubout -out "$GENERATED_PUBLIC_KEY"
+          cmp "$GENERATED_PUBLIC_KEY" config/releases/appliance-release-public.pem
           python3 release/assemble.py \
             --metadata "$RUNNER_TEMP/release-metadata.json" \
             --signing-key "$SIGNING_KEY" \
             --public-key config/releases/appliance-release-public.pem \
             --dependencies "$DEPENDENCY_DIRECTORY" \
             "$RELEASE_DIRECTORY"
+      - name: Remove transient signing material
+        if: always()
+        run: rm -f "$SIGNING_KEY" "$GENERATED_PUBLIC_KEY"
       - name: Publish complete release atomically
         run: |
           tag="v$VERSION"
@@ -180,6 +194,3 @@ jobs:
           assets=$(gh release view "$tag" --json assets --jq '[.assets[].name] | sort | join(" ")')
           test "$assets" = 'elderbrain-dependencies.tar.zst elderbrain-host.tar.zst manifest.json manifest.sig'
           gh release edit "$tag" --draft=false --prerelease=false --latest
-      - name: Remove transient signing material
-        if: always()
-        run: rm -f "$SIGNING_KEY" "$GENERATED_PUBLIC_KEY"
