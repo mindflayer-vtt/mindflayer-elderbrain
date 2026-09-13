@@ -650,13 +650,25 @@ check. Configure `/etc/elderbrain/release-source.json` with exactly:
 {"baseUrl":"https://updates.example.org/elderbrain/stable/"}
 ```
 
-This is an example, not a deployed Mindflayer release endpoint. The directory
-must serve `manifest.json` and `manifest.sig` directly with HTTP 200 over trusted
-HTTPS. Credentials, query strings, fragments, compression and redirects are not
-accepted. An independently provisioned `/etc/elderbrain/release-public.pem` pins
-the signing key. Both files must be canonical regular files owned by root, not
+The production source is the public repository's stable GitHub Release assets:
+
+```json
+{"baseUrl":"https://github.com/mindflayer-vtt/mindflayer-elderbrain/releases/latest/download/"}
+```
+
+Other HTTPS directories must serve `manifest.json` and `manifest.sig` directly
+with HTTP 200. The exact GitHub `releases/latest/download/` form may follow at
+most five HTTPS redirects, restricted to `github.com` and GitHub's dedicated
+`objects.githubusercontent.com` or `release-assets.githubusercontent.com` asset
+hosts. Redirect credentials, fragments, non-default ports and query strings on
+`github.com` are rejected; only the signed CDN destination may carry GitHub's
+temporary query parameters. Redirects remain disabled for every other source.
+Compression is never accepted. The release repository must be public because
+the appliance deliberately stores no GitHub credential.
+
+An independently provisioned `/etc/elderbrain/release-public.pem` pins the
+signing key. Both files must be canonical regular files owned by root, not
 group/world writable; do not obtain the key from the announcement itself.
-No production source or key is generated automatically by discovery.
 
 The host verifies the exact manifest signature before exposing release notes,
 component versions, downtime or the confirmation digest. Compatibility checks
@@ -680,13 +692,14 @@ a changed digest, signature, version, platform or schema prevents downloading an
 artifacts. The source directory must additionally serve the two exact signed
 filenames `elderbrain-host.tar.zst` and `elderbrain-dependencies.tar.zst`.
 
-Downloads use private temporary storage, HTTPS without redirects, bounded reads,
-signed lengths/checksums and a per-artifact deadline. Space is checked before
-downloads. Only after both archives are verified does existing release preparation
-stage the host, verify offline dependency inputs, install stable dependency
-prefixes and pull missing digest-pinned images. It never builds images or starts
-services. Preparation holds owned job admission and maintenance exclusion; final
-activation repeats its independent verification and recovery prerequisites.
+Downloads use private temporary storage, HTTPS with only the bounded GitHub asset
+redirect policy above, bounded reads, signed lengths/checksums and a per-artifact
+deadline. Space is checked before downloads. Only after both archives are verified
+does existing release preparation stage the host, verify offline dependency inputs,
+install stable dependency prefixes and pull missing digest-pinned images. It never
+builds images or starts services. Preparation holds owned job admission and
+maintenance exclusion; final activation repeats its independent verification and
+recovery prerequisites.
 
 The GUI polls durable host jobs and resumes displaying them after reload. An
 uncertain submission is not automatically retried. Closing the page does not

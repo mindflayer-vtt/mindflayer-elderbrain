@@ -1,16 +1,14 @@
 """Fetch confirmed signed artifacts into private preparation, never live paths."""
 import hashlib
-import http.client
 import json
 import os
 from pathlib import Path
 import shutil
-import ssl
 import tempfile
 import time
 
 from appliance_release import unique, verify, require_compatible, validate
-from release_catalog import source_url, trusted, fetch
+from release_catalog import source_url, trusted, fetch, open_release
 from release_prepare import prepare
 
 
@@ -19,16 +17,13 @@ def artifact(base, release, component, directory):
     if component not in ('host', 'dependencies'):
         raise ValueError('Unsupported artifact')
     selected = release[component]['artifact']
-    parsed = source_url(base)
-    connection = http.client.HTTPSConnection(parsed.hostname, parsed.port, timeout=30,
-                                              context=ssl.create_default_context())
+    source_url(base)
+    connection, response = open_release(base, selected['file'], 30)
     destination = Path(directory) / selected['file']
     deadline = time.monotonic() + 1800
     try:
-        connection.request('GET', parsed.path + selected['file'], headers={'Accept-Encoding': 'identity'})
-        response = connection.getresponse()
         if response.status != 200 or response.getheader('Content-Encoding', 'identity') != 'identity':
-            raise ValueError('Artifact source must serve bytes directly over HTTPS')
+            raise ValueError('Release source did not serve artifact bytes over HTTPS')
         size = response.getheader('Content-Length')
         if size is not None and (not size.isdecimal() or int(size) != selected['size']):
             raise ValueError('Artifact length differs from signed release')

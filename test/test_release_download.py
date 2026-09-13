@@ -17,8 +17,10 @@ class DownloadTests(unittest.TestCase):
         sample = fixture.ApplianceReleaseTests()
         sample.setUp()
         self.release = sample.value
-        self.connection = self.enterContext(patch('release_download.http.client.HTTPSConnection')).return_value
-        self.response = self.connection.getresponse.return_value
+        self.connection = Mock()
+        self.response = Mock()
+        self.open_release = self.enterContext(patch(
+            'release_download.open_release', return_value=(self.connection, self.response)))
         self.response.status = 200
         self.response.getheader.side_effect = lambda key, default=None: default
         self.response.read1.return_value = b'fixture'
@@ -28,13 +30,14 @@ class DownloadTests(unittest.TestCase):
         result = artifact('https://example.test/stable/', self.release, 'host', self.root)
         self.assertEqual(result.read_bytes(), b'fixture')
         self.assertEqual(result.stat().st_mode & 0o777, 0o600)
-        self.connection.request.assert_called_once_with('GET', '/stable/elderbrain-host.tar.zst', headers={'Accept-Encoding': 'identity'})
+        self.open_release.assert_called_once_with(
+            'https://example.test/stable/', 'elderbrain-host.tar.zst', 30)
         self.connection.close.assert_called_once()
 
-    def test_redirect_truncation_checksum_and_excess_bytes_rejected(self):
-        for mode in ('redirect', 'truncated', 'checksum', 'excess'):
+    def test_bad_status_truncation_checksum_and_excess_bytes_rejected(self):
+        for mode in ('status', 'truncated', 'checksum', 'excess'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
-                self.response.status = 302 if mode == 'redirect' else 200
+                self.response.status = 503 if mode == 'status' else 200
                 self.response.read1.return_value = b'' if mode == 'truncated' else b'changed' if mode == 'checksum' else b'fixture'
                 self.response.read.return_value = b'x' if mode == 'excess' else b''
                 with self.assertRaises(ValueError):

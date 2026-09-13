@@ -127,6 +127,73 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(factory.call_args.kwargs['timeout'], 10)
             self.assertEqual(factory.return_value.close.call_count, 2)
 
+    def test_github_latest_release_follows_only_bounded_asset_redirects(self):
+        connections = [Mock() for _ in range(3)]
+        responses = [connection.getresponse.return_value for connection in connections]
+        responses[0].status = responses[1].status = 302
+        responses[0].getheader.side_effect = lambda key, default=None: (
+            '/mindflayer-vtt/mindflayer-elderbrain/releases/download/v1.0.1/manifest.json'
+            if key == 'Location' else default)
+        responses[1].getheader.side_effect = lambda key, default=None: (
+            'https://release-assets.githubusercontent.com/github-production-release-asset/123/manifest?token=signed'
+            if key == 'Location' else default)
+        responses[2].status = 200
+        responses[2].getheader.side_effect = lambda key, default=None: default
+        responses[2].read.return_value = b'manifest'
+        with patch('release_catalog.http.client.HTTPSConnection', side_effect=connections) as factory:
+            result = fetch('https://github.com/mindflayer-vtt/mindflayer-elderbrain/releases/latest/download/',
+                           'manifest.json', 64)
+        self.assertEqual(result, b'manifest')
+        self.assertEqual([call.args[:2] for call in factory.call_args_list], [
+            ('github.com', None), ('github.com', None), ('release-assets.githubusercontent.com', None)])
+        connections[0].request.assert_called_once_with(
+            'GET', '/mindflayer-vtt/mindflayer-elderbrain/releases/latest/download/manifest.json',
+            headers={'Accept-Encoding': 'identity'})
+        connections[1].request.assert_called_once_with(
+            'GET', '/mindflayer-vtt/mindflayer-elderbrain/releases/download/v1.0.1/manifest.json',
+            headers={'Accept-Encoding': 'identity'})
+        connections[2].request.assert_called_once_with(
+            'GET', '/github-production-release-asset/123/manifest?token=signed',
+            headers={'Accept-Encoding': 'identity'})
+        for connection in connections:
+            connection.close.assert_called_once()
+
+    def test_github_redirect_rejects_untrusted_destinations_and_loops(self):
+        for location in ('http://release-assets.githubusercontent.com/object',
+                         'https://example.test/object',
+                         'https://user:secret@release-assets.githubusercontent.com/object',
+                         'https://github.com/release?token=secret',
+                         'https://release-assets.githubusercontent.com:444/object',
+                         'https://release-assets.githubusercontent.com/object#fragment'):
+            with self.subTest(location=location), patch('release_catalog.http.client.HTTPSConnection') as factory:
+                response = factory.return_value.getresponse.return_value
+                response.status = 302
+                response.getheader.return_value = location
+                with self.assertRaisesRegex(ValueError, 'trusted GitHub'):
+                    fetch('https://github.com/mindflayer-vtt/mindflayer-elderbrain/releases/latest/download/',
+                          'manifest.json', 64)
+                response.read.assert_not_called()
+        connections = [Mock() for _ in range(6)]
+        for connection in connections:
+            response = connection.getresponse.return_value
+            response.status = 302
+            response.getheader.return_value = '/owner/repo/releases/download/v1/manifest.json'
+        with patch('release_catalog.http.client.HTTPSConnection', side_effect=connections):
+            with self.assertRaisesRegex(ValueError, 'trusted GitHub asset redirects'):
+                fetch('https://github.com/owner/repo/releases/latest/download/', 'manifest.json', 64)
+        self.assertTrue(all(connection.getresponse.return_value.read.call_count == 0 for connection in connections))
+
+    def test_redirects_remain_disabled_for_non_github_and_non_latest_sources(self):
+        for base in ('https://updates.example.test/stable/',
+                     'https://github.com/owner/repo/releases/download/v1/'):
+            with self.subTest(base=base), patch('release_catalog.http.client.HTTPSConnection') as factory:
+                response = factory.return_value.getresponse.return_value
+                response.status = 302
+                response.getheader.return_value = 'https://release-assets.githubusercontent.com/object?token=x'
+                with self.assertRaisesRegex(ValueError, 'serve bytes directly'):
+                    fetch(base, 'manifest.json', 64)
+                self.assertEqual(factory.call_count, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

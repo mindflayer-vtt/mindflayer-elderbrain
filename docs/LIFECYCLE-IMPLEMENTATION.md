@@ -2323,3 +2323,22 @@ showed the logo with changing spinner frames until Chromium displayed the
 Elderbrain login page, without a black transition frame. After boot, stack,
 management and graphics were active and `systemctl --failed` was empty. This is
 installed-VM qualification, not physical display/GPU qualification.
+
+## Production release transport
+
+GitHub Releases is the selected production update channel. Release discovery and
+artifact download accept the stable public
+`github.com/mindflayer-vtt/mindflayer-elderbrain/releases/latest/download/`
+address. The client follows only a bounded chain through GitHub's exact release
+and asset hosts; arbitrary HTTPS sources remain non-redirecting. All response
+size, encoding, timeout, signed-length, hash and detached-signature checks still
+apply after redirect resolution. Unit coverage rejects untrusted hosts, insecure
+schemes, credentials, fragments, unexpected ports, loops and redirects from
+non-GitHub sources.
+
+The independently generated 3072-bit RSA appliance release key remains a distinct
+trust root from firmware signing. Its private half belongs only in the protected
+`appliance-release` GitHub Environment; its public half is a reviewed ISO input.
+The repository is private during pre-release, so anonymous physical-appliance
+download qualification remains pending until it becomes public. No GitHub token
+will be installed on the appliance.

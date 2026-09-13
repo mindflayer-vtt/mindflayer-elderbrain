@@ -8,7 +8,7 @@ import platform
 import re
 import ssl
 import stat
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 from appliance_release import VERSION, unique, verify, require_compatible
 from release_recovery_status import active as active_recovery
@@ -43,17 +43,61 @@ def source_url(value):
     return parsed
 
 
+_REDIRECT_CODES = frozenset((301, 302, 303, 307, 308))
+_GITHUB_ASSET_HOSTS = frozenset(('github.com', 'objects.githubusercontent.com',
+                                 'release-assets.githubusercontent.com'))
+_GITHUB_RELEASE_PATH = re.compile(r'/[^/]+/[^/]+/releases/latest/download/$')
+
+
+def _redirect_url(current, location):
+    if (not isinstance(location, str) or not 0 < len(location) <= 4096
+            or any(ord(char) <= 32 or ord(char) >= 127 for char in location)):
+        raise ValueError('Invalid release redirect')
+    target = urlsplit(urljoin(current, location))
+    if (target.scheme != 'https' or target.hostname not in _GITHUB_ASSET_HOSTS
+            or target.username is not None or target.password is not None or target.fragment
+            or target.port not in (None, 443) or '\\' in location
+            or (target.query and target.hostname == 'github.com')):
+        raise ValueError('Release redirect left the trusted GitHub asset service')
+    return target
+
+
+def open_release(base, filename, timeout):
+    """Open one release object, following only GitHub's bounded asset redirects."""
+    initial = source_url(base)
+    if not isinstance(filename, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+', filename):
+        raise ValueError('Invalid release filename')
+    github = (initial.hostname == 'github.com' and initial.port in (None, 443)
+              and _GITHUB_RELEASE_PATH.fullmatch(initial.path) is not None)
+    current = initial
+    for attempt in range(6):
+        connection = http.client.HTTPSConnection(current.hostname, current.port, timeout=timeout,
+                                                  context=ssl.create_default_context())
+        try:
+            path = current.path + (filename if attempt == 0 else '')
+            if current.query:
+                path += '?' + current.query
+            connection.request('GET', path, headers={'Accept-Encoding': 'identity'})
+            response = connection.getresponse()
+            if response.status not in _REDIRECT_CODES:
+                return connection, response
+            if not github or attempt == 5:
+                raise ValueError('Release source must serve bytes directly or use trusted GitHub asset redirects')
+            current = _redirect_url(current.geturl(), response.getheader('Location'))
+        except Exception:
+            connection.close()
+            raise
+        connection.close()
+    raise AssertionError('unreachable')
+
+
 def fetch(base, filename, limit):
-    parsed = source_url(base)
     if filename not in ('manifest.json', 'manifest.sig'):
         raise ValueError('Unsupported release metadata')
-    connection = http.client.HTTPSConnection(parsed.hostname, parsed.port, timeout=10,
-                                              context=ssl.create_default_context())
+    connection, response = open_release(base, filename, 10)
     try:
-        connection.request('GET', parsed.path + filename, headers={'Accept-Encoding': 'identity'})
-        response = connection.getresponse()
         if response.status != 200 or response.getheader('Content-Encoding', 'identity') != 'identity':
-            raise ValueError('Release source must serve metadata directly over HTTPS')
+            raise ValueError('Release source did not serve metadata over HTTPS')
         length = response.getheader('Content-Length')
         if length is not None and (not length.isdecimal() or not 0 < int(length) <= limit):
             raise ValueError('Release metadata exceeds limit')
