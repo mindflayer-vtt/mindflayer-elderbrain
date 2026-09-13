@@ -25,6 +25,14 @@ has passed. Perform the transition in this order:
     anonymous manifest inspection/pull of the immutable release digest succeeds.
 17. Only after every preceding gate passes, approve and publish the first signed update.
 
+Before changing visibility, inspect `.github/workflows/release.yml` and its green
+CI result. Confirm that `prepare` has exactly `contents: read` and
+`packages: write`, while `sign-and-publish` has exactly `actions: read`,
+`contents: write`, and `packages: read`; only the latter may use the
+`appliance-release` Environment or signing secret. Both checkouts must disable
+persisted credentials. The build job must not have release contents-write
+authority or a job-wide `GH_TOKEN`.
+
 The appliance deliberately has no GitHub credential. Repository visibility and
 anonymous GHCR access are therefore release correctness requirements, not merely
 distribution preferences.
@@ -32,6 +40,11 @@ distribution preferences.
 ## First public update: `0.1.1` / sequence 2
 
 Start with the recorded private ISO baseline at `0.1.0`, release sequence `1`.
+The same identity is committed in
+`config/releases/production-baseline.json`, so the workflow mechanically rejects
+sequence `1` even though no baseline GitHub Release exists. It accepts the
+planned sequence `2`; after publication, later runs use the maximum of this floor
+and the latest authenticated signed release sequence.
 Make one harmless, visible release-identity change and allow its pull request and
 CI to exercise the new protections. Do not use a security behavior change as the
 update marker. Dispatch **Appliance release** from the protected `main` commit with:

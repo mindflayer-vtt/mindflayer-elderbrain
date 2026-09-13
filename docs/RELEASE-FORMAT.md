@@ -56,6 +56,34 @@ health-check, and retain the previous release for rollback. Signed older metadat
 is still cryptographically valid: update ordering, rollback authorization and
 replay policy belong in the release-selection/activation coordinator.
 
+## Production build and signing boundary
+
+The production workflow does not build dependencies or images in the signing
+authority domain. Its unprotected `prepare` runner has `contents: read` and
+`packages: write`, performs all networked Docker, pip/PEP 517, npm and artifact
+construction, then transfers exactly `release-metadata.json`, release notes, the
+host archive, the dependency archive, and a preparation receipt. The receipt has
+an exact schema and binds the source commit/tree/identity, version, sequence,
+Setup digest, dependency input digest, metadata digest, and every file's bounded
+size and SHA-256. Downloaded entries with unknown names, symlinks, special files,
+duplicate JSON keys, noncanonical metadata, wrong hashes, or a different
+`GITHUB_SHA` are rejected.
+
+The fresh `sign-and-publish` runner has `actions: read`, `contents: write`, and
+`packages: read`. Before the Environment key is exposed, it independently
+revalidates the receipt and source inputs, regenerates production metadata,
+checks both archives, repeats anonymous exact-digest Setup access and runtime
+image checks, authenticates publication sequence state, and checks tag
+availability. The private key then exists only in the signing step, is compared
+to the independently committed public key, and is deleted immediately after
+signing with an `always()` fallback. The final four assets are verified with the
+committed public key after key deletion and before publication.
+
+This prevents dependency build code from sharing a runner with the private key
+and keeps release contents-write authority out of the build job. It does not make
+the preparation hermetic: PEP 517 build isolation and its fetched upstream build
+inputs remain a reviewed release-runner trust boundary.
+
 ## Private host package staging
 
 `release_staging.stage` verifies the signature itself, copies the compressed host
@@ -833,3 +861,14 @@ accepted by a successful online update remains valid. Because a preserve reinsta
 replaces the OS-local receipt, it explicitly re-establishes the selected ISO as the
 new baseline even when retained control state previously recorded a higher release.
 Normal discovery and activation still reject equal or lower signed releases.
+
+Production publication has an additional committed starting floor in
+`config/releases/production-baseline.json`. Its strict schema records the
+distributed installation baseline `0.1.0` / sequence `1`, even though that
+baseline intentionally has no GitHub Release. The publisher requires the proposed
+sequence to exceed the maximum of that committed value and the latest
+authenticated published manifest. It uses the committed value alone only for an
+actual no-release response; an existing release whose manifest or signature
+cannot be authenticated aborts publication. Thus sequence `1` can never become
+the first normal update, while `0.1.1` / sequence `2` is the planned first public
+release.

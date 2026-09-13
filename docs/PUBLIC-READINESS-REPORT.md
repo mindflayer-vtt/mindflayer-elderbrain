@@ -7,9 +7,9 @@ and no production GitHub Release was created.
 ## History and repository audit
 
 - Scanner: gitleaks 8.30.1, invoked by `make public-audit`.
-- Audited commit: `2ce4668672052c3631efc5b3ec39750bf0fa568b`.
+- Audited commit: `92a2c9496dc6aa98497cb3139505970d8ecbe12d`.
 - Scope: every remote branch and tag, all reachable Git history, and current
-  tracked files (142 commits at the time of the recorded run).
+  tracked files (143 commits at the time of the recorded run).
 - Result: pass; no leaks were found and no secret values were retained in audit
   output.
 - Remediation: no genuine credential was found, so no credential rotation,
@@ -93,6 +93,40 @@ Clean installation may resolve newer authenticated Ubuntu and vendor packages;
 the ISO is therefore not a byte-complete offline Linux distribution. The
 coordinated Elderbrain application update is a separate signed, digest-pinned,
 offline-prepared path, as detailed in `BUILD.md` and `RELEASE-FORMAT.md`.
+
+## Release-control hardening
+
+Production release preparation and signing now execute in separate fresh jobs.
+The networked `prepare` job has only `contents: read` and `packages: write`; it
+does all Docker, Python dependency, npm, host and dependency artifact work and
+never receives the `appliance-release` Environment or signing secret. The
+protected `sign-and-publish` job has `actions: read`, `contents: write`, and
+`packages: read`. Both checkouts disable persisted credentials, and GitHub tokens
+are provided only to the registry or GitHub API/publication steps that use them.
+
+Five fixed prepared files cross the boundary. A strict receipt binds the source
+commit/tree/identity, requested version and sequence, exact Setup digest,
+dependency-source inputs, canonical metadata, and every transferred artifact by
+bounded size and SHA-256. The receipt hash also crosses as a job output. The
+protected runner rejects extra names, symlinks, special files, duplicate keys,
+source mismatch, metadata drift and byte changes before exposing the key. It then
+repeats anonymous Setup and runtime digest checks and sequence/tag validation.
+The key exists only for signing, is removed immediately (plus defensive
+`always()` cleanup), and the four final assets are independently verified after
+removal.
+
+`config/releases/production-baseline.json` records the already-installed
+`0.1.0` / sequence `1` starting point. Publication requires a sequence above the
+maximum of this committed floor and the latest authenticated signed manifest.
+The baseline-only fallback applies solely when no GitHub Release exists; bad
+latest-release metadata or signatures fail closed. Focused tests accept
+`0.1.1` / `2`, reject proposed sequences `0` and `1`, accept sequence `3` after
+an authenticated sequence `2`, reject `1` and `2` in that state, and exercise
+malformed baseline/latest inputs.
+
+This boundary prevents PEP 517 and other dependency build code from executing on
+the protected signing runner. Preparation still downloads and executes upstream
+build tooling and is intentionally not described as hermetic.
 
 ## Post-public transition
 
