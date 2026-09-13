@@ -1,0 +1,12 @@
+* @749
+
+/.github/workflows/ @749
+/release/ @749
+/config/releases/ @749
+/config/defaults/*requirements* @749
+/setup/Dockerfile @749
+/appliance/lib/release_* @749
+/appliance/lib/update_* @749
+/provisioning/update/ @749
+/provisioning/update* @749
+/iso/ @749
