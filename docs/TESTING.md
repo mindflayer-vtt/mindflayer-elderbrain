@@ -11,6 +11,8 @@
 - Production-build browser suite: all 40 tests passed. Its host/network/hardware
   operations use test fixtures; this is not physical integration evidence.
 - Static safety and Compose configuration checks passed.
+- GitHub Actions run `34743873482` passed the same complete workflow on the
+  Ubuntu 26.04 hosted image with Python 3.14 and Node 24.
 
 The installed Ubuntu 26.04 disposable VM also passed the branded Plymouth reboot,
 graphical handoff and post-boot unit-health check. No production permission changes

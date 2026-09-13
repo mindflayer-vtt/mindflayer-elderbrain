@@ -3,8 +3,9 @@
 The lifecycle implementation is newer than the previously qualified `6116339a`
 Ventoy image and remains local by operator request. The complete non-destructive
 suite and destructive signed-update/recovery qualification pass in a disposable
-VM. A newly built ISO still needs hosted CI and final physical acceptance before
-it should be treated as a production release.
+VM. The complete Ubuntu 26.04/Python 3.14 hosted CI workflow is green, and a
+tracked-input 1.0.0/release-sequence-1 ISO has been built for final physical
+acceptance before it should be treated as a production release.
 
 ## Delivery sequence and acceptance gates
 
