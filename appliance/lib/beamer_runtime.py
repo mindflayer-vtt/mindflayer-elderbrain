@@ -94,7 +94,7 @@ def read_private(file, owners=(0, 1000), mask=0o077):
         os.close(descriptor)
 
 
-def refresh(source=SOURCE, directory=DIRECTORY, group=None):
+def refresh(source=SOURCE, directory=DIRECTORY, group=None, owners=(0, 1000)):
     group = pwd.getpwnam('elderbrain-kiosk').pw_gid if group is None else group
     directory.mkdir(mode=0o750, exist_ok=True)
     info = directory.lstat()
@@ -106,7 +106,7 @@ def refresh(source=SOURCE, directory=DIRECTORY, group=None):
     try:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            value = read_private(source)
+            value = read_private(source, owners=owners)
         except Exception:
             (directory / 'beamer.json').unlink(missing_ok=True)
             raise

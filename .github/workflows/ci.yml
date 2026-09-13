@@ -16,6 +16,8 @@ jobs:
           sudo apt-get install --no-install-recommends -y ripgrep
       - run: npm ci
         working-directory: setup
+      - name: Install host-test dependencies
+        run: python -m pip install -r config/defaults/requirements.txt
       - run: make lint test
       - run: make compose-check
       - run: npm run build

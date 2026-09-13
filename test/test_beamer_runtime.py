@@ -40,14 +40,14 @@ class BeamerProjectionTests(unittest.TestCase):
                      'userId': '1234567890abcdef', 'password': 'test-only-private-password', 'unrelated': 'exclude'}
             source.write_text(json.dumps(value))
             source.chmod(0o600)
-            result = module.refresh(source, target, os.getgid())
+            result = module.refresh(source, target, os.getgid(), owners=(os.getuid(),))
             self.assertNotIn(value['password'], json.dumps(result))
             projected = target / 'beamer.json'
             self.assertEqual(projected.stat().st_mode & 0o777, 0o640)
             self.assertNotIn('unrelated', json.loads(projected.read_text()))
             self.assertEqual(module.read_private(projected, owners=(os.getuid(),), mask=0o027)['revision'], value['revision'])
             source.unlink()
-            self.assertEqual(module.refresh(source, target, os.getgid())['state'], 'pairing-required')
+            self.assertEqual(module.refresh(source, target, os.getgid(), owners=(os.getuid(),))['state'], 'pairing-required')
             self.assertFalse(projected.exists())
 
     def test_corruption_removes_stale_projection(self):
