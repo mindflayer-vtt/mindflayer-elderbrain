@@ -116,6 +116,8 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertIn('exec python3 /opt/mindflayer-elderbrain/browser-session.py', (ROOT / 'provisioning/graphics/browser-launcher').read_text())
         self.assertIn('"$RUNTIME/browser-session.py"', (ROOT / 'provisioning/install.sh').read_text())
         self.assertNotIn('fullscreen enable', (ROOT / 'provisioning/graphics/sway.conf').read_text())
+        self.assertIn('default_border none', (ROOT / 'provisioning/graphics/sway.conf').read_text())
+        self.assertIn('default_floating_border none', (ROOT / 'provisioning/graphics/sway.conf').read_text())
         self.assertIn('ExecStartPre=+/usr/bin/python3 /opt/mindflayer-elderbrain/prepare-browser.py', (ROOT / 'provisioning/systemd/elderbrain-graphics.service').read_text())
 
     def test_projection_excludes_non_display_admin_data(self):

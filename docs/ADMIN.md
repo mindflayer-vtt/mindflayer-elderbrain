@@ -242,6 +242,10 @@ narrow operation; it does not grant administrative access.
 Switching to the tty2 bootstrap display temporarily removes Sway's active output,
 but does not terminate or recreate the browser. Returning with Ctrl+Alt+F1 keeps
 the current form contents and tabs intact.
+
+Sway window decorations are disabled, avoiding a redundant title bar above
+Chrome's own administration tabs and maximizing usable display height.
+
 Chrome's managed `PasswordManagerEnabled: false` policy disables saving new
 passwords and save-password prompts in the appliance browser. This does not erase
 previously saved credentials; Chrome may still use those if a pre-existing profile
