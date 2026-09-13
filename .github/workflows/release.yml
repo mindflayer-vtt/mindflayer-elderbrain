@@ -17,6 +17,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: write
   packages: write
 
@@ -47,6 +48,20 @@ jobs:
         run: |
           echo 'The appliance stores no GitHub credential; make the repository public before publishing.' >&2
           exit 1
+      - name: Require protected release authority
+        run: |
+          environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/appliance-release")
+          reviewers=$(printf '%s' "$environment" | jq '[.protection_rules[] | select(.type == "required_reviewers") | .reviewers[]] | length')
+          test "$reviewers" -ge 1 || {
+            echo 'appliance-release must require an approving reviewer' >&2
+            exit 1
+          }
+          branch_policy=$(printf '%s' "$environment" | jq -r '.deployment_branch_policy.custom_branch_policies')
+          test "$branch_policy" = true
+          policies=$(gh api "repos/$GITHUB_REPOSITORY/environments/appliance-release/deployment-branch-policies")
+          test "$(printf '%s' "$policies" | jq '.total_count')" -eq 1
+          test "$(printf '%s' "$policies" | jq -r '.branch_policies[0].name')" = main
+          test "$(printf '%s' "$policies" | jq -r '.branch_policies[0].type')" = branch
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:

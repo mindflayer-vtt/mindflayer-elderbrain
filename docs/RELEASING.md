@@ -18,7 +18,14 @@ Actions secret. Retain an encrypted or offline recovery copy outside the reposit
 Configure the Environment to require approval and restrict deployments to
 `main`. The workflow derives the public half of the supplied secret and compares
 it byte-for-byte with the committed public key before signing anything. A key
-mismatch fails the release.
+mismatch fails the release. The workflow also queries GitHub and refuses to run
+unless at least one required reviewer and exactly the `main` branch policy are
+actually present.
+
+Required-reviewer protection is unavailable for a private repository owned by a
+GitHub Free organization. Add that rule immediately after making the repository
+public and before dispatching the first production release; branch restriction
+and the Environment secret can be configured while it remains private.
 
 ## Publishing
 
