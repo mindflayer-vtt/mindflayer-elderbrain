@@ -255,6 +255,21 @@ def verify_anchors(root, *, allow_missing=False):
 
 def publish_generation(identity, *, directory):
     verify_generation(identity, directory=directory)
+    stale = []
+    for candidate in Path(directory).glob('.bootstrap-active-*'):
+        name = candidate.name.removeprefix('.bootstrap-active-')
+        info = candidate.lstat()
+        target = os.readlink(candidate) if stat.S_ISLNK(info.st_mode) else ''
+        match = re.fullmatch(GENERATIONS + r'/([a-f0-9]{64})', target)
+        if (not re.fullmatch(r'[a-f0-9]{32}', name) or info.st_uid != os.geteuid()
+                or match is None):
+            raise ValueError('Unsafe temporary bootstrap selector')
+        verify_generation(match.group(1), directory=directory)
+        stale.append(candidate)
+    for candidate in stale:
+        candidate.unlink()
+    if stale:
+        sync_directory(Path(directory))
     target = GENERATIONS + '/' + identity
     current = Path(directory) / ACTIVE
     temporary = Path(directory) / ('.bootstrap-active-' + uuid.uuid4().hex)
@@ -265,6 +280,7 @@ def publish_generation(identity, *, directory):
     finally:
         if temporary.exists() or temporary.is_symlink():
             temporary.unlink()
+            sync_directory(Path(directory))
     return {'generation': identity}
 
 

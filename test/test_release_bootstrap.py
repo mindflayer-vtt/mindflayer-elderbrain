@@ -239,6 +239,19 @@ class BootstrapTests(unittest.TestCase):
             prepared['candidate'], state=self.state, host_root=self.root),
             {'bundle': candidate['bundle'], 'generation': candidate['id']})
 
+    def test_candidate_switch_removes_only_verified_stale_temporary_selectors(self):
+        baseline = self.install()
+        recovery = self.root / 'usr/lib/elderbrain-recovery'
+        stale = recovery / ('.bootstrap-active-' + 'a' * 32)
+        stale.symlink_to('bootstrap-generations/' + baseline['generation'])
+        bootstrap.publish_generation(baseline['generation'], directory=recovery)
+        self.assertFalse(stale.exists() or stale.is_symlink())
+        unsafe = recovery / ('.bootstrap-active-' + 'b' * 32)
+        unsafe.write_text('not a selector')
+        with self.assertRaisesRegex(ValueError, 'temporary bootstrap selector'):
+            bootstrap.publish_generation(baseline['generation'], directory=recovery)
+        self.assertTrue(unsafe.is_file())
+
     def test_interrupted_candidate_generation_publication_remains_unselected(self):
         baseline = self.install()
         recovery = self.root / 'usr/lib/elderbrain-recovery'
