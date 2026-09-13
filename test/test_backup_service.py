@@ -123,6 +123,10 @@ class MaintenanceTests(unittest.TestCase):
         from admin_tls import openssl
         ca, tls = state / 'host/admin-ca', state / 'traefik/tls'
         ca.mkdir(parents=True, mode=0o700); tls.mkdir()
+        (state / 'traefik/admin-tls.yaml').write_text(
+            'tls:\n  stores:\n    default:\n      defaultCertificate:\n'
+            '        certFile: /etc/traefik/dynamic/tls/admin.crt\n'
+            '        keyFile: /etc/traefik/dynamic/tls/admin.key\n')
         openssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', ca / 'ca.key',
                  '-out', ca / 'ca.crt', '-days', '1', '-subj', '/CN=backup-test-CA',
                  '-addext', 'basicConstraints=critical,CA:TRUE',

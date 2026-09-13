@@ -33,7 +33,7 @@ onBeforeUnmount(() => { stopped = true; clearInterval(timer); });
       <template #header><h2 class="text-xl font-semibold">Displays and URLs</h2></template>
       <form class="space-y-5" @submit.prevent="saveConfig">
         <fieldset :disabled="previewLocked || busy" class="space-y-5">
-        <UFormField label="LAN domain"><UInput v-model="config.domain" required class="w-full" /></UFormField>
+        <UFormField label="Base LAN domain" description="Example: home.example creates foundry.home.example, mindflayer.home.example and elderbrain.home.example."><UInput v-model="config.domain" required class="w-full" /></UFormField>
         <div v-for="(view, index) in config.views" :key="index" class="border border-default rounded p-4 space-y-4">
           <DisplayOutput v-model="view.output" :label="'Output ' + (index + 1)" :outputs="outputs" :unavailable="unavailable" />
           <UFormField :label="'Browser mode ' + (index + 1)"><USelect v-model="view.mode" :items="[{ value: 'admin', label: 'Administration browser' }, { value: 'player', label: 'Player map kiosk' }]" class="w-full" /></UFormField>

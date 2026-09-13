@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import stat
 
 
 def validate_domain(value):
@@ -47,8 +48,17 @@ def reconcile(state):
     except FileNotFoundError:
         config = {}
     content = json.dumps(document(config.get('domain', 'elderbrain.local')), indent=2) + '\n'
-    target = state / 'traefik/lan-routes.yaml'
+    target = state / 'traefik/dynamic/lan-routes.yaml'
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    parent_info = target.parent.lstat()
+    if (target.parent.resolve() != target.parent or not stat.S_ISDIR(parent_info.st_mode)
+            or parent_info.st_uid != os.geteuid() or parent_info.st_mode & 0o022):
+        raise ValueError('Unsafe Traefik dynamic configuration directory')
+    if target.exists() or target.is_symlink():
+        info = target.lstat()
+        if (target.resolve() != target or not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid() or info.st_mode & 0o022):
+            raise ValueError('Unsafe LAN route projection')
     if target.exists() and target.read_text() == content:
         return
     temporary = target.parent / ('.routes-' + secrets.token_hex(16))

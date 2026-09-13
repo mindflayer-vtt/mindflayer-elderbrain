@@ -39,7 +39,7 @@ def main():
     if args.operation == 'seed':
         assert not args.manifest.exists(), 'Do not overwrite a previous baseline'
         fixture_name = '.preserve-test-fixture-' + secrets.token_hex(8)
-        files = [STATE / '.elderbrain-volume.json', STATE / 'traefik/admin-tls.yaml']
+        files = [STATE / '.elderbrain-volume.json', STATE / 'traefik/dynamic/admin-tls.yaml']
         for scope in SCOPES:
             parent = STATE / scope
             assert parent.is_dir() and not parent.is_symlink()

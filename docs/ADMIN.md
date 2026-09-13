@@ -121,8 +121,8 @@ Administration now requires HTTPS and redirects HTTP requests. First boot prepar
 a local CA and appliance certificate and installs local browser trust. Remote
 clients need to trust the appliance CA after verifying it through a trusted local
 channel, or use an externally managed certificate. The CA signing key is retained
-under root-only host state and is not mounted into Traefik; only its leaf TLS key
-and certificate are mounted individually. Foundry retains its separate
+under root-only host state and is not mounted into Traefik; only the separate
+leaf-certificate directory is mounted read-only. Foundry retains its separate
 login and routing. Installed-appliance TLS verification passed in a clean VM. Neither
 public ACME nor external DNS is assumed.
 
@@ -242,7 +242,6 @@ narrow operation; it does not grant administrative access.
 Switching to the tty2 bootstrap display temporarily removes Sway's active output,
 but does not terminate or recreate the browser. Returning with Ctrl+Alt+F1 keeps
 the current form contents and tabs intact.
-
 Chrome's managed `PasswordManagerEnabled: false` policy disables saving new
 passwords and save-password prompts in the appliance browser. This does not erase
 previously saved credentials; Chrome may still use those if a pre-existing profile

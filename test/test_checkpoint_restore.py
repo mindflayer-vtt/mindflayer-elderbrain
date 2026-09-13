@@ -76,7 +76,7 @@ class CheckpointRestoreTests(unittest.TestCase):
         value = json.loads(self.live.read_text())
         self.assertEqual(value['domain'], 'archived.local')
         self.assertTrue(value['configured'])
-        self.assertIn('foundry.archived.local', (self.state / 'traefik/lan-routes.yaml').read_text())
+        self.assertIn('foundry.archived.local', (self.state / 'traefik/dynamic/lan-routes.yaml').read_text())
         self.assertEqual(self.events, ['stop', 'checkpoint', 'validate', 'resume', 'release'])
         self.assertEqual(list(self.maintenance.directory.glob('checkpoint-restore-*')), [])
 
@@ -86,7 +86,7 @@ class CheckpointRestoreTests(unittest.TestCase):
             self.restore()
         self.assertEqual(json.loads(self.live.read_text())['domain'], 'current.local')
         self.assertEqual(self.maintenance.previous()['state'], 'rolled-back')
-        self.assertIn('foundry.current.local', (self.state / 'traefik/lan-routes.yaml').read_text())
+        self.assertIn('foundry.current.local', (self.state / 'traefik/dynamic/lan-routes.yaml').read_text())
         self.assertEqual(self.events[-1], 'release')
 
     def test_missing_compatibility_rejected_before_stop(self):
@@ -109,7 +109,7 @@ class CheckpointRestoreTests(unittest.TestCase):
             result = recover_host(self.state, self.state, self.maintenance, host_root=self.state)
         self.assertEqual(result['state'], 'rolled-back')
         self.assertEqual(json.loads(self.live.read_text())['domain'], 'current.local')
-        self.assertIn('foundry.current.local', (self.state / 'traefik/lan-routes.yaml').read_text())
+        self.assertIn('foundry.current.local', (self.state / 'traefik/dynamic/lan-routes.yaml').read_text())
 
 
 if __name__ == '__main__':

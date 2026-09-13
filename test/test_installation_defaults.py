@@ -14,8 +14,10 @@ spec.loader.exec_module(module)
 class InstallationDefaultsTests(unittest.TestCase):
     def test_preserve_install_never_overwrites_saved_traefik_tls_settings(self):
         script = (ROOT / 'provisioning/install.sh').read_text()
-        self.assertIn('initialize-default.py" "$STATE/traefik/admin-tls.yaml"', script)
+        self.assertIn('initialize-default.py" "$STATE/traefik/dynamic/admin-tls.yaml"', script)
         self.assertNotIn('install -m 0644 "$PAYLOAD_DIR/config/defaults/admin-tls.yaml"', script)
+        prepare = (ROOT / 'provisioning/prepare-admin').read_text()
+        self.assertIn('admin_tls.py" migrate --directory "$state/traefik"', prepare)
 
     def test_foundry_data_is_owned_by_the_container_user(self):
         script = (ROOT / 'provisioning/install.sh').read_text()

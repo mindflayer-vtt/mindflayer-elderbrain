@@ -406,20 +406,20 @@ test('network polling preserves typing and reload loses the confirmation token b
 test("display preview survives reload, cancels without saving and blocks direct writes", async ({ page, request }) => {
   const before = await (await request.get('/elderbrain/api/config')).json();
   await page.goto('/elderbrain/displays');
-  await page.getByLabel('LAN domain').fill('preview-only.example');
+  await page.getByLabel('Base LAN domain').fill('preview-only.example');
   await page.getByRole('button', { name: 'Preview display changes', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Keep display settings', exact: true })).toBeVisible();
   expect(await (await request.get('/elderbrain/api/config')).json()).toEqual(before);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Keep display settings', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Keep display settings', exact: true })).toBeFocused();
-  await expect(page.getByLabel('LAN domain')).toBeDisabled();
+  await expect(page.getByLabel('Base LAN domain')).toBeDisabled();
   const session = await (await request.get('/elderbrain/api/auth/session')).json();
   expect((await request.put('/elderbrain/api/config', { headers: { 'x-elderbrain-request': '1', 'x-csrf-token': session.csrf }, data: before })).status()).toBe(409);
   expect((await request.post('/elderbrain/api/display-preview/confirm', { headers: { 'x-elderbrain-request': '1' }, data: { id: 'd'.repeat(32) } })).status()).toBe(403);
   await page.getByRole('button', { name: 'Revert display settings', exact: true }).click();
   await expect(page.getByText('Display changes reverted', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('LAN domain')).toHaveValue(before.domain);
+  await expect(page.getByLabel('Base LAN domain')).toHaveValue(before.domain);
   expect(await (await request.get('/elderbrain/api/config')).json()).toEqual(before);
 });
 
@@ -502,17 +502,17 @@ test("overview renders host usage graphs and marks stale readings", async ({ pag
 
 test("navigation protects unsaved edits and works on mobile", async ({ page }) => {
   await page.goto("/elderbrain/displays");
-  await expect(page.getByLabel("LAN domain")).not.toHaveValue("");
-  await page.getByLabel("LAN domain").fill("unsaved.example");
+  await expect(page.getByLabel("Base LAN domain")).not.toHaveValue("");
+  await page.getByLabel("Base LAN domain").fill("unsaved.example");
   page.once("dialog", dialog => dialog.dismiss());
   await page.getByRole("link", { name: "Foundry", exact: true }).click();
   await expect(page).toHaveURL(/\/displays$/);
-  await expect(page.getByLabel("LAN domain")).toHaveValue("unsaved.example");
+  await expect(page.getByLabel("Base LAN domain")).toHaveValue("unsaved.example");
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("link", { name: "Foundry", exact: true }).click();
   await expect(page.getByLabel("Account email")).toBeVisible();
   await expect(page.getByLabel("Account email")).toBeFocused();
-  await expect(page.getByLabel("LAN domain")).toHaveCount(0);
+  await expect(page.getByLabel("Base LAN domain")).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("link", { name: "Network", exact: true }).click();
@@ -571,16 +571,17 @@ test("Nuxt UI works through the appliance prefix and preserves unsaved edits", a
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/elderbrain/displays");
   await expect(page.getByRole("heading", { name: "Displays", exact: true })).toBeVisible();
-  await expect(page.getByLabel("LAN domain")).toHaveValue("elderbrain.local");
-  await page.getByLabel("LAN domain").fill("table.example");
+  await expect(page.getByLabel("Base LAN domain")).toHaveValue("elderbrain.local");
+  await expect(page.getByText("home.example creates foundry.home.example")).toBeVisible();
+  await page.getByLabel("Base LAN domain").fill("table.example");
   await page.waitForTimeout(5500);
-  await expect(page.getByLabel("LAN domain")).toHaveValue("table.example");
+  await expect(page.getByLabel("Base LAN domain")).toHaveValue("table.example");
   await page.getByRole("button", { name: "Preview display changes" }).click();
   await page.getByRole("button", { name: "Keep display settings", exact: true }).click();
   await expect(page.getByText("Configuration saved", { exact: true })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/elderbrain/displays");
   await page.reload();
-  await expect(page.getByLabel("LAN domain")).toHaveValue("table.example");
+  await expect(page.getByLabel("Base LAN domain")).toHaveValue("table.example");
   await page.getByRole("link", { name: "Keypads", exact: true }).click();
   await page.getByRole("button", { name: "Identify", exact: true }).click();
   await expect(page.getByText("Identification colors sent", { exact: true })).toBeVisible();
@@ -649,7 +650,7 @@ test("direct hostname entry also hydrates", async ({ page }) => {
   await page.goto("http://127.0.0.1:18080/");
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Displays", exact: true }).click();
-  await expect(page.getByLabel("LAN domain")).toBeVisible();
+  await expect(page.getByLabel("Base LAN domain")).toBeVisible();
 });
 
 test("backup panel requires downtime consent and offers an authenticated download", async ({ page, request }) => {

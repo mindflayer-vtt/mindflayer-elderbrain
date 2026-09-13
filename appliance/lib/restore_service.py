@@ -200,8 +200,9 @@ def restore_host(archive, state, runtime, maintenance, *, host_root=Path("/")):
         required = set(DATA_ROOTS) | {"service-config", "ssh-server", "admin-ca"}
         if not required <= set(manifest["roots"]):
             raise ValueError("Archive is missing required appliance configuration roots")
-        from admin_tls import validate_layout
+        from admin_tls import migrate_layout, validate_layout
         try:
+            migrate_layout(contents / 'traefik')
             validate_layout(contents / 'traefik', contents / 'admin-ca')
         except (OSError, ValueError) as error:
             raise ValueError('Archive administration TLS authority is invalid') from error

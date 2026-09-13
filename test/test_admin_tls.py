@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'appliance/lib'))
-from admin_tls import ensure_address, names, openssl, validate_layout
+from admin_tls import ensure_address, migrate_layout, names, openssl, validate_layout
 
 
 class AdminTLSTests(unittest.TestCase):
@@ -14,6 +14,7 @@ class AdminTLSTests(unittest.TestCase):
             tls = root / 'tls'
             ca = root / 'admin-ca'
             tls.mkdir(); ca.mkdir(mode=0o700)
+            (root / 'dynamic').mkdir(mode=0o700)
             openssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', ca / 'ca.key',
                      '-out', ca / 'ca.crt', '-days', '1', '-subj', '/CN=test-CA',
                      '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign,cRLSign'])
@@ -23,7 +24,7 @@ class AdminTLSTests(unittest.TestCase):
             openssl(['x509', '-req', '-in', tls / 'request.pem', '-CA', ca / 'ca.crt', '-CAkey', ca / 'ca.key',
                      '-set_serial', '1', '-days', '1', '-copy_extensions', 'copy', '-out', tls / 'admin.crt'])
             (tls / 'ca.crt').write_bytes((ca / 'ca.crt').read_bytes())
-            config = root / 'admin-tls.yaml'
+            config = root / 'dynamic/admin-tls.yaml'
             config.write_text('# Existing custom settings must remain intact\ntls: {}\n')
             (tls / 'admin.crt').chmod(0o640)
             preserved = {path: path.read_bytes() for path in (ca / 'ca.crt', ca / 'ca.key',
@@ -45,7 +46,18 @@ class AdminTLSTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tls, ca = root / 'tls', root / 'admin-ca'
-            tls.mkdir(); ca.mkdir(mode=0o700)
+            tls.mkdir(); ca.mkdir(mode=0o700); (root / 'dynamic').mkdir(mode=0o700)
             (tls / 'ca.key').write_text('exposed')
             with self.assertRaisesRegex(ValueError, 'must not be present'):
                 validate_layout(root, ca)
+
+    def test_legacy_dynamic_config_migrates_without_exposing_ca(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy = root / 'admin-tls.yaml'
+            legacy.write_text('certFile: /etc/traefik/dynamic/tls/admin.crt\n')
+            self.assertTrue(migrate_layout(root))
+            target = root / 'dynamic/admin-tls.yaml'
+            self.assertEqual(target.read_text(), 'certFile: /etc/traefik/tls/admin.crt\n')
+            self.assertEqual(target.stat().st_mode & 0o777, 0o644)
+            self.assertFalse(migrate_layout(root))

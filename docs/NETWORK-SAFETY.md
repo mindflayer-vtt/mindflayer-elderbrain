@@ -95,8 +95,9 @@ Implemented foundations:
   `test/qemu/network-confirmation.py`. Its client runs inside the guest bound to
   ens3; this does not prove external browser/UFW reachability or setup reconnect.
 - Setup certificate refresh now adds the new IP while retaining existing DNS/IP
-  SANs, CA and leaf private key. Certificate replacement is atomic and re-publishes
-  unchanged dynamic configuration to trigger Traefik's file watcher. The listener
+  SANs, CA and leaf private key. Certificate and dynamic-configuration parent
+  directories are mounted read-only into Traefik, so atomic replacement remains
+  visible and re-publishing the unchanged configuration triggers its watcher. The listener
   prepares this before opening confirmation TLS. Unit tests verify preservation
   and idempotence. A live VM test (`test/qemu/admin-tls.py`) verified that Traefik
   actually served the new CA-verified certificate, then restored the original

@@ -57,17 +57,61 @@ def replace(path, data):
         temporary.unlink(missing_ok=True)
 
 
+def migrate_layout(directory='/var/lib/mindflayer-elderbrain/traefik'):
+    """Move legacy dynamic YAML into its atomically watched parent directory."""
+    root = Path(directory)
+    dynamic = root / 'dynamic'
+    if dynamic.exists() or dynamic.is_symlink():
+        info = dynamic.lstat()
+        if (dynamic.resolve() != dynamic or not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.geteuid() or info.st_mode & 0o022):
+            raise ValueError('Unsafe Traefik dynamic configuration directory')
+    else:
+        dynamic.mkdir(mode=0o700)
+    target = dynamic / 'admin-tls.yaml'
+    if target.exists() or target.is_symlink():
+        return False
+    legacy = root / 'admin-tls.yaml'
+    info = legacy.lstat()
+    if (legacy.resolve() != legacy or not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.geteuid() or info.st_mode & 0o022
+            or info.st_size > 65536):
+        raise ValueError('Unsafe legacy administration TLS routing configuration')
+    data = legacy.read_bytes().replace(b'/etc/traefik/dynamic/tls/', b'/etc/traefik/tls/')
+    descriptor, temporary = tempfile.mkstemp(prefix='.tls-config-', dir=dynamic)
+    try:
+        with os.fdopen(descriptor, 'wb') as stream:
+            os.fchmod(stream.fileno(), 0o644)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+        sync = os.open(dynamic, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(sync)
+        finally:
+            os.close(sync)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return True
+
+
 def validate_layout(directory='/var/lib/mindflayer-elderbrain/traefik',
                     ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
     root, ca = Path(directory), Path(ca_directory)
-    tls = root / 'tls'
-    for path in (root, tls, ca):
+    tls, dynamic = root / 'tls', root / 'dynamic'
+    for path in (root, tls, dynamic, ca):
         info = path.lstat()
         if (path.resolve() != path or not stat.S_ISDIR(info.st_mode)
                 or info.st_uid != os.geteuid() or info.st_mode & 0o022):
             raise ValueError('Unsafe administration TLS directory')
     if (tls / 'ca.key').exists() or (tls / 'ca.key').is_symlink():
         raise ValueError('CA signing key must not be present in served TLS state')
+    config = dynamic / 'admin-tls.yaml'
+    info = config.lstat()
+    if (config.resolve() != config or not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.geteuid() or info.st_mode & 0o022):
+        raise ValueError('Unsafe administration TLS routing configuration')
     for path, private in ((ca / 'ca.key', True), (ca / 'ca.crt', False),
                           (tls / 'admin.key', True), (tls / 'admin.crt', False),
                           (tls / 'ca.crt', False)):
@@ -93,7 +137,7 @@ def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
     ca = Path(ca_directory)
     tls = root / 'tls'
     certificate, key = tls / 'admin.crt', tls / 'admin.key'
-    dynamic = root / 'admin-tls.yaml'
+    dynamic = root / 'dynamic/admin-tls.yaml'
     with open(tls / '.refresh.lock', 'a') as lock:
         os.fchmod(lock.fileno(), 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -128,10 +172,13 @@ def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('validate',))
+    parser.add_argument('action', choices=('validate', 'migrate'))
     parser.add_argument('--directory', default='/var/lib/mindflayer-elderbrain/traefik')
     parser.add_argument('--ca-directory', default='/var/lib/mindflayer-elderbrain/host/admin-ca')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('must run as root')
-    validate_layout(args.directory, args.ca_directory)
+    if args.action == 'migrate':
+        migrate_layout(args.directory)
+    else:
+        validate_layout(args.directory, args.ca_directory)

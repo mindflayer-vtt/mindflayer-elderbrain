@@ -32,9 +32,9 @@ class DomainRoutesTests(unittest.TestCase):
         self.assertNotIn('providers.docker', compose)
         self.assertNotIn('/var/run/docker.sock', compose)
         self.assertNotIn('traefik.http.', compose)
-        self.assertNotIn('/traefik:/etc/traefik/dynamic', compose)
-        self.assertNotIn('ca.key:/etc/traefik', compose)
-        self.assertIn('/traefik/tls/admin.key:/etc/traefik/dynamic/tls/admin.key:ro', compose)
+        self.assertIn('/traefik/dynamic:/etc/traefik/dynamic:ro', compose)
+        self.assertIn('/traefik/tls:/etc/traefik/tls:ro', compose)
+        self.assertNotIn('/host/admin-ca:/etc/traefik', compose)
         prepare = (Path(__file__).resolve().parents[1] / 'provisioning/prepare-admin').read_text()
         self.assertIn('python3 "$runtime/domain_routes.py" "$state"', prepare)
 
@@ -46,7 +46,7 @@ class DomainRoutesTests(unittest.TestCase):
             old = {'configured': True, 'domain': 'old.test', 'views': [{'url': 'http://foundry.old.test'}]}
             store.config.write_text(json.dumps(old))
             reconcile(root)
-            target = root / 'traefik/lan-routes.yaml'
+            target = root / 'traefik/dynamic/lan-routes.yaml'
             before = target.read_bytes()
             pending = store.begin({**old, 'domain': 'home.viromania.com'})
             store.recover()
@@ -69,4 +69,16 @@ class DomainRoutesTests(unittest.TestCase):
             pending = store.begin({'configured': True, 'domain': 'new.test', 'views': [{'url': 'http://new.test'}]})
             store.cancel(pending['id'])
             store.recover()
-            self.assertNotIn('new.test', (root / 'traefik/lan-routes.yaml').read_text())
+            self.assertNotIn('new.test', (root / 'traefik/dynamic/lan-routes.yaml').read_text())
+
+    def test_reconcile_rejects_an_unsafe_projection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / 'traefik/dynamic/lan-routes.yaml'
+            target.parent.mkdir(parents=True, mode=0o700)
+            outside = root / 'outside'
+            outside.write_text('unchanged')
+            target.symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, 'Unsafe LAN route projection'):
+                reconcile(root)
+            self.assertEqual(outside.read_text(), 'unchanged')

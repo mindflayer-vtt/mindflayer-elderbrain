@@ -249,6 +249,19 @@ all four containers remain healthy. Local GUI explanatory text/validation
 will be included in the next build, not rebuilt on the physical appliance.
 Elderbrain remains local/unpushed; current candidate ISO predates this fix.
 
+A later physical retest exposed a Docker bind-mount edge case in that repair:
+atomic replacement changed the host file inode while Traefik retained the old
+single-file mount, so every new hostname still returned 404. Host and container
+SHA256/inode comparison confirmed the stale mount. The live appliance was safely
+repaired by setting the intended base domain to `home.viromania.com` and recreating
+only Traefik; `foundry.home.viromania.com` then returned Foundry's HTTP 302 and the
+display preview remained confirmed. Runtime configuration now keeps both dynamic
+documents in a read-only parent-directory mount and leaf TLS material in a separate
+read-only directory, leaving `host/admin-ca` unmounted. Boot and restore migrate
+legacy dynamic YAML and translate its appliance-owned certificate paths. This
+preserves atomic writes while allowing Traefik's watcher to observe replacements.
+The Displays field now says **Base LAN domain** and shows the resulting hostnames.
+
 The management restart exposed a second issue: systemd removed/recreated
 `/run/elderbrain`, leaving Setup's bind mount on the old directory (host inode
 5282, container inode 3076, socket missing). Added `RuntimeDirectoryPreserve=yes`
@@ -1775,9 +1788,9 @@ appliance was changed; signed-update and disconnected-boot qualification remain.
 
 Separated administration CA signing authority from Traefik serving state. The CA
 key and authoritative certificate now live in the private persistent
-`host/admin-ca` directory. Traefik receives individual read-only bind mounts only
-for its two dynamic documents and leaf certificate/key; neither the CA key nor its
-parent directory is mounted. `prepare-admin` refuses legacy exposed-key layouts,
+`host/admin-ca` directory. Traefik receives read-only parent-directory mounts for
+dynamic documents and leaf certificates so atomic replacements remain observable;
+neither the CA key nor its parent directory is mounted. `prepare-admin` refuses legacy exposed-key layouts,
 refuses silent trust rotation when a published CA has lost its key, publishes only
 the public CA copy, and validates CA/key/leaf consistency before stack startup.
 Host certificate refresh, temporary network-confirmation TLS and recovery health

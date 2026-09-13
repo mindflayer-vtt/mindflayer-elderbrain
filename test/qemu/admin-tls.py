@@ -29,7 +29,7 @@ def served(certificate, name):
 def main():
     assert subprocess.check_output(['systemd-detect-virt'], text=True).strip() in ('qemu', 'kvm')
     root = Path('/var/lib/mindflayer-elderbrain/traefik')
-    certificate, dynamic = root / 'tls/admin.crt', root / 'admin-tls.yaml'
+    certificate, dynamic = root / 'tls/admin.crt', root / 'dynamic/admin-tls.yaml'
     original, configuration = certificate.read_bytes(), dynamic.read_bytes()
     try:
         ensure_address('10.0.2.20')

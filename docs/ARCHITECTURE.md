@@ -11,8 +11,10 @@ WebSocket over a separate self-signed TLS identity at `/device/v1` on 10443.
 Their firmware pins that identity, so host 10443 maps directly to the server.
 
 The administration CA certificate and signing key live in root-only persistent
-host state at `host/admin-ca`. Traefik receives four individual read-only files:
-its dynamic TLS/routing documents and the leaf server certificate/private key.
+host state at `host/admin-ca`. Traefik receives only the read-only dynamic and
+leaf-certificate directories: its dynamic TLS/routing documents and the leaf
+server certificate/private key. Parent-directory mounts keep atomic replacements
+visible to its watcher, while the CA signing directory is never mounted.
 The CA private key is never within a container bind mount. A public CA copy remains
 available in host TLS state for client enrollment, while renewal and network
 confirmation run only in the root host service.
