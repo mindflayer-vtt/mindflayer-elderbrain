@@ -8,6 +8,12 @@ entry. Installation is unattended and erases the selected target disk: back up
 that disk and disconnect other data disks before starting. Remove the installer
 USB after installation when rebooting into the installed system.
 
+The Elderbrain boot entry delays USB-storage probing for five seconds and applies
+the kernel's delayed-initialization quirk to Innostor IS918 (`1f75:0918`) flash
+controllers. This prevents those controllers from being scanned while they still
+report no media on older xHCI hosts. Do not unplug installation media after boot
+begins; a device that remains absent after the bounded delay still fails closed.
+
 The storage console lists only unused, writable, non-removable disks with a unique
 hardware serial. Each entry has a number, path, model, size and serial. Choose the
 target by typing its number; the installer retains and revalidates the exact udev

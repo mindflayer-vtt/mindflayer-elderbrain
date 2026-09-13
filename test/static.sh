@@ -40,6 +40,8 @@ python3 -m py_compile "$root/test/qemu/network-confirmation.py"
 python3 -m py_compile "$root/test/qemu/admin-tls.py"
 python3 -m py_compile "$root/test/qemu/network-external.py"
 grep -q 'Install Mindflayer Elderbrain' "$root/iso/boot/elderbrain-grub.cfg"
+grep -qF 'usbcore.quirks=1f75:0918:g' "$root/iso/boot/elderbrain-grub.cfg"
+grep -qF 'usb-storage.delay_use=5' "$root/iso/boot/elderbrain-grub.cfg"
 grep -q 'authorized-keys' "$root/iso/build.sh"
 image=$(sed -n 's/^MINDFLAYER_SERVER_IMAGE=//p' "$root/config/defaults/appliance.env")
 [[ $image == mindflayervtt/server:0.4.1@sha256:* ]]
