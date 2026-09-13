@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from . import test_appliance_release as fixture
-from release_catalog import check, fetch, source_url
+from release_catalog import check, fetch, source_url, status
 
 
 class CatalogTests(unittest.TestCase):
@@ -38,6 +38,13 @@ class CatalogTests(unittest.TestCase):
         download = Mock()
         self.assertEqual(check(host_root=self.root, download=download)['state'], 'not-configured')
         download.assert_not_called()
+
+    def test_local_status_reports_installed_identity_without_network(self):
+        self.assertEqual(status(host_root=self.root), {
+            'installedHostVersion': '1.0.0', 'installedReleaseSequence': 0,
+            'state': 'not-configured', 'release': None})
+        self.configure()
+        self.assertEqual(status(host_root=self.root)['state'], 'configured')
 
     def test_old_source_built_iso_version_is_not_an_update_baseline(self):
         version = 'a' * 40 + '-dirty'

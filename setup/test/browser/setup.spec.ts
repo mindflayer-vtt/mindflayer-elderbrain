@@ -23,14 +23,23 @@ test('System page checks signed release metadata and renders notes as text', asy
   const headers = { 'x-elderbrain-request': '1', 'x-csrf-token': session.csrf };
   expect((await request.post(url, { headers, data: { baseUrl: 'https://untrusted.test/' } })).ok()).toBe(false);
   await page.goto('/elderbrain/system');
-  await page.getByRole('button', { name: 'Check for updates' }).click();
   await expect(page.getByText('Installed host: 1.0.0')).toBeVisible();
   await expect(page.getByText('accepted release sequence 100', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Check for updates' }).click();
   await expect(page.getByRole('heading', { name: 'Release 1.2.3' })).toBeVisible();
   await expect(page.getByText('120 seconds', { exact: true })).toBeVisible();
   await expect(page.getByText('123', { exact: true })).toBeVisible();
   await expect(page.getByText('Improved offline updates. <script>unsafe()</script>', { exact: true })).toBeVisible();
   await expect(page.getByText('Release signature verified', { exact: true })).toBeVisible();
+});
+
+test('System page retains installed identity when the release source is unavailable', async ({ page }) => {
+  await page.route('**/api/system/check', route => route.fulfill({ status: 400, json: { error: 'unavailable' } }));
+  await page.goto('/elderbrain/system');
+  await expect(page.getByText('Installed host: 1.0.0')).toBeVisible();
+  await page.getByRole('button', { name: 'Check for updates' }).click();
+  await expect(page.getByText('Release check failed. Check the configured release source and network connection, then retry.')).toBeVisible();
+  await expect(page.getByText('Installed host: 1.0.0')).toBeVisible();
 });
 
 test('update API requires authentication, CSRF and exact confirmed release identity', async ({ request, playwright, baseURL }) => {

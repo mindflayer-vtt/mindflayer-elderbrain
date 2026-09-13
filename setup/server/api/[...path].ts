@@ -30,6 +30,11 @@ export default defineEventHandler(async (event) => {
     return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as unknown;
   }
   try {
+    if (route === 'system/release' && method === 'GET') {
+      const result = await command(socket, 'release-status');
+      if (!result.ok) throw new Error('Installed release status unavailable');
+      return JSON.parse(result.output || 'null');
+    }
     if (route === 'system/power' && method === 'GET') {
       const result = await command(socket, 'power-status');
       if (!result.ok) throw new Error('Power status unavailable');

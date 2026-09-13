@@ -109,7 +109,7 @@ def fetch(base, filename, limit):
         connection.close()
 
 
-def check(*, host_root=Path('/'), download=fetch):
+def status(*, host_root=Path('/')):
     root = Path(host_root).absolute()
     installed = trusted(root / 'opt/mindflayer-elderbrain/VERSION', 129).decode().strip()
     if not re.fullmatch(VERSION, installed):
@@ -125,6 +125,18 @@ def check(*, host_root=Path('/'), download=fetch):
     if not isinstance(selected, dict) or set(selected) != {'baseUrl'}:
         raise ValueError('Invalid release source configuration')
     source_url(selected['baseUrl'])
+    result['state'] = 'configured'
+    return result
+
+
+def check(*, host_root=Path('/'), download=fetch):
+    root = Path(host_root).absolute()
+    result = status(host_root=root)
+    if result['state'] == 'not-configured':
+        return result
+    config = root / 'etc/elderbrain/release-source.json'
+    selected = json.loads(trusted(config, 4096), object_pairs_hook=unique)
+    policy = ReleasePolicy(root / 'var/lib/mindflayer-elderbrain')
     key = trusted(root / 'etc/elderbrain/release-public.pem', 16384)
     manifest = download(selected['baseUrl'], 'manifest.json', 65536)
     signature = download(selected['baseUrl'], 'manifest.sig', 1024)

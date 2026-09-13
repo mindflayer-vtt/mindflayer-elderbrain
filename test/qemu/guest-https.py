@@ -11,7 +11,8 @@ state = Path("/var/lib/mindflayer-elderbrain")
 settings = dict(line.split("=", 1) for line in Path("/opt/mindflayer-elderbrain/appliance.env").read_text().splitlines()
                 if "=" in line and not line.startswith("#"))
 host = settings["ELDERBRAIN_HOST"]
-domain = json.loads((state / 'elderbrain/config.json').read_text()).get('domain', 'elderbrain.local')
+config = state / 'elderbrain/config.json'
+domain = json.loads(config.read_text()).get('domain', 'elderbrain.local') if config.exists() else 'elderbrain.local'
 foundry_host = 'foundry.' + domain
 context = ssl.create_default_context(cafile=str(state / "traefik/tls/ca.crt"))
 

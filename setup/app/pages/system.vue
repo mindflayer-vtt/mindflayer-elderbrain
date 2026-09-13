@@ -3,6 +3,7 @@ definePageMeta({ alias: ['/elderbrain/system'] });
 const { session } = useAdmin();
 const checking = ref(false);
 const error = ref('');
+const statusError = ref('');
 const confirmUpdate = ref(false);
 const confirmDowntime = ref(false);
 const submitting = ref(false);
@@ -20,6 +21,12 @@ let disposed = false;
 const result = ref<{ installedHostVersion: string; installedReleaseSequence: number; state: string; release: null | {
   version: string; releaseSequence: number; recoveryApi: number; hostVersion: string; setupVersion: string; notes: string; downtimeSeconds: number; compatible: boolean; manifestSha256: string;
 } }>();
+async function refreshReleaseStatus() {
+  try {
+    const value = await $fetch<typeof result.value>('/elderbrain/api/system/release', { retry: 0, timeout: 10000 });
+    if (!disposed) result.value = value;
+  } catch { if (!disposed) statusError.value = 'Installed release status is unavailable.'; }
+}
 async function refreshJobs() {
   if (refreshing) return;
   refreshing = true;
@@ -76,13 +83,12 @@ async function update() {
     notice.value = 'Request status uncertain or rejected. Wait for the job list to reconnect and inspect it before retrying.';
   } finally { submitting.value = false; confirmUpdate.value = false; confirmDowntime.value = false; }
 }
-onMounted(() => { void refreshJobs(); timer = setInterval(() => void refreshJobs(), 5000); });
+onMounted(() => { void refreshReleaseStatus(); void refreshJobs(); timer = setInterval(() => void refreshJobs(), 5000); });
 onBeforeUnmount(() => { disposed = true; clearInterval(timer); });
 async function check() {
   if (checking.value) return;
   checking.value = true;
   error.value = '';
-  result.value = undefined;
   confirmUpdate.value = false;
   confirmDowntime.value = false;
   try {
@@ -99,10 +105,11 @@ async function check() {
       <template #header><h2 class="text-xl font-semibold">Elderbrain updates</h2></template>
       <div class="space-y-4">
         <p>Check the configured release source for signed host and Setup versions. Checking does not install software or interrupt Foundry.</p>
+        <UAlert v-if="statusError" color="warning" :title="statusError" />
+        <p v-if="result">Installed host: {{ result.installedHostVersion }} — accepted release sequence {{ result.installedReleaseSequence }}</p>
         <UButton :loading="checking" :disabled="checking" @click="check">Check for updates</UButton>
         <UAlert v-if="error" color="error" :title="error" />
         <template v-if="result">
-          <p>Installed host: {{ result.installedHostVersion }} — accepted release sequence {{ result.installedReleaseSequence }}</p>
           <UAlert v-if="result.state === 'not-configured'" color="warning" title="Release source not configured" description="Configure the appliance release source and trusted public signing key before checking for updates." />
           <template v-if="result.release">
             <h3 class="text-lg font-semibold">Release {{ result.release.version }}</h3>

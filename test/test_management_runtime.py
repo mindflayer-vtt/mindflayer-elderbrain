@@ -79,6 +79,15 @@ class ManagementRuntimeTests(unittest.TestCase):
         restart.assert_called_once_with(['/usr/local/sbin/elderbrain', 'restart-foundry'], text=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
 
+        release_catalog = types.SimpleNamespace(status=Mock(return_value={
+            'installedHostVersion': '1.0.0', 'installedReleaseSequence': 1,
+            'state': 'configured', 'release': None}))
+        with patch.dict(sys.modules, {'release_catalog': release_catalog}):
+            release = send(b'release-status\n')
+        self.assertTrue(release['ok'])
+        self.assertEqual(json.loads(release['output'])['installedReleaseSequence'], 1)
+        release_catalog.status.assert_called_once_with()
+
         selected = {'usbId': 'c' * 32, 'version': '1.2.3', 'revision': 4, 'adopt': False}
         payload = json.dumps(selected).encode()
         self.assertTrue(send(f'keypad-provision-start {len(payload)}\n'.encode() + payload)['ok'])

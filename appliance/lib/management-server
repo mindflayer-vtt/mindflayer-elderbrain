@@ -102,6 +102,9 @@ class Handler(socketserver.StreamRequestHandler):
             elif action == 'release-check':
                 from release_catalog import check
                 result = {'ok': True, 'output': json.dumps(check())}
+            elif action == 'release-status':
+                from release_catalog import status
+                result = {'ok': True, 'output': json.dumps(status())}
             elif action == 'power-status':
                 from power_service import pending
                 result = {'ok': True, 'output': json.dumps({'pending': pending(JOBS.directory.parent)})}
