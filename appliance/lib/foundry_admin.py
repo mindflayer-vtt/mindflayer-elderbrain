@@ -27,13 +27,24 @@ def _read_json(path):
     return value
 
 
-def _generate():
+def _words():
     words = json.loads(WORDLIST.read_text())
     if (not isinstance(words, list) or len(words) != 256 or len(set(words)) != 256
             or any(not isinstance(word, str) or not word.isascii() or not word.isalpha()
                    or not word.islower() or not 3 <= len(word) <= 8 for word in words)):
         raise ValueError("Invalid bootstrap word list")
-    return "-".join(secrets.choice(words) for _ in range(4))
+    return words
+
+
+def _generate():
+    words = _words()
+    return "-".join(secrets.choice(words) for _ in range(12))
+
+
+def _valid(key):
+    selected = key.split("-")
+    allowed = set(_words())
+    return len(selected) == 12 and all(word in allowed for word in selected)
 
 
 def _write(path, value):
@@ -87,8 +98,8 @@ def access_key(operation="status"):
         key = value.get("foundry_admin_key")
         existing = _existing_admin_file()
         if key and operation != "reset":
-            if not 12 <= len(key) <= 256 or any(ord(character) < 32 or ord(character) == 127 for character in key):
-                raise ValueError("Invalid managed Foundry administrator key")
+            if not _valid(key):
+                return {"managed": False, "resetRequired": True}
             if existing is not None and not _matches(existing, key):
                 return {"managed": False, "resetRequired": True}
             return {"managed": True, "accessKey": key, "resetRequired": False}

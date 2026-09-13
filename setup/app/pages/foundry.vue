@@ -35,7 +35,7 @@ onMounted(loadAdministrator);
         </UFormField>
       </template>
       <UAlert v-else-if="administrator?.resetRequired" color="warning" title="Foundry already has an administrator access key that cannot be recovered. Reset it to replace it with an Elderbrain-managed key." />
-      <p v-else class="text-muted">An Elderbrain-managed four-word access key will be generated before Foundry starts for the first time.</p>
+      <p v-else class="text-muted">An Elderbrain-managed 12-word access key will be generated before Foundry starts for the first time.</p>
       <div v-if="administrator" class="mt-4 space-y-3">
         <UCheckbox v-model="confirmReset" label="I understand this replaces the current Foundry administrator access key." />
         <UButton color="warning" variant="outline" :disabled="!confirmReset || busy" :loading="busy" @click="resetAdministrator">

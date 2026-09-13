@@ -590,12 +590,12 @@ test("Nuxt UI works through the appliance prefix and preserves unsaved edits", a
   await expect(page.getByText("Restart requested", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Foundry", exact: true }).click();
   const adminKey = page.getByLabel("Foundry administrator access key", { exact: true });
-  await expect(adminKey).toHaveValue("amber-cabin-maple-river");
+  await expect(adminKey).toHaveValue("acorn-amber-apple-apron-arrow-atlas-badge-bagel-baker-bamboo-banana-basket");
   await adminKey.locator("xpath=..").getByRole("button", { name: "Show password", exact: true }).click();
   await expect(adminKey).toHaveAttribute("type", "text");
   await page.getByRole("checkbox", { name: "I understand this replaces the current Foundry administrator access key." }).check();
   await page.getByRole("button", { name: "Regenerate access key" }).click();
-  await expect(adminKey).toHaveValue("cedar-orbit-sunset-willow");
+  await expect(adminKey).toHaveValue("beach-bean-bear-beaver-bench-berry-birch-bird-biscuit-blanket-boat-bonnet");
   await expect(page.getByText("Foundry administrator access key reset", { exact: true })).toBeVisible();
   await page.getByLabel("Account email").fill("test@example.com");
   await page.getByLabel("Password", { exact: true }).fill("test-secret");
@@ -646,7 +646,7 @@ test("production API preserves health, metadata, errors and method boundaries", 
   expect((await request.get("/elderbrain/api/foundry/credentials")).status()).toBe(404);
   const administrator = await request.get("/elderbrain/api/foundry/admin-key");
   expect(administrator.headers()["cache-control"]).toBe("no-store");
-  expect((await administrator.json()).accessKey).toMatch(/^[a-z]+(?:-[a-z]+){3}$/);
+  expect((await administrator.json()).accessKey).toMatch(/^[a-z]+(?:-[a-z]+){11}$/);
   expect((await request.post("/elderbrain/api/foundry/admin-key", { headers, data: { confirmReset: false } })).status()).toBe(400);
   expect((await request.post("/elderbrain/api/actions/shutdown", { headers })).status()).toBe(404);
   const install = { usbId: "4".repeat(32), version: "1.2.3", revision: 1, adopt: false, confirm: true };

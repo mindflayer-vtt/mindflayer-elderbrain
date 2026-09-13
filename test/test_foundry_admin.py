@@ -26,17 +26,26 @@ class FoundryAdministratorTests(unittest.TestCase):
         with patch.object(MODULE, "STATE", self.state), patch.object(MODULE, "WORDLIST", self.words), patch.object(MODULE.os, "chown"):
             return MODULE.access_key(operation)
 
-    def test_ensure_generates_four_words_and_preserves_download_credentials(self):
+    def test_ensure_generates_durable_key_and_preserves_download_credentials(self):
         self.secret.write_text(json.dumps({"foundry_username": "owner", "foundry_password": "private"}))
         result = self.operate("ensure")
         self.assertTrue(result["managed"])
-        self.assertEqual(len(result["accessKey"].split("-")), 4)
+        self.assertEqual(len(result["accessKey"].split("-")), 12)
+        self.assertTrue(all(word in json.loads(self.words.read_text()) for word in result["accessKey"].split("-")))
         saved = json.loads(self.secret.read_text())
         self.assertEqual(saved["foundry_username"], "owner")
         self.assertEqual(saved["foundry_password"], "private")
         self.assertEqual(saved["foundry_admin_key"], result["accessKey"])
         self.assertEqual(self.secret.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.operate("status"), result)
+
+    def test_generation_uses_twelve_independent_csprng_choices(self):
+        words = json.loads(self.words.read_text())
+        with patch.object(MODULE, "WORDLIST", self.words), patch.object(
+                MODULE.secrets, "choice", side_effect=words[:12]) as choice:
+            generated = MODULE._generate()
+        self.assertEqual(generated, "-".join(words[:12]))
+        self.assertEqual(choice.call_count, 12)
 
     def test_existing_unmanaged_key_requires_explicit_reset(self):
         admin = self.state / "foundry/Config/admin.txt"
@@ -50,16 +59,18 @@ class FoundryAdministratorTests(unittest.TestCase):
         self.assertEqual(json.loads(self.secret.read_text())["foundry_admin_key"], reset["accessKey"])
 
     def test_reset_rotates_an_existing_managed_key(self):
-        self.secret.write_text(json.dumps({"foundry_admin_key": "amber-cabin-maple-river"}))
+        old = "amber-cabin-maple-river"
+        self.secret.write_text(json.dumps({"foundry_admin_key": old}))
         admin = self.state / "foundry/Config/admin.txt"
         admin.parent.mkdir(parents=True)
         admin.write_text("one-way-hash")
         result = self.operate("reset")
-        self.assertNotEqual(result["accessKey"], "amber-cabin-maple-river")
+        self.assertNotEqual(result["accessKey"], old)
+        self.assertEqual(len(result["accessKey"].split("-")), 12)
         self.assertFalse(admin.exists())
 
     def test_does_not_display_a_managed_key_changed_inside_foundry(self):
-        key = "amber-cabin-maple-river"
+        key = self.operate("reset")["accessKey"]
         self.secret.write_text(json.dumps({"foundry_admin_key": key}))
         admin = self.state / "foundry/Config/admin.txt"
         admin.parent.mkdir(parents=True)
@@ -67,6 +78,10 @@ class FoundryAdministratorTests(unittest.TestCase):
             "sha512", key.encode(), b"17c4f39053ac5a50d5797c665ad1f4e6", 1000, 64).hex())
         self.assertTrue(self.operate("status")["managed"])
         admin.write_text("changed-in-foundry")
+        self.assertEqual(self.operate("status"), {"managed": False, "resetRequired": True})
+
+    def test_unreleased_four_word_keys_require_reset(self):
+        self.secret.write_text(json.dumps({"foundry_admin_key": "amber-cabin-maple-river"}))
         self.assertEqual(self.operate("status"), {"managed": False, "resetRequired": True})
 
     def test_rejects_symlinked_administrator_file(self):

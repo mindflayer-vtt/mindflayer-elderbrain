@@ -26,7 +26,7 @@ let displayPreview = { phase: 'idle', id: '', deadline: 0 };
 let displayCandidate: unknown;
 let checkpointRetention = { enabled: false, keep: 10 };
 let powerPending = false;
-let foundryAdministrator = { managed: true, accessKey: "amber-cabin-maple-river", resetRequired: false };
+let foundryAdministrator = { managed: true, accessKey: "acorn-amber-apple-apron-arrow-atlas-badge-bagel-baker-bamboo-banana-basket", resetRequired: false };
 const management = net.createServer({ allowHalfOpen: true }, (socket) => {
   socket.once("data", (data) => {
     const action = data.toString().trim();
@@ -50,7 +50,7 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
     }
     if (["foundry-admin-key", "foundry-admin-key-ensure", "foundry-admin-key-reset"].includes(action)) {
       if (action === "foundry-admin-key-reset") foundryAdministrator = {
-        managed: true, accessKey: "cedar-orbit-sunset-willow", resetRequired: false,
+        managed: true, accessKey: "beach-bean-bear-beaver-bench-berry-birch-bird-biscuit-blanket-boat-bonnet", resetRequired: false,
       };
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify({ ...foundryAdministrator,
         ...(action === "foundry-admin-key-reset" ? { restarted: { ok: true } } : {}) }) }) + "\n");
