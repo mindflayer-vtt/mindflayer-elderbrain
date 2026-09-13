@@ -2251,3 +2251,43 @@ list API and cannot participate in restore or retention as a completed record.
 All four appliance suites passed. Because a Btrfs snapshot itself is atomic, this
 capture-before-publication point is the actual durable interruption boundary for
 checkpoint creation rather than a synthetic partial-copy state.
+
+Recovery-bootstrap publication is now qualified on both sides of its atomic
+selector swap with genuinely different recovery generations. A guest-only comment
+in each disposable signed fixture changes recovery identity without changing the
+repository's production behavior. The ptrace watcher binds the exact job, version
+and digest, then stops only the matching worker either at entry to or successful
+exit from the `bootstrap-active` rename syscall. It requires completed activation,
+committed anti-replay policy and a still-running `committing-recovery` job before
+accepting either boundary.
+
+For signed 1.0.17 job `df75f43d99004463b7857327fbf2ea04`, evidence in
+`/root/elderbrain-bootstrap-switch-interrupt-wul1zqxx` records boot ID
+`100f64fd-acb8-4960-aea8-42eb6f743f4b`, completed maintenance operation
+`51107971068543b1ae187cd803c0327a`, old generation `abe93b3b...` still selected,
+verified candidate `a8e02388...` and its durable temporary selector. Version and
+policy had already committed to 1.0.17/sequence 17. After abrupt reset, the old
+recovery authority finished the candidate selection and receipt, reconciled the
+job to `completed / recovery-finished`, and returned every service healthy.
+
+That cut revealed a non-authoritative temporary selector remained hidden after
+recovery. Publication now validates all matching entries as root-owned symlinks
+to verified generations before removing any of them, fsyncs their removal, and
+fails closed on malformed entries. Signed 1.0.18 installed this change and selected
+generation `136e2760...`. A repeated pre-swap cut of signed 1.0.19 job
+`4c53240c531e4f49b32934fd88dc2f99` at evidence
+`/root/elderbrain-bootstrap-switch-interrupt-_4jayq2z` proved the active fixed code
+removed the earlier residue before creating the one current temporary selector.
+After abrupt reset it selected candidate `b3b0cee9...`, completed 1.0.19/sequence
+19 and removed that temporary selector as well; zero remained.
+
+Finally, signed 1.0.20 job `5e6fbe8f71b24a7e89eebc90976bd306` was stopped just
+after the atomic swap. Evidence in
+`/root/elderbrain-bootstrap-switch-interrupt-uaa6s2o3` records boot ID
+`54819d9d-77dd-4d44-8a95-30ef26bafda4`, old generation `b3b0cee9...`, newly
+selected candidate `5368b810...`, no temporary selector, completed maintenance
+operation `d3a54a3bed2a4fb3ac2cfb16e62ecc2f` and the deliberately old installation
+receipt. Abrupt reset booted through the new generation, rewrote the receipt to
+its matching bundle, reconciled the job to `completed / recovery-finished`, and
+retained 1.0.20/sequence 20. Zero temporary selectors and zero failed units
+remained; all four appliance suites passed.
