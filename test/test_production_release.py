@@ -161,9 +161,13 @@ class ProductionReleaseTests(unittest.TestCase):
         self.assertIn('config/releases/production-baseline.json', signing_commands)
         self.assertIn('DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG"', signing_commands)
         step_names = [step.get('name', '') for step in signing['steps']]
-        materialize = step_names.index('Materialize key, sign prepared inputs, and immediately erase key')
+        deep = step_names.index('Deeply validate archives and prove host provenance')
+        materialize = step_names.index('Materialize key, sign approved manifest, and immediately erase key')
         self.assertLess(step_names.index('Revalidate every prepared byte'), materialize)
+        self.assertLess(deep, materialize)
         self.assertLess(step_names.index('Reverify Setup image anonymously by exact digest'), materialize)
+        self.assertLess(step_names.index('Require available tag and authenticated sequence advance'),
+                        materialize)
         self.assertLess(materialize, step_names.index('Verify signed release after key removal'))
         self.assertLess(step_names.index('Verify signed release after key removal'),
                         step_names.index('Publish complete release atomically'))
@@ -173,7 +177,13 @@ class ProductionReleaseTests(unittest.TestCase):
         self.assertLess(sign_step['run'].index('unset APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY'),
                         sign_step['run'].index('openssl pkey'))
         self.assertLess(sign_step['run'].index('unset APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY'),
-                        sign_step['run'].index('release/sign-prepared.py'))
+                        sign_step['run'].index('release/sign-manifest.py'))
+        sign_call = sign_step['run'].index('python3 release/sign-manifest.py')
+        cleanup_call = sign_step['run'].index('cleanup_signing_material\n', sign_call)
+        self.assertLess(sign_call, cleanup_call)
+        helper = (ROOT / 'release/sign-manifest.py').read_text()
+        for forbidden in ('release_staging', 'stage(', 'tarfile', 'zstd', 'prepared-inputs'):
+            self.assertNotIn(forbidden, helper)
         publish = next(step for step in signing['steps'] if step.get('name') == 'Publish complete release atomically')
         self.assertEqual(set(publish['env']), {'GH_TOKEN'})
         self.assertIn('--draft --target "$GITHUB_SHA"', publish['run'])

@@ -48,6 +48,19 @@ tree prevents links or leftovers from earlier failed releases being reused.
 Callers must never supply live runtime/configuration as the inventory root.
 """
     release = verify(manifest, signature, public_key)
+    with stage_verified(archive, release, allowed_paths, parent=parent,
+                        component=component) as staged:
+        yield staged
+
+
+@contextmanager
+def stage_verified(archive, release, allowed_paths=None, *, parent, component='host'):
+    """Stage an artifact whose release metadata was already strictly validated.
+
+    This entry point exists for pre-signing validation. The caller must establish
+    the metadata independently; all archive digest, type, inventory and expansion
+    checks remain identical to signed-release staging.
+    """
     if component not in ('host', 'dependencies') or component not in release:
         raise ValueError('Unsupported release artifact component')
     if component == 'dependencies':
@@ -99,6 +112,7 @@ Callers must never supply live runtime/configuration as the inventory root.
                 if (name not in paths or name in members or not member.isfile()
                         or member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE)
                         or not safe_metadata or member.mode & 0o7000
+                        or member.mode & 0o777 != paths[name]
                         or not 0 <= member.size <= FILE_LIMIT):
                     raise ValueError('Unexpected or unsafe host archive member')
                 members[name] = member

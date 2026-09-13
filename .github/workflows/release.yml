@@ -214,6 +214,8 @@ jobs:
       - name: Verify exact source identity and signing tools
         run: |
           test "$(git rev-parse --verify 'HEAD^{commit}')" = "$GITHUB_SHA"
+          git diff --quiet
+          git diff --cached --quiet
           source_tree=$(git rev-parse --verify 'HEAD^{tree}')
           [[ $source_tree =~ ^[0-9a-f]{40}$ ]]
           echo "SOURCE_TREE=$source_tree" >> "$GITHUB_ENV"
@@ -236,6 +238,12 @@ jobs:
             --source-commit "$GITHUB_SHA" --source-tree "$SOURCE_TREE" \
             --version "$VERSION" --sequence "$RELEASE_SEQUENCE" \
             --github-output "$GITHUB_OUTPUT" "$PREPARED_DIRECTORY"
+      - name: Deeply validate archives and prove host provenance
+        run: |
+          python3 release/verify-prepared-release.py \
+            --source-commit "$GITHUB_SHA" --source-tree "$SOURCE_TREE" \
+            --version "$VERSION" --sequence "$RELEASE_SEQUENCE" \
+            --inputs "$PREPARED_DIRECTORY" "$RELEASE_DIRECTORY"
       - name: Reverify Setup image anonymously by exact digest
         env:
           SETUP_IMAGE: ${{ steps.prepared.outputs.setup-image }}
@@ -294,7 +302,7 @@ jobs:
             --public-key config/releases/appliance-release-public.pem \
             --version "$VERSION" --proposed "$RELEASE_SEQUENCE" \
             "${sequence_args[@]}"
-      - name: Materialize key, sign prepared inputs, and immediately erase key
+      - name: Materialize key, sign approved manifest, and immediately erase key
         env:
           APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY }}
         run: |
@@ -307,12 +315,11 @@ jobs:
           openssl pkey -in "$SIGNING_KEY" -check -noout
           openssl pkey -in "$SIGNING_KEY" -pubout -out "$GENERATED_PUBLIC_KEY"
           cmp "$GENERATED_PUBLIC_KEY" config/releases/appliance-release-public.pem
-          python3 release/sign-prepared.py \
-            --source-commit "$GITHUB_SHA" --source-tree "$SOURCE_TREE" \
-            --version "$VERSION" --sequence "$RELEASE_SEQUENCE" \
+          python3 release/sign-manifest.py \
+            --manifest "$RELEASE_DIRECTORY/manifest.json" \
+            --signature "$RELEASE_DIRECTORY/manifest.sig" \
             --signing-key "$SIGNING_KEY" \
-            --public-key config/releases/appliance-release-public.pem \
-            --inputs "$PREPARED_DIRECTORY" "$RELEASE_DIRECTORY"
+            --public-key config/releases/appliance-release-public.pem
           cleanup_signing_material
           trap - EXIT
       - name: Verify signed release after key removal

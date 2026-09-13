@@ -31,8 +31,9 @@ def check(directory, public_key, source=ROOT):
     paths['runtime/VERSION'] = 0o644
     with tempfile.TemporaryDirectory(prefix='release-final-verify-') as temporary:
         with stage(directory / 'elderbrain-host.tar.zst', raw, signature, public,
-                   paths, parent=Path(temporary)):
-            pass
+                   paths, parent=Path(temporary)) as (_, tree):
+            if (tree / 'runtime/VERSION').read_bytes() != (release['version'] + '\n').encode():
+                raise ValueError('Host runtime/VERSION differs from signed release version')
         with stage(directory / 'elderbrain-dependencies.tar.zst', raw, signature,
                    public, parent=Path(temporary), component='dependencies'):
             pass
