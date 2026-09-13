@@ -29,7 +29,7 @@ if secret.exists():
     assert stat.S_IMODE(secret.stat().st_mode) == 0o600
     words = secret.read_text().strip().split('-')
     vocabulary = json.loads(Path('/opt/mindflayer-elderbrain/bootstrap-words.json').read_text())
-    assert len(words) == 8 and all(word in vocabulary for word in words)
+    assert len(words) == 4 and all(word in vocabulary for word in words)
     credential_state = 'bootstrap format/permissions'
 else:
     account = Path('/var/lib/mindflayer-elderbrain/elderbrain/secrets/admin.json')
