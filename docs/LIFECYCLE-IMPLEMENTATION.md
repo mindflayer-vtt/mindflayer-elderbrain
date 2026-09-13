@@ -2162,3 +2162,28 @@ authenticated HTTPS client observed `failed / failed-before-activation`, the
 installed version and sequence remained unchanged, and no systemd unit failed.
 Partial bytes remain private, unreferenced and are never treated as a prepared
 release; a later explicit attempt uses a new exclusive temporary directory.
+
+Prepared-but-not-activated recovery is also VM-qualified. A pre-armed watcher
+killed signed 1.0.11 job `249fa02cd313424295a997b0f3a58566` at the exact
+`preparing-recovery` stage. Evidence in
+`/root/elderbrain-update-stage-interrupt-r6_oq_31` records boot ID
+`5c30f9d8-dd26-4f90-854c-62abb61a4a06`, an unchanged bootstrap selector and the
+previous completed maintenance operation. The prepared directory contained both
+signed archives, manifest, signature and a `runtime-prepared` record bound to
+manifest `560dce5bfa72e78cf6731c824d0d54ad7e0f60240407999b2de6e1f8494aaecf`.
+An abrupt QEMU reset changed the boot ID; all lifecycle services returned active,
+no unit failed, and a fresh authenticated API client observed `failed /
+failed-before-activation`. Installed runtime and anti-replay policy remained
+1.0.9/sequence 9 while the verified preparation remained available.
+
+An explicit new API submission, job `2ccb175d5510406db782e0e7497b0509`, then
+selected the identical version and digest. The disposable HTTPS source log showed
+only manifest and signature requests and no archive requests, proving the exact
+prepared host and dependency artifacts were reused. Activation completed,
+committed 1.0.11/sequence 11 and created checkpoint
+`f5e476b5f2b94f6746f3dcda8e295a7a`. Version, anti-replay policy and terminal job
+persisted across another reboot; the runtime, persistent-storage, ready-admin
+HTTPS/authentication and physical UI suites all passed. The signed-source fixture
+now permits this narrowly verified pre-existing preparation only in
+`--serve-download` retry mode; the fresh-download mode retains its absence
+assertions.

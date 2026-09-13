@@ -113,7 +113,13 @@ if not download_fixture:
         allow_download=False, dependency_archive=bundle / 'elderbrain-dependencies.tar.zst', dependency_directory=dependencies)
     print('Signed runtime prepared from cached images and offline dependencies', flush=True)
 else:
-    assert not (prepared / args.version).exists() and not (dependencies / args.version).exists()
+    if args.download_job:
+        assert not (prepared / args.version).exists() and not (dependencies / args.version).exists()
+    else:
+        preparation = json.loads((prepared / args.version / 'preparation.json').read_text())
+        assert preparation['version'] == args.version
+        assert preparation['manifestSha256'] == hashlib.sha256(manifest).hexdigest()
+        assert (dependencies / args.version).is_dir()
     # Trust a fresh test TLS CA in this disposable guest only. No insecure TLS
     # flags or environment overrides are passed to the isolated worker.
     command('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
