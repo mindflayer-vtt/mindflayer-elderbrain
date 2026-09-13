@@ -38,7 +38,7 @@ class ReleaseStagingTests(unittest.TestCase):
                     continue
                 member = tarfile.TarInfo(name)
                 member.size = 7
-                member.mode = 0o777  # Modes are normalized from trusted policy.
+                member.mode = self.paths[name]
                 archive.addfile(member, io.BytesIO(b'fixture'))
             for member, data in extras:
                 archive.addfile(member, io.BytesIO(data))

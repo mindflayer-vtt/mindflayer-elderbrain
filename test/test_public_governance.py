@@ -21,9 +21,9 @@ class PublicGovernanceTests(unittest.TestCase):
             "Confirm local and remote `main`", "Run `make public-audit`",
             "Make `mindflayer-vtt/mindflayer-elderbrain` public",
             "create or enable the `main` branch ruleset", "Require the green `test` status",
-            "Require changes through a pull request", "Require review from CODEOWNERS",
+            "Require changes through a pull request", "Keep CODEOWNERS as ownership documentation",
             "Disable force pushes", "Disable branch deletion", "Open the `appliance-release`",
-            "Require at least one approving reviewer", "exactly one deployment branch policy",
+            "Require `@749` as an approving reviewer", "exactly one deployment branch policy",
             "Add `APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY` only as an Environment secret",
             "public-key derivation check", "no repository or organization Actions secret duplicates",
             "change\n    package visibility to public", "approve and publish the first signed update",
@@ -33,6 +33,8 @@ class PublicGovernanceTests(unittest.TestCase):
         self.assertIn("version: 0.1.1", document)
         self.assertIn("release_sequence: 2", document)
         self.assertIn("actual public GitHub Release artifacts", document)
+        self.assertIn("required approving reviews to zero", document)
+        self.assertIn("Prevent self-review** disabled", document)
 
     def test_public_docs_state_non_hermetic_install_and_release_boundaries(self):
         build = (ROOT / "docs/BUILD.md").read_text()
