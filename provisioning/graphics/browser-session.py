@@ -82,6 +82,11 @@ def safe_url(value):
     return value
 
 
+def outputs_suspended(outputs, children):
+    """Keep existing views while Sway temporarily releases DRM for another VT."""
+    return isinstance(outputs, list) and not outputs and bool(children)
+
+
 def plan(config, outputs, token):
     connected = sorted({item['name'] for item in outputs if item.get('active') and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', item.get('name', ''))})
     # Completion is an onboarding indicator, not an override of saved displays.
@@ -158,7 +163,14 @@ def main():
     try:
         while running:
             response = subprocess.run(['swaymsg', '-r', '-t', 'get_outputs'], capture_output=True, text=True, check=True, timeout=5)
-            desired = {view['index']: view for view in plan(config, json.loads(response.stdout), token)}
+            outputs = json.loads(response.stdout)
+            # Sway reports no outputs while another virtual terminal owns the
+            # display. Stopping Chrome here destroys the first-login form and
+            # tabs merely because the user viewed the bootstrap password.
+            if outputs_suspended(outputs, children):
+                time.sleep(2)
+                continue
+            desired = {view['index']: view for view in plan(config, outputs, token)}
             credential = read_beamer()
             for view in desired.values():
                 if view['mode'] == 'player':

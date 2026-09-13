@@ -79,6 +79,12 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual(len(module.plan(config, outputs, 'token')), 1)
         self.assertEqual(module.plan(config, [], 'token'), [])
 
+    def test_virtual_terminal_output_suspension_keeps_existing_views(self):
+        self.assertTrue(module.outputs_suspended([], {0: object()}))
+        self.assertFalse(module.outputs_suspended([], {}))
+        self.assertFalse(module.outputs_suspended(
+            [{'name': 'DP-1', 'active': True}], {0: object()}))
+
     def test_modes_and_profile_isolation(self):
         views = [{'mode': mode, 'url': 'https://foundry.example', 'tabs': ['https://notes.example']} for mode in ('admin', 'player')]
         plan = module.plan({'configured': True, 'views': views}, [{'name': name, 'active': True} for name in ('DP-1', 'DP-2')], 'token')

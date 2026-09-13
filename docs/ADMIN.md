@@ -239,6 +239,10 @@ Sway default when the kiosk restarts. Remote browsers must use their own operati
 system's keyboard settings. A private, per-kiosk capability permits only this
 narrow operation; it does not grant administrative access.
 
+Switching to the tty2 bootstrap display temporarily removes Sway's active output,
+but does not terminate or recreate the browser. Returning with Ctrl+Alt+F1 keeps
+the current form contents and tabs intact.
+
 Chrome's managed `PasswordManagerEnabled: false` policy disables saving new
 passwords and save-password prompts in the appliance browser. This does not erase
 previously saved credentials; Chrome may still use those if a pre-existing profile
