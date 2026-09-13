@@ -2187,3 +2187,25 @@ HTTPS/authentication and physical UI suites all passed. The signed-source fixtur
 now permits this narrowly verified pre-existing preparation only in
 `--serve-download` retry mode; the fresh-download mode retains its absence
 assertions.
+
+The runtime's narrowest file-switch boundary is now destructively VM-qualified.
+A qualification-only ptrace watcher binds an exact API-returned job ID, version
+and manifest digest to the worker in its systemd scope, follows only that process,
+and stops it at successful syscall exit after the old
+`/opt/mindflayer-elderbrain` tree is renamed but before the incoming tree can be
+installed. It validates the maintenance and restore journals plus all three
+runtime locations before accepting the boundary; it does not inject hooks into
+production code.
+
+Signed 1.0.14 job `986dc15b0f504927b48238730555333d` was stopped at that exact
+point. Evidence in `/root/elderbrain-runtime-switch-interrupt-fjsaahif` records
+boot ID `2262f2ea-e2de-445b-968f-16db6484393e`, maintenance operation
+`f171260522814274a90aaab2912244b8` in `installing-update`, restore transaction
+`4b7a1dfd290c4d4a8d6d9e3b510ec736` in `installing`, an absent live runtime and
+both durable `previous` and `incoming` trees. QEMU was abruptly reset without
+allowing process cleanup. Early boot rolled the incomplete file transaction back
+before writers started; final recovery converged the maintenance operation and
+public job to `rolled-back / recovery-finished`. Installed runtime and anti-replay
+policy remained at the previously successful 1.0.13/sequence 13. No systemd unit
+failed, and all four runtime, storage, ready-admin HTTPS/authentication and
+physical UI suites passed.
