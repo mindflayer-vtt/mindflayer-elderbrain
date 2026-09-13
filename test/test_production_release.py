@@ -76,6 +76,8 @@ class ProductionReleaseTests(unittest.TestCase):
         self.assertNotIn('pull_request_target', workflow)
         self.assertIn('environment:\n      name: appliance-release', workflow)
         self.assertIn('APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY:', workflow)
+        self.assertNotIn('${{ runner.temp }}', workflow)
+        self.assertIn('echo "SIGNING_KEY=$RUNNER_TEMP/appliance-release-private.pem"', workflow)
         self.assertIn('if: github.event.repository.private', workflow)
         self.assertIn('select(.type == "required_reviewers")', workflow)
         self.assertIn(".branch_policies[0].name')\" = main", workflow)

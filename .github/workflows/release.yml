@@ -36,11 +36,6 @@ jobs:
       VERSION: ${{ inputs.version }}
       RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
       RELEASE_NOTES: ${{ inputs.notes }}
-      SIGNING_KEY: ${{ runner.temp }}/appliance-release-private.pem
-      GENERATED_PUBLIC_KEY: ${{ runner.temp }}/appliance-release-public.pem
-      RELEASE_DIRECTORY: ${{ runner.temp }}/elderbrain-release
-      DEPENDENCY_DIRECTORY: ${{ runner.temp }}/elderbrain-dependencies
-      NOTES_FILE: ${{ runner.temp }}/release-notes.md
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Require a public production channel
@@ -69,6 +64,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - name: Configure private release paths
+        run: |
+          {
+            echo "SIGNING_KEY=$RUNNER_TEMP/appliance-release-private.pem"
+            echo "GENERATED_PUBLIC_KEY=$RUNNER_TEMP/appliance-release-public.pem"
+            echo "RELEASE_DIRECTORY=$RUNNER_TEMP/elderbrain-release"
+            echo "DEPENDENCY_DIRECTORY=$RUNNER_TEMP/elderbrain-dependencies"
+            echo "NOTES_FILE=$RUNNER_TEMP/release-notes.md"
+          } >> "$GITHUB_ENV"
       - name: Install release tooling
         run: |
           sudo apt-get update
