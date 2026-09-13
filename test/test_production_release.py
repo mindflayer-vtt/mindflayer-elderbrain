@@ -169,6 +169,10 @@ class ProductionReleaseTests(unittest.TestCase):
         sign_step = signing['steps'][materialize]
         self.assertEqual(set(sign_step['env']), {'APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY'})
         self.assertIn('cleanup_signing_material', sign_step['run'])
+        self.assertLess(sign_step['run'].index('unset APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY'),
+                        sign_step['run'].index('openssl pkey'))
+        self.assertLess(sign_step['run'].index('unset APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY'),
+                        sign_step['run'].index('release/sign-prepared.py'))
         publish = next(step for step in signing['steps'] if step.get('name') == 'Publish complete release atomically')
         self.assertEqual(set(publish['env']), {'GH_TOKEN'})
         self.assertIn('--draft --target "$GITHUB_SHA"', publish['run'])

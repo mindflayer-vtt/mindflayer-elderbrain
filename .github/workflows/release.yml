@@ -303,6 +303,7 @@ jobs:
           cleanup_signing_material() { rm -f "$SIGNING_KEY" "$GENERATED_PUBLIC_KEY"; }
           trap cleanup_signing_material EXIT
           printf '%s\n' "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY" > "$SIGNING_KEY"
+          unset APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY
           openssl pkey -in "$SIGNING_KEY" -check -noout
           openssl pkey -in "$SIGNING_KEY" -pubout -out "$GENERATED_PUBLIC_KEY"
           cmp "$GENERATED_PUBLIC_KEY" config/releases/appliance-release-public.pem
