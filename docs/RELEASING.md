@@ -24,9 +24,10 @@ Enable independent approval and prevent self-review only after a second active
 maintainer is eligible to approve releases. The workflow derives the public half
 of the supplied secret and compares it byte-for-byte with the committed public
 key before signing anything. A key
-mismatch fails the release. The workflow also queries GitHub and refuses to run
-unless at least one required reviewer and exactly the `main` branch policy are
-actually present.
+mismatch fails the release. GitHub natively holds the entire protected job before
+it starts and releases the Environment secret only after the configured reviewer
+approves it; the workflow does not implement a second approval mechanism itself.
+Keep exactly the `main` deployment branch policy configured in the Environment.
 
 Required-reviewer protection is unavailable for a private repository owned by a
 GitHub Free organization. Add that rule immediately after making the repository

@@ -157,6 +157,7 @@ class ProductionReleaseTests(unittest.TestCase):
         self.assertNotIn('docker build --pull', signing_commands)
         self.assertNotIn('pip wheel', signing_commands)
         self.assertNotIn('npm pack', signing_commands)
+        self.assertNotIn('/environments/appliance-release', signing_commands)
         self.assertIn('release/prepared-inputs.py verify', signing_commands)
         self.assertIn('config/releases/production-baseline.json', signing_commands)
         self.assertIn('DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG"', signing_commands)
