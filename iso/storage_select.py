@@ -8,12 +8,14 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 
 import yaml
 
 from appliance.lib.storage_guard import read_identity
 from iso.storage_existing import read_existing
+from iso.storage_plan import select_disk
 from iso.storage_prepare import prepare
 from iso.storage_probe import probe
 from iso.storage_console import read_line
@@ -23,23 +25,52 @@ def choose(inventory, ask=input, tell=print):
     tell('Mindflayer Elderbrain installation')
     tell('Fresh: ERASES THE ENTIRE SELECTED DISK. Preserve: reinstalls OS only;')
     tell('requires an existing supported Elderbrain data volume. Back up first.')
-    for disk in inventory:
-        # JSON quoting prevents disk strings from injecting terminal controls.
-        tell(json.dumps({key: disk.get(key) for key in
-                         ('path', 'serial', 'size', 'removable', 'read_only', 'in_use')}))
     mode = ask('Type fresh or preserve (anything else cancels): ').strip()
     if mode not in ('fresh', 'preserve'):
         raise ValueError('Installation cancelled')
-    serial = ask('Enter the exact target disk serial: ').strip()
-    matches = [disk for disk in inventory if disk.get('serial') == serial]
-    if not serial or len(matches) != 1:
-        raise ValueError('Selected serial is missing or ambiguous')
+    targets = []
+    for disk in inventory:
+        try:
+            selected = select_disk(inventory, disk.get('serial'))
+        except ValueError:
+            continue
+        if selected is disk:
+            targets.append(disk)
+    if not targets:
+        raise ValueError('No unused, writable, non-removable installation disk is available')
+    tell('Available installation disks:')
+    for number, disk in enumerate(targets, 1):
+        # JSON quoting prevents probed device strings from injecting controls.
+        description = {key: disk.get(key) for key in ('path', 'model', 'serial')}
+        description['sizeGiB'] = round(disk['size'] / 1024 ** 3, 1)
+        tell(f'  {number}. {json.dumps(description, sort_keys=True)}')
+    answer = ask('Enter the target disk number (anything else cancels): ').strip()
+    if not re.fullmatch(r'[1-9][0-9]*', answer) or int(answer) > len(targets):
+        raise ValueError('Installation cancelled')
+    disk_number = int(answer)
+    target = targets[disk_number - 1]
+    serial = target['serial']
+    tell('Selected disk: ' + json.dumps({key: target.get(key) for key in
+                                        ('path', 'model', 'serial')}, sort_keys=True))
     data_uuid = None
     if mode == 'preserve':
-        tell('Existing partition identities:')
-        tell(json.dumps(matches[0].get('partitions', [])))
-        data_uuid = ask('Enter the persistent Btrfs filesystem UUID: ').strip()
-    phrase = f'ERASE {serial}' if mode == 'fresh' else f'REINSTALL OS {serial}'
+        partitions = [part for part in target.get('partitions', [])
+                      if (part.get('fstype') == 'btrfs' and isinstance(part.get('uuid'), str)
+                          and type(part.get('number')) is int
+                          and 1 <= part['number'] <= 128)]
+        if not partitions:
+            raise ValueError('Selected disk has no persistent Btrfs partition')
+        tell('Available persistent Btrfs partitions:')
+        for partition in partitions:
+            description = {key: partition.get(key) for key in ('path', 'size', 'uuid')}
+            tell(f"  {partition.get('number')}. {json.dumps(description, sort_keys=True)}")
+        answer = ask('Enter the persistent partition number: ').strip()
+        matches = [part for part in partitions if str(part.get('number')) == answer]
+        if len(matches) != 1:
+            raise ValueError('Selected persistent partition is missing or ambiguous')
+        data_uuid = matches[0]['uuid']
+    phrase = (f'ERASE DISK {disk_number}' if mode == 'fresh'
+              else f'REINSTALL OS DISK {disk_number}')
     if ask(f'Type {json.dumps(phrase)} to confirm: ') != phrase:
         raise ValueError('Confirmation did not match; installation cancelled')
     return dict(mode=mode, serial=serial, data_uuid=data_uuid,

@@ -27,16 +27,8 @@ def _uuid(value):
     return parsed
 
 
-def plan(inventory, *, mode, serial, erase_confirmed=False,
-         data_uuid=None, metadata=None, uefi=True):
-    """Return storage config for an explicitly selected, non-removable disk.
-
-    Inventory entries: serial, size (bytes), type, removable, read_only,
-    in_use, ptable and partitions. Partition entries: number, size, fstype,
-    uuid and flag. Unknown/missing safety facts are rejected.
-    """
-    if mode not in ('fresh', 'preserve'):
-        raise ValueError('Choose fresh or preserve installation explicitly')
+def select_disk(inventory, serial):
+    """Resolve one exact stable serial and enforce common target safety facts."""
     if not isinstance(serial, str) or not serial.strip():
         raise ValueError('An explicit disk serial is required')
     matches = [disk for disk in inventory if disk.get('serial') == serial]
@@ -49,6 +41,20 @@ def plan(inventory, *, mode, serial, erase_confirmed=False,
     size = disk.get('size')
     if type(size) is not int or size < ROOT_SIZE + MIN_DATA_SIZE + 515 * MIB:
         raise ValueError('Disk is too small for OS and persistent data')
+    return disk
+
+
+def plan(inventory, *, mode, serial, erase_confirmed=False,
+         data_uuid=None, metadata=None, uefi=True):
+    """Return storage config for an explicitly selected, non-removable disk.
+
+    Inventory entries: serial, size (bytes), type, removable, read_only,
+    in_use, ptable and partitions. Partition entries: number, size, fstype,
+    uuid and flag. Unknown/missing safety facts are rejected.
+    """
+    if mode not in ('fresh', 'preserve'):
+        raise ValueError('Choose fresh or preserve installation explicitly')
+    disk = select_disk(inventory, serial)
     preserve = mode == 'preserve'
     if not preserve and erase_confirmed is not True:
         raise ValueError('Fresh installation requires explicit disk-erasure confirmation')

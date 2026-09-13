@@ -19,30 +19,53 @@ class StorageSelectionTests(unittest.TestCase):
         return choose([self.disk], ask=Mock(side_effect=answers), tell=Mock())
 
     def test_fresh_has_no_default_and_needs_exact_erasure_phrase(self):
-        for answers in [[''], ['fresh', 'test-disk', 'yes'],
-                        ['fresh', 'test-disk', 'ERASE other']]:
+        for answers in [[''], ['fresh', '0'], ['fresh', '1', 'yes'],
+                        ['fresh', '1', 'ERASE DISK 2']]:
             with self.assertRaises(ValueError):
                 self.choose(answers)
-        selected = self.choose(['fresh', 'test-disk', 'ERASE test-disk'])
+        selected = self.choose(['fresh', '1', 'ERASE DISK 1'])
         self.assertTrue(selected['erase_confirmed'])
+        self.assertEqual(selected['serial'], 'test-disk')
 
     def test_preserve_needs_uuid_and_os_reinstall_confirmation(self):
-        selected = self.choose(['preserve', 'test-disk', fixtures.DATA_UUID,
-                                'REINSTALL OS test-disk'])
+        selected = self.choose(['preserve', '1', '4', 'REINSTALL OS DISK 1'])
         self.assertEqual(selected['data_uuid'], fixtures.DATA_UUID)
         self.assertFalse(selected['erase_confirmed'])
 
-    def test_wrong_and_ambiguous_serials_rejected(self):
+    def test_wrong_number_and_ambiguous_or_unsafe_serials_are_not_selectable(self):
         with self.assertRaises(ValueError):
-            self.choose(['fresh', 'unknown'])
+            self.choose(['fresh', '2'])
         with self.assertRaises(ValueError):
-            choose([self.disk, self.disk], ask=Mock(side_effect=['fresh', 'test-disk']), tell=Mock())
+            choose([self.disk, self.disk], ask=Mock(side_effect=['fresh']), tell=Mock())
+        unsafe = copy.deepcopy(self.disk)
+        unsafe['removable'] = True
+        with self.assertRaisesRegex(ValueError, 'No unused'):
+            choose([unsafe], ask=Mock(side_effect=['fresh']), tell=Mock())
+
+    def test_numbered_disk_selection_resolves_exact_serial_without_transcription(self):
+        first = copy.deepcopy(self.disk)
+        first.update(path='/dev/sda', model='First disk', serial='first-serial')
+        second = copy.deepcopy(self.disk)
+        second.update(path='/dev/sdb', model='Second disk', serial='second-serial')
+        tell = Mock()
+        selected = choose([first, second], ask=Mock(side_effect=[
+            'fresh', '2', 'ERASE DISK 2']), tell=tell)
+        self.assertEqual(selected['serial'], 'second-serial')
+        output = '\n'.join(call.args[0] for call in tell.call_args_list)
+        self.assertIn('1. ', output)
+        self.assertIn('2. ', output)
+        self.assertIn('Second disk', output)
+
+    def test_preserve_partition_selection_requires_displayed_btrfs_number(self):
+        for answer in ('', '3', fixtures.DATA_UUID):
+            with self.subTest(answer=answer), self.assertRaises(ValueError):
+                self.choose(['preserve', '1', answer])
 
     def test_document_keeps_other_installer_settings(self):
         document = {'autoinstall': {'version': 1, 'identity': {'hostname': 'elderbrain'},
                                     'storage': {'layout': {'name': 'direct'}}}}
         original = copy.deepcopy(document)
-        selected = self.choose(['fresh', 'test-disk', 'ERASE test-disk'])
+        selected = self.choose(['fresh', '1', 'ERASE DISK 1'])
         updated, receipt = configure(document, selected, inventory_probe=lambda: [self.disk])
         self.assertEqual(document, original)
         self.assertEqual(updated['autoinstall']['identity'], original['autoinstall']['identity'])
@@ -65,7 +88,7 @@ class StorageSelectionTests(unittest.TestCase):
 
     def test_subiquity_normalized_inner_document_is_supported(self):
         document = {'version': 1, 'identity': {'hostname': 'elderbrain'}, 'storage': {'config': []}}
-        selected = self.choose(['fresh', 'test-disk', 'ERASE test-disk'])
+        selected = self.choose(['fresh', '1', 'ERASE DISK 1'])
         updated, receipt = configure(document, selected, inventory_probe=lambda: [self.disk])
         self.assertNotIn('autoinstall', updated)
         self.assertEqual(updated['identity'], document['identity'])

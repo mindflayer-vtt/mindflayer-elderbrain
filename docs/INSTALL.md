@@ -8,6 +8,15 @@ entry. Installation is unattended and erases the selected target disk: back up
 that disk and disconnect other data disks before starting. Remove the installer
 USB after installation when rebooting into the installed system.
 
+The storage console lists only unused, writable, non-removable disks with a unique
+hardware serial. Each entry has a number, path, model, size and serial. Choose the
+target by typing its number; the installer retains and revalidates the exact serial
+internally. A fresh install then requires `ERASE DISK N`, where `N` is the displayed
+number. Preserve reinstall lists eligible Btrfs partitions and accepts their
+displayed partition number before requiring `REINSTALL OS DISK N`. Invalid,
+ambiguous, changed or missing identities still cancel installation without choosing
+a fallback disk.
+
 One screen is sufficient for initial setup (verified in the single-output VM).
 Physical GPU support and two-output placement still require hardware testing.
 For the first login, use `admin` and read the unique initial password with

@@ -40,6 +40,13 @@ class StoragePlanTests(unittest.TestCase):
             self.assertEqual(config[-1]['path'], storage.DATA_MOUNT)
             self.assertNotIn('nofail', config[-1]['options'])
 
+    def test_shared_disk_selection_returns_only_one_safe_stable_target(self):
+        self.assertIs(storage.select_disk([self.disk], 'test-disk'), self.disk)
+        for inventory, serial in (([self.disk], ''), ([self.disk], 'missing'),
+                                  ([self.disk, copy.deepcopy(self.disk)], 'test-disk')):
+            with self.subTest(serial=serial), self.assertRaises(ValueError):
+                storage.select_disk(inventory, serial)
+
     def test_preserve_never_wipes_disk_or_formats_data_or_esp(self):
         before = copy.deepcopy(self.disk)
         config = self.preserve()['config']

@@ -4,7 +4,7 @@ import json
 import subprocess
 
 
-COLUMNS = 'PATH,TYPE,SIZE,SERIAL,RM,RO,PTTYPE,PARTN,PARTTYPE,FSTYPE,UUID,MOUNTPOINTS'
+COLUMNS = 'PATH,TYPE,SIZE,MODEL,SERIAL,RM,RO,PTTYPE,PARTN,PARTTYPE,FSTYPE,UUID,MOUNTPOINTS'
 PARTITION_FLAGS = {
     '21686148-6449-6e6f-744e-656564454649': 'bios_grub',
     'c12a7328-f81f-11d2-ba4b-00a0c93ec93b': 'boot',
@@ -54,7 +54,8 @@ def normalize(document):
                 'fstype': child.get('fstype'), 'uuid': child.get('uuid'),
             })
         disks.append({
-            'path': node.get('path'), 'serial': node.get('serial'),
+            'path': node.get('path'), 'model': node.get('model'),
+            'serial': node.get('serial'),
             'size': node.get('size'), 'type': 'disk',
             'removable': node.get('rm'), 'read_only': node.get('ro'),
             'in_use': _busy(node), 'ptable': node.get('pttype'),

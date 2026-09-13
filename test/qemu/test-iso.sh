@@ -57,14 +57,14 @@ cleanup() {
 }
 trap cleanup EXIT
 echo "Starting QEMU with $firmware firmware; the test explicitly selects the second, destructive Elderbrain boot entry."
-echo 'At the storage console choose fresh, serial elderbrain-vm-test, then ERASE elderbrain-vm-test. This applies only to the newly created disposable disk above.'
+echo 'At the storage console choose fresh, disk 1, then ERASE DISK 1. This applies only to the newly created disposable disk above.'
 qemu-system-x86_64 "${accel[@]}" "${firmware_args[@]}" -m 4096 -smp 2 -drive "file=$disk,if=none,id=appliance-disk" -device virtio-blk-pci,drive=appliance-disk,serial=elderbrain-vm-test -cdrom "$iso" -boot once=d \
   -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$ssh_port-:22" -vnc "127.0.0.1:$vnc_display" -monitor "unix:$monitor,server,nowait" -daemonize -pidfile "$work/qemu.pid"
 for attempt in $(seq 1 20); do [[ -S $monitor ]] && break; sleep 0.25; done
 sleep 15
 printf 'sendkey down\nsendkey ret\n' | nc -q 0 -U "$monitor" >/dev/null
 if [[ ${QEMU_STORAGE_PROMPTS_AUTOMATED:-0} != 1 ]]; then
-  printf '%s\n' 'Complete the fresh/preserve, exact serial and final confirmation prompts in the VM console.'
+  printf '%s\n' 'Complete the mode, numbered disk and final confirmation prompts in the VM console.'
   printf '%s' 'Press Enter here only after submitting the final storage confirmation: '
   read -r
 fi

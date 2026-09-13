@@ -18,6 +18,7 @@ class StorageProbeTests(unittest.TestCase):
                               parttype='21686148-6449-6e6f-744e-656564454649',
                               fstype=None, uuid=None, mountpoints=[None])
         self.disk = dict(path='/dev/vda', type='disk', serial='vm-test', size=128*1024**3,
+                         model='QEMU HARDDISK',
                          rm=False, ro=False, pttype='gpt', mountpoints=[None],
                          children=[self.partition])
 
@@ -32,6 +33,8 @@ class StorageProbeTests(unittest.TestCase):
         self.assertEqual(result[0]['partitions'][0]['flag'], 'bios_grub')
         self.assertIs(result[0]['in_use'], False)
         self.assertEqual(result[0]['serial'], 'vm-test')
+        self.assertEqual(result[0]['model'], 'QEMU HARDDISK')
+        self.assertIn('MODEL', probe.COLUMNS)
 
     def test_mounted_swap_and_unknown_mount_information_are_busy(self):
         for mounts in (['/'], ['/cdrom'], ['[SWAP]'], None):
