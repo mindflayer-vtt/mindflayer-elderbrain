@@ -6,6 +6,9 @@ import re
 import subprocess
 import tempfile
 import unittest
+import yaml
+
+from . import test_appliance_release as release_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
@@ -19,6 +22,15 @@ spec.loader.exec_module(sequence)
 
 
 class ProductionReleaseTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        release_fixture.ApplianceReleaseTests.setUpClass()
+        cls.addClassCleanup(release_fixture.ApplianceReleaseTests.doClassCleanups)
+
+    def setUp(self):
+        self.release_fixture = release_fixture.ApplianceReleaseTests()
+        self.release_fixture.setUp()
+
     def test_reviewed_update_trust_is_valid_and_matches_production_channel(self):
         source = ROOT / 'config/releases/github-releases.json'
         public = ROOT / 'config/releases/appliance-release-public.pem'
@@ -63,40 +75,110 @@ class ProductionReleaseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 production.create('1.0.0', 1, setup, 'notes', images)
 
-    def test_publisher_sequence_must_increase(self):
-        sequence.require_new(9, 10)
-        for proposed in (8, 9):
-            with self.subTest(proposed=proposed), self.assertRaisesRegex(
-                    ValueError, 'exceed the latest'):
-                sequence.require_new(9, proposed)
+    def test_no_published_release_uses_committed_baseline_floor(self):
+        configured = sequence.baseline(ROOT / 'config/releases/production-baseline.json')
+        self.assertEqual(configured, {'format': 1, 'version': '0.1.0', 'releaseSequence': 1})
+        self.assertEqual(sequence.require_new(configured, '0.1.1', 2), 1)
+        for proposed in (0, 1):
+            with self.subTest(proposed=proposed), self.assertRaises(ValueError):
+                sequence.require_new(configured, '0.1.1', proposed)
+        for version in ('0.1.0', '0.0.9'):
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'version'):
+                sequence.require_new(configured, version, 2)
 
-    def test_release_workflow_is_manual_protected_and_sha_pinned(self):
-        workflow = (ROOT / '.github/workflows/release.yml').read_text()
-        self.assertIn('workflow_dispatch:', workflow)
-        self.assertNotIn('pull_request_target', workflow)
-        self.assertIn('environment:\n      name: appliance-release', workflow)
-        self.assertIn('APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY:', workflow)
-        self.assertNotIn('${{ runner.temp }}', workflow)
-        self.assertIn('echo "SIGNING_KEY=$RUNNER_TEMP/appliance-release-private.pem"', workflow)
-        self.assertIn('if: github.event.repository.private', workflow)
-        self.assertIn('select(.type == "required_reviewers")', workflow)
-        self.assertIn(".branch_policies[0].name')\" = main", workflow)
-        self.assertIn('permissions:\n  actions: read\n  contents: write\n  packages: write', workflow)
-        self.assertIn('--draft --target "$GITHUB_SHA"', workflow)
-        self.assertLess(workflow.index('gh release create'), workflow.index('gh release edit'))
-        materialize = workflow.index("printf '%s\\n' \"$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY\"")
-        self.assertLess(workflow.index('Build offline dependencies and release metadata'), materialize)
-        cleanup = workflow.index('Remove transient signing material')
-        self.assertLess(materialize, cleanup)
-        self.assertLess(cleanup, workflow.index('Publish complete release atomically'))
-        self.assertIn('DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG"', workflow)
-        self.assertLess(workflow.index('Anonymous GHCR inspection resolved'), materialize)
-        actions = re.findall(r'uses:\s+[^\s@]+@([^\s]+)', workflow)
+    def test_authenticated_latest_release_and_baseline_form_maximum_floor(self):
+        configured = {'format': 1, 'version': '0.1.0', 'releaseSequence': 1}
+        self.assertEqual(sequence.require_new(configured, '0.1.2', 3, 2), 2)
+        for proposed in (1, 2):
+            with self.subTest(proposed=proposed), self.assertRaisesRegex(ValueError, 'floor'):
+                sequence.require_new(configured, '0.1.2', proposed, 2)
+        self.assertEqual(sequence.require_new(configured, '0.1.2', 6, 5), 5)
+
+    def test_bad_latest_release_never_falls_back_to_baseline(self):
+        value = self.release_fixture.value
+        raw = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+        signature = self.release_fixture.sign(raw)
+        self.assertEqual(sequence.authenticated_sequence(
+            raw, signature, self.release_fixture.public.read_bytes()), value['releaseSequence'])
+        cases = [
+            (b'{', signature),
+            (raw, b'invalid-signature'),
+        ]
+        invalid = dict(value)
+        invalid['releaseSequence'] = 0
+        invalid_raw = json.dumps(invalid, sort_keys=True, separators=(',', ':')).encode()
+        cases.append((invalid_raw, self.release_fixture.sign(invalid_raw)))
+        for manifest, selected_signature in cases:
+            with self.subTest(manifest=manifest[:20]), self.assertRaises(ValueError):
+                sequence.authenticated_sequence(
+                    manifest, selected_signature, self.release_fixture.public.read_bytes())
+
+    def test_baseline_parser_rejects_noncanonical_schema_and_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'baseline.json'
+            invalid = (
+                b'{"format":1,"format":1,"version":"0.1.0","releaseSequence":1}',
+                b'{"format":1,"version":"0.1.0","releaseSequence":1,"extra":true}',
+                b'{"format":1,"version":"v0.1.0","releaseSequence":1}',
+                b'{"format":1,"version":"0.1.0","releaseSequence":0}',
+                b'{"format":1,"version":"0.1.0","releaseSequence":9223372036854775808}',
+                b'{',
+            )
+            for content in invalid:
+                path.write_bytes(content)
+                with self.subTest(content=content), self.assertRaises((ValueError, json.JSONDecodeError)):
+                    sequence.baseline(path)
+
+    def test_release_workflow_is_manual_and_has_separate_authority_domains(self):
+        raw = (ROOT / '.github/workflows/release.yml').read_text()
+        workflow = yaml.load(raw, Loader=yaml.BaseLoader)
+        self.assertEqual(set(workflow['on']), {'workflow_dispatch'})
+        self.assertEqual(set(workflow['jobs']), {'prepare', 'sign-and-publish'})
+        prepare, signing = workflow['jobs']['prepare'], workflow['jobs']['sign-and-publish']
+        self.assertEqual(prepare['permissions'], {'contents': 'read', 'packages': 'write'})
+        self.assertEqual(signing['permissions'], {
+            'actions': 'read', 'contents': 'write', 'packages': 'read'})
+        self.assertEqual(signing['needs'], 'prepare')
+        self.assertNotIn('environment', prepare)
+        self.assertEqual(signing['environment'], {'name': 'appliance-release'})
+        self.assertNotIn('APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY', json.dumps(prepare))
+        self.assertIn('${{ secrets.APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY }}', json.dumps(signing))
+        for job in (prepare, signing):
+            self.assertNotIn('GH_TOKEN', job.get('env', {}))
+            checkouts = [step for step in job['steps'] if step.get('uses', '').startswith('actions/checkout@')]
+            self.assertEqual(len(checkouts), 1)
+            self.assertEqual(checkouts[0]['with']['persist-credentials'], 'false')
+        prepare_commands = '\n'.join(step.get('run', '') for step in prepare['steps'])
+        signing_commands = '\n'.join(step.get('run', '') for step in signing['steps'])
+        self.assertIn('release/build-dependencies.py', prepare_commands)
+        self.assertIn('docker build --pull', prepare_commands)
+        self.assertNotIn('release/build-dependencies.py', signing_commands)
+        self.assertNotIn('docker build --pull', signing_commands)
+        self.assertNotIn('pip wheel', signing_commands)
+        self.assertNotIn('npm pack', signing_commands)
+        self.assertIn('release/prepared-inputs.py verify', signing_commands)
+        self.assertIn('config/releases/production-baseline.json', signing_commands)
+        self.assertIn('DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG"', signing_commands)
+        step_names = [step.get('name', '') for step in signing['steps']]
+        materialize = step_names.index('Materialize key, sign prepared inputs, and immediately erase key')
+        self.assertLess(step_names.index('Revalidate every prepared byte'), materialize)
+        self.assertLess(step_names.index('Reverify Setup image anonymously by exact digest'), materialize)
+        self.assertLess(materialize, step_names.index('Verify signed release after key removal'))
+        self.assertLess(step_names.index('Verify signed release after key removal'),
+                        step_names.index('Publish complete release atomically'))
+        sign_step = signing['steps'][materialize]
+        self.assertEqual(set(sign_step['env']), {'APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY'})
+        self.assertIn('cleanup_signing_material', sign_step['run'])
+        publish = next(step for step in signing['steps'] if step.get('name') == 'Publish complete release atomically')
+        self.assertEqual(set(publish['env']), {'GH_TOKEN'})
+        self.assertIn('--draft --target "$GITHUB_SHA"', publish['run'])
+        self.assertLess(publish['run'].index('gh release create'), publish['run'].index('gh release edit'))
+        actions = re.findall(r'uses:\s+[^\s@]+@([^\s]+)', raw)
         self.assertTrue(actions)
         self.assertTrue(all(re.fullmatch(r'[0-9a-f]{40}', value) for value in actions))
         for name in ('manifest.json', 'manifest.sig', 'elderbrain-host.tar.zst',
                      'elderbrain-dependencies.tar.zst'):
-            self.assertIn(name, workflow)
+            self.assertIn(name, publish['run'])
 
 
 if __name__ == '__main__':
