@@ -92,7 +92,7 @@ def plan(config, outputs, token):
     # Completion is an onboarding indicator, not an override of saved displays.
     views = config.get('views')
     if views is None or views == [] and not config.get('configured'):
-        views = [{'mode': 'admin', 'url': 'http://foundry.elderbrain.local', 'output': ''}]
+        views = [{'mode': 'admin', 'url': 'https://foundry.elderbrain.local', 'output': ''}]
     if not isinstance(views, list) or not 1 <= len(views) <= 2:
         raise ValueError('Invalid browser views')
     # Explicit assignments take priority over automatic selection.

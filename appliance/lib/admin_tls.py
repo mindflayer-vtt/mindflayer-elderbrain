@@ -130,9 +130,19 @@ def validate_layout(directory='/var/lib/mindflayer-elderbrain/traefik',
     return {'state': 'valid'}
 
 
-def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
-                   ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
-    address = unicast(address)
+def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
+                 ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
+    normalized = []
+    for entry in required:
+        if entry.startswith('DNS:'):
+            if not re.fullmatch(r'DNS:[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,251}[A-Za-z0-9])?', entry):
+                raise ValueError('Invalid certificate DNS name')
+        elif entry.startswith('IP:'):
+            entry = 'IP:' + str(ipaddress.ip_address(entry[3:]))
+        else:
+            raise ValueError('Invalid certificate alternative name')
+        normalized.append(entry)
+    required = list(dict.fromkeys(normalized))
     root = Path(directory)
     ca = Path(ca_directory)
     tls = root / 'tls'
@@ -145,18 +155,21 @@ def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
         original_config = dynamic.read_bytes()
         original_certificate = certificate.read_bytes()
         existing = names(certificate)
-        changed = 'IP:' + address not in existing
+        changed = any(entry not in existing for entry in required)
         if changed:
             openssl(['verify', '-CAfile', ca / 'ca.crt', certificate])
             with tempfile.TemporaryDirectory(prefix='.refresh-', dir=tls) as temporary:
                 stage = Path(temporary)
                 openssl(['x509', '-x509toreq', '-in', certificate, '-signkey', key, '-out', stage / 'request.pem'])
-                (stage / 'extensions').write_text('subjectAltName=' + ','.join(existing + ['IP:' + address])
+                updated = existing + [entry for entry in required if entry not in existing]
+                (stage / 'extensions').write_text('subjectAltName=' + ','.join(updated)
                                                 + '\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\n')
                 openssl(['x509', '-req', '-in', stage / 'request.pem', '-CA', ca / 'ca.crt', '-CAkey', ca / 'ca.key',
                          '-set_serial', '0x' + secrets.token_hex(16), '-days', '825', '-extfile', stage / 'extensions',
                          '-out', stage / 'certificate.pem'])
-                openssl(['verify', '-CAfile', ca / 'ca.crt', '-verify_ip', address, stage / 'certificate.pem'])
+                for entry in required:
+                    verification = ['-verify_ip', entry[3:]] if entry.startswith('IP:') else ['-verify_hostname', entry[4:]]
+                    openssl(['verify', '-CAfile', ca / 'ca.crt', *verification, stage / 'certificate.pem'])
                 ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(stage / 'certificate.pem', key)
                 if certificate.read_bytes() != original_certificate or dynamic.read_bytes() != original_config:
                     raise ValueError('TLS configuration changed during refresh')
@@ -169,10 +182,23 @@ def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
         return changed
 
 
+def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
+                   ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
+    return ensure_names(['IP:' + unicast(address)], directory, ca_directory)
+
+
+def ensure_domain(domain, directory='/var/lib/mindflayer-elderbrain/traefik',
+                  ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
+    from domain_routes import validate_domain
+    domain = validate_domain(domain)
+    return ensure_names([f'DNS:elderbrain.{domain}', f'DNS:foundry.{domain}'], directory, ca_directory)
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('validate', 'migrate'))
+    parser.add_argument('action', choices=('validate', 'migrate', 'domain'))
+    parser.add_argument('--domain')
     parser.add_argument('--directory', default='/var/lib/mindflayer-elderbrain/traefik')
     parser.add_argument('--ca-directory', default='/var/lib/mindflayer-elderbrain/host/admin-ca')
     args = parser.parse_args()
@@ -180,5 +206,9 @@ if __name__ == '__main__':
         parser.error('must run as root')
     if args.action == 'migrate':
         migrate_layout(args.directory)
+    elif args.action == 'domain':
+        if not args.domain:
+            parser.error('--domain is required for the domain action')
+        ensure_domain(args.domain, args.directory, args.ca_directory)
     else:
         validate_layout(args.directory, args.ca_directory)

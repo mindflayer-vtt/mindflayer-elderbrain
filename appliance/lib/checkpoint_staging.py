@@ -16,8 +16,8 @@ from restore_transaction import copy_owned, sync_directory
 
 DEFAULT_CONFIG = {'version': 1, 'configured': False, 'domain': 'elderbrain.local',
                   'controllers': {}, 'views': [
-                      {'output': '', 'url': 'http://foundry.elderbrain.local', 'mode': 'admin', 'tabs': []},
-                      {'output': '', 'url': 'http://foundry.elderbrain.local', 'mode': 'player', 'tabs': []}]}
+                      {'output': '', 'url': 'https://foundry.elderbrain.local', 'mode': 'admin', 'tabs': []},
+                      {'output': '', 'url': 'https://foundry.elderbrain.local', 'mode': 'player', 'tabs': []}]}
 DEFAULT_KEYPADS = {'revision': 0, 'ssid': '', 'psk': '', 'serverHost': '', 'serverPort': 10443}
 
 

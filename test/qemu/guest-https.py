@@ -5,11 +5,14 @@ import os
 from pathlib import Path
 import ssl
 import stat
+import socket
 
 state = Path("/var/lib/mindflayer-elderbrain")
 settings = dict(line.split("=", 1) for line in Path("/opt/mindflayer-elderbrain/appliance.env").read_text().splitlines()
                 if "=" in line and not line.startswith("#"))
 host = settings["ELDERBRAIN_HOST"]
+domain = json.loads((state / 'elderbrain/config.json').read_text()).get('domain', 'elderbrain.local')
+foundry_host = 'foundry.' + domain
 context = ssl.create_default_context(cafile=str(state / "traefik/tls/ca.crt"))
 
 
@@ -33,8 +36,19 @@ def request(path, *, method="GET", data=None, cookie=None, csrf=None, secure=Tru
 
 
 code, headers, _ = request("/elderbrain/", secure=False)
-assert code in (301, 302, 307, 308), "HTTP administration did not redirect"
+assert code in (301, 308), "HTTP administration did not redirect permanently"
 assert headers.get("location", "").startswith("https://"), "Redirect is not HTTPS"
+connection = http.client.HTTPConnection('127.0.0.1', timeout=15)
+connection.request('GET', '/', headers={'Host': foundry_host})
+response = connection.getresponse()
+response.read()
+assert response.status in (301, 308), 'HTTP Foundry did not redirect permanently'
+assert response.getheader('Location', '').startswith('https://'), 'Foundry redirect is not HTTPS'
+connection.close()
+with socket.create_connection(('127.0.0.1', 443), timeout=15) as plain:
+    with context.wrap_socket(plain, server_hostname=foundry_host) as secure:
+        alternatives = secure.getpeercert().get('subjectAltName', ())
+        assert ('DNS', foundry_host) in alternatives, 'Foundry hostname is absent from the served certificate'
 for path in ("/health", "/elderbrain/health", "/elderbrain/"):
     assert request(path)[0] == 200, f"HTTPS route unavailable: {path}"
 for prefix in ("/api/", "/elderbrain/api/"):

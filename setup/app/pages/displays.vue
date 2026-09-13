@@ -48,10 +48,10 @@ onBeforeUnmount(() => { stopped = true; clearInterval(timer); });
           </template>
           <UButton v-if="index === 1" variant="outline" @click="config.views.splice(1, 1)">Remove second screen</UButton>
         </div>
-        <UButton v-if="config.views.length < 2" variant="outline" @click="config.views.push({ output: '', url: 'http://foundry.' + config.domain, mode: 'player', tabs: [] })">Add second screen</UButton>
+        <UButton v-if="config.views.length < 2" variant="outline" @click="config.views.push({ output: '', url: 'https://foundry.' + config.domain, mode: 'player', tabs: [] })">Add second screen</UButton>
         <UCheckbox v-model="config.configured" label="Configuration complete" />
         <UButton type="submit" :loading="busy">Preview display changes</UButton>
-        <p class="text-sm text-muted">After confirmation, the LAN domain updates routing for foundry, mindflayer and elderbrain subdomains. DNS is external: point these names at the appliance in your router or DNS server. Existing custom browser URLs are unchanged. Setup HTTPS still requires trusting the appliance certificate.</p>
+        <p class="text-sm text-muted">After confirmation, the LAN domain updates routing and the local certificate for the Foundry and Elderbrain names. DNS is external: point these names at the appliance in your router or DNS server. Existing custom browser URLs are unchanged. Other devices must trust the appliance CA.</p>
         <p class="text-sm text-muted">Preview restarts the browsers. Reopen Setup if needed and confirm within 90 seconds; otherwise the host restores the saved configuration automatically.</p>
         </fieldset>
       </form>

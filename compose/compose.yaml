@@ -91,8 +91,8 @@ services:
       - source: foundry_config
         target: config.json
     environment:
-      FOUNDRY_HOSTNAME: ${FOUNDRY_HOST:-foundry.elderbrain.local}
-      FOUNDRY_PROXY_SSL: ${FOUNDRY_PROXY_SSL:-false}
+      FOUNDRY_PROXY_SSL: "true"
+      FOUNDRY_PROXY_PORT: "443"
       CONTAINER_PRESERVE_CONFIG: "true"
     expose: ["30000"]
     # Kiosk-only login path; never publish Foundry's direct port to the LAN.

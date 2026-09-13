@@ -39,6 +39,7 @@ class CheckpointRestoreTests(unittest.TestCase):
         self.stack.enter_context(patch('checkpoint_restore.persistent_identity', return_value={'data_uuid': 'fixture'}))
         self.stack.enter_context(patch('restore_service.persistent_identity', return_value={'data_uuid': 'fixture'}))
         self.stack.enter_context(patch('host_bindings.refresh'))
+        self.tls = self.stack.enter_context(patch('admin_tls.ensure_domain'))
         self.hooks = {'before_restore': lambda record: self.events.append('checkpoint'),
                       'release_checkpoint': lambda record: self.events.append('release')}
         self.stack.enter_context(patch('checkpoint_restore.checkpoint_hooks', return_value=self.hooks))

@@ -7,7 +7,6 @@ install -d -m 0700 "$state/elderbrain/secrets"
 dynamic="$state/traefik/dynamic"
 install -d -m 0700 "$dynamic"
 python3 "$runtime/admin_tls.py" migrate --directory "$state/traefik"
-python3 "$runtime/domain_routes.py" "$state"
 if [[ ! -e "$state/elderbrain/secrets/admin.json" && ! -s "$state/elderbrain/secrets/initial-password" ]]; then
   (umask 077; python3 "$runtime/generate-admin-password.py" "$runtime/bootstrap-words.json" > "$state/elderbrain/secrets/initial-password")
   chown 1000:1000 "$state/elderbrain/secrets/initial-password"
@@ -55,6 +54,7 @@ if ! openssl x509 -in "$tls/admin.crt" -noout >/dev/null 2>&1; then
   rm -f "$ca/admin.csr"
 fi
 python3 "$runtime/admin_tls.py" validate --directory "$state/traefik" --ca-directory "$ca"
+python3 "$runtime/domain_routes.py" "$state"
 install -m 0644 "$ca/ca.crt" /usr/local/share/ca-certificates/elderbrain-admin.crt
 update-ca-certificates >/dev/null
 # Chrome uses NSS on Linux. Trust this appliance's CA in its dedicated kiosk account.

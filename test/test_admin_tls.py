@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'appliance/lib'))
-from admin_tls import ensure_address, migrate_layout, names, openssl, validate_layout
+from admin_tls import ensure_address, ensure_domain, migrate_layout, names, openssl, validate_layout
 
 
 class AdminTLSTests(unittest.TestCase):
@@ -38,6 +38,12 @@ class AdminTLSTests(unittest.TestCase):
             refreshed = (tls / 'admin.crt').read_bytes()
             self.assertFalse(ensure_address('10.0.2.20', root, ca))
             self.assertEqual((tls / 'admin.crt').read_bytes(), refreshed)
+            self.assertTrue(ensure_domain('table.example', root, ca))
+            self.assertIn('DNS:elderbrain.table.example', names(tls / 'admin.crt'))
+            self.assertIn('DNS:foundry.table.example', names(tls / 'admin.crt'))
+            openssl(['verify', '-CAfile', tls / 'ca.crt', '-verify_hostname',
+                     'foundry.table.example', tls / 'admin.crt'])
+            self.assertFalse(ensure_domain('table.example', root, ca))
             for path, original in preserved.items():
                 self.assertEqual(path.read_bytes(), original)
             self.assertFalse(list(tls.glob('.refresh-*')))

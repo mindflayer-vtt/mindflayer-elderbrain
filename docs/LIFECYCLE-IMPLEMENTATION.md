@@ -226,61 +226,30 @@ also newer than ISO `3fad5c99` and must be included before preserve-install test
 
 ## LAN domain routing repair
 
-The Lenovo now has a permanent DHCP reservation at **10.0.96.90**, confirmed
-by the user and the previously trusted SSH host key. DNS for
-`foundry.home.viromania.com` correctly reaches it. The 404 was caused by the
-Displays domain setting not being projected into Traefik's routing rules.
+`domain_routes.py` atomically projects the committed base domain into Traefik's
+file provider for Foundry, Mindflayer and Setup. The dynamic configuration and
+leaf TLS directories are mounted read-only as directories, so Traefik observes
+atomic replacements without any Docker socket. The CA signing key remains in
+the host-only `host/admin-ca` tree and is never mounted into a container.
 
-Added atomic, idempotent `domain_routes.py` projection of the committed domain
-for Foundry, Mindflayer and Setup. Traefik watches the dynamic directory;
-existing Docker services/middleware and default hostname routes are retained.
-Only confirmation activates a new domain, and the display watchdog reconciles
-on recovery/startup (including after restore). Preview/cancel never activate
-an uncommitted domain. Domain labels are validated in both host and Setup.
-This changes hostname routing, not external DNS or custom browser URLs, and
-does not issue new HTTPS certificates. Foundry retains its existing HTTP route.
+Only confirmation activates a new domain. Before publishing its HTTPS routes,
+the host reissues the existing leaf certificate with SANs for
+`elderbrain.<domain>` and `foundry.<domain>`, verifies the leaf against the
+unchanged local CA, and atomically replaces it. Preview/cancel never activates an
+uncommitted name. Boot and preference restore repeat the same idempotent
+reconciliation, and a failure stops publication rather than exposing a hostname
+with a mismatched certificate. HTTP requests to Setup and Foundry permanently
+redirect to HTTPS; Traefik may continue using HTTP on its isolated proxy network.
+Foundry is explicitly configured for an external TLS proxy.
 
-Deployed only the two host files and provider-directory change to the Lenovo;
-original files are under `/root/elderbrain-domain-fix-UBa1Grfe`.
-Recreated only Traefik, restarted management/display watchdog; Foundry stayed
-running. Verified Foundry's new hostname returns HTTP302 to `/license`, Setup's
-new hostname HTTPS200 (certificate verification bypassed for this test), and
-all four containers remain healthy. Local GUI explanatory text/validation
-will be included in the next build, not rebuilt on the physical appliance.
-Elderbrain remains local/unpushed; current candidate ISO predates this fix.
+The kiosk account trusts the local CA through its dedicated NSS database. Other
+devices must install that CA and provide external DNS records for the configured
+names. Custom browser URLs are intentionally not rewritten when the domain
+changes. The file provider remains the only Traefik provider.
 
-A later physical retest exposed a Docker bind-mount edge case in that repair:
-atomic replacement changed the host file inode while Traefik retained the old
-single-file mount, so every new hostname still returned 404. Host and container
-SHA256/inode comparison confirmed the stale mount. The live appliance was safely
-repaired by setting the intended base domain to `home.viromania.com` and recreating
-only Traefik; `foundry.home.viromania.com` then returned Foundry's HTTP 302 and the
-display preview remained confirmed. Runtime configuration now keeps both dynamic
-documents in a read-only parent-directory mount and leaf TLS material in a separate
-read-only directory, leaving `host/admin-ca` unmounted. Boot and restore migrate
-legacy dynamic YAML and translate its appliance-owned certificate paths. This
-preserves atomic writes while allowing Traefik's watcher to observe replacements.
-The Displays field now says **Base LAN domain** and shows the resulting hostnames.
-
-The management restart exposed a second issue: systemd removed/recreated
-`/run/elderbrain`, leaving Setup's bind mount on the old directory (host inode
-5282, container inode 3076, socket missing). Added `RuntimeDirectoryPreserve=yes`
-to management's unit locally and on hardware; backed up the original unit beside
-the routing backup. Restarted only Setup to remount the current directory.
-Verified identical directory inode and successful management query from inside
-Setup; all containers healthy. Host regression: 284 tests, 5 optional skips
-before adding the runtime unit regression; Setup: 36 tests and typecheck pass.
-
-Follow-up browser issue: saved and projected URLs were correct, but
-`configured=false` caused browser-session to discard all views and use defaults.
-Saved views now apply independently of onboarding completion; missing first-boot
-views still get the administration fallback. Added a regression using the
-reported Foundry+Spotify tabs (10 browser unit tests pass). Deployed the single
-browser-session file with original retained in the same hardware backup directory
-and restarted only graphics to activate the saved tabs.
-
-The user confirmed tabs opened correctly; process inspection also verified
-the configured Foundry and Spotify URLs in the actual admin browser arguments.
+Saved browser views apply independently of onboarding completion; missing
+first-boot views use the administration fallback. New default Foundry tabs use
+HTTPS.
 
 ## Persistent-storage clean boot evidence and compositor repair
 

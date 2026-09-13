@@ -103,6 +103,11 @@ Implemented foundations:
   actually served the new CA-verified certificate, then restored the original
   files and verified the original certificate was served again. Full external
   browser reconnection through a real address transition remains unverified.
+- A confirmed base-domain change uses the same host-only CA signer to add the
+  exact Elderbrain and Foundry DNS SANs before atomically publishing their HTTPS
+  routes. HTTP permanently redirects to HTTPS, Foundry is proxy-TLS aware, and
+  neither the CA key nor a Docker socket is mounted in Traefik. The kiosk NSS
+  database trusts the local CA; other clients must install its public certificate.
 - External host ingress passed using a temporary loopback-only QEMU port forward
   through the guest's ens3 interface and UFW rule. The host TLS client verified the
   appliance CA and exact guest IP, then confirmed the pending DHCP transaction.

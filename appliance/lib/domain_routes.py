@@ -22,12 +22,16 @@ def document(domain):
     for name in ('foundry', 'mindflayer', 'elderbrain'):
         router = {'rule': f'Host(`{name}.{domain}`)', 'entryPoints': ['web'],
                   'service': name, 'priority': 100}
+        if name in ('foundry', 'elderbrain'):
+            router['middlewares'] = [name + '-https']
+            routers['lan-' + name + '-tls'] = {
+                'rule': router['rule'], 'entryPoints': ['websecure'],
+                'service': name, 'priority': 100, 'tls': {},
+            }
         if name == 'elderbrain':
             router['rule'] += ' || PathPrefix(`/elderbrain`)'
-            router['middlewares'] = ['elderbrain-https']
-            routers['lan-elderbrain-tls'] = {
-                **router, 'entryPoints': ['websecure'], 'tls': {},
-                'middlewares': ['elderbrain-strip']}
+            routers['lan-elderbrain-tls']['rule'] = router['rule']
+            routers['lan-elderbrain-tls']['middlewares'] = ['elderbrain-strip']
         routers['lan-' + name] = router
     services = {
         'elderbrain': {'loadBalancer': {'servers': [{'url': 'http://elderbrain-setup:8080'}]}},
@@ -35,7 +39,8 @@ def document(domain):
         'foundry': {'loadBalancer': {'servers': [{'url': 'http://foundry:30000'}]}},
     }
     middlewares = {
-        'elderbrain-https': {'redirectScheme': {'scheme': 'https'}},
+        'elderbrain-https': {'redirectScheme': {'scheme': 'https', 'permanent': True}},
+        'foundry-https': {'redirectScheme': {'scheme': 'https', 'permanent': True}},
         'elderbrain-strip': {'stripPrefix': {'prefixes': ['/elderbrain']}},
     }
     return {'http': {'routers': routers, 'services': services, 'middlewares': middlewares}}
@@ -78,8 +83,21 @@ def reconcile(state):
         temporary.unlink(missing_ok=True)
 
 
+def publish(state):
+    """Publish certificate support before making committed HTTPS routes live."""
+    state = Path(state)
+    try:
+        config = json.loads((state / 'elderbrain/config.json').read_text())
+    except FileNotFoundError:
+        config = {}
+    domain = validate_domain(config.get('domain', 'elderbrain.local'))
+    from admin_tls import ensure_domain
+    ensure_domain(domain, state / 'traefik', state / 'host/admin-ca')
+    reconcile(state)
+
+
 if __name__ == '__main__':
     import sys
     if os.geteuid() != 0 or len(sys.argv) != 2:
         raise SystemExit('Route projection requires root and the appliance state directory')
-    reconcile(sys.argv[1])
+    publish(sys.argv[1])

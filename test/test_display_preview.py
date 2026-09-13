@@ -20,7 +20,8 @@ class DisplayPreviewTests(unittest.TestCase):
         self.monotonic = 100
         self.calls = []
         self.store = module.DisplayPreview(self.directory.name, clock=lambda: self.clock,
-            monotonic=lambda: self.monotonic, reboot_id='boot-one', apply=lambda: self.calls.append('restart'))
+            monotonic=lambda: self.monotonic, reboot_id='boot-one', apply=lambda: self.calls.append('restart'),
+            publisher=lambda state: None)
         self.store.config.parent.mkdir()
         self.old = {'configured': False, 'views': [{'output': '', 'url': 'https://old.example', 'mode': 'admin'}]}
         self.new = {'configured': True, 'views': [{'output': '', 'url': 'https://new.example', 'mode': 'player'}]}
@@ -41,7 +42,8 @@ class DisplayPreviewTests(unittest.TestCase):
         self.clock += 16
         self.assertEqual(self.store.effective(), self.old)
         other = module.DisplayPreview(self.directory.name, clock=lambda: self.clock,
-            monotonic=lambda: self.monotonic, reboot_id='boot-one', apply=lambda: self.calls.append('restart'))
+            monotonic=lambda: self.monotonic, reboot_id='boot-one', apply=lambda: self.calls.append('restart'),
+            publisher=lambda state: None)
         self.assertEqual(other.recover()['phase'], 'rolled-back')
         with self.assertRaises(ValueError):
             other.confirm(preview['id'])

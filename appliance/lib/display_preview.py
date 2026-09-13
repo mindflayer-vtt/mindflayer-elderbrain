@@ -51,7 +51,8 @@ def restart():
 
 
 class DisplayPreview:
-    def __init__(self, state='/var/lib/mindflayer-elderbrain', clock=time.time, reboot_id=None, apply=restart, monotonic=time.monotonic):
+    def __init__(self, state='/var/lib/mindflayer-elderbrain', clock=time.time, reboot_id=None,
+                 apply=restart, monotonic=time.monotonic, publisher=None):
         self.root = Path(state) / 'display-preview'
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.config = Path(state) / 'elderbrain/config.json'
@@ -59,6 +60,14 @@ class DisplayPreview:
         self.monotonic = monotonic
         self.boot = reboot_id or Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         self.apply = apply
+        self.publisher = publisher
+
+    def publish(self):
+        if self.publisher is not None:
+            self.publisher(self.root.parent)
+        else:
+            from domain_routes import publish
+            publish(self.root.parent)
 
     @contextmanager
     def locked(self):
@@ -172,8 +181,7 @@ class DisplayPreview:
             record['phase'] = 'committing'
             self.write(record)
             self.commit(record['candidate'])
-            from domain_routes import reconcile
-            reconcile(self.root.parent)
+            self.publish()
             record['phase'] = 'confirmed'
             record.pop('candidate', None)
             self.write(record)
@@ -189,8 +197,7 @@ class DisplayPreview:
 
     def recover(self):
         with self.locked():
-            from domain_routes import reconcile
-            reconcile(self.root.parent)
+            self.publish()
             record = self.read()
             if record and (record['phase'] == 'rolling-back' or record['phase'] == 'pending' and self.expired(record)):
                 self.rollback(record)

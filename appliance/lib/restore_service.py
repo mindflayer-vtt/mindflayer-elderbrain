@@ -162,8 +162,8 @@ def alias_refresher(state, host_root, keys, identity):
                 raise ValueError('Persistent storage identity changed during restore')
             refresh(state, identity['data_uuid'], names, host_root=host_root)
         if 'preferences' in keys:
-            from domain_routes import reconcile
-            reconcile(state)
+            from domain_routes import publish
+            publish(state)
     return refresh_verified
 
 

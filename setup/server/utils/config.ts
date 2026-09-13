@@ -7,8 +7,8 @@ export const defaults: ApplianceConfig = {
   configured: false,
   domain: "elderbrain.local",
   views: [
-    { output: "", url: "http://foundry.elderbrain.local", mode: "admin", tabs: [] },
-    { output: "", url: "http://foundry.elderbrain.local", mode: "player", tabs: [] },
+    { output: "", url: "https://foundry.elderbrain.local", mode: "admin", tabs: [] },
+    { output: "", url: "https://foundry.elderbrain.local", mode: "player", tabs: [] },
   ],
   controllers: {},
 };
