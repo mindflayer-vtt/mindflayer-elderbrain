@@ -240,6 +240,10 @@ jobs:
             --github-output "$GITHUB_OUTPUT" "$PREPARED_DIRECTORY"
       - name: Deeply validate archives and prove host provenance
         run: |
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$GITHUB_SHA"
+          test "$(git rev-parse --verify 'HEAD^{tree}')" = "$SOURCE_TREE"
+          git diff --quiet
+          git diff --cached --quiet
           python3 release/verify-prepared-release.py \
             --source-commit "$GITHUB_SHA" --source-tree "$SOURCE_TREE" \
             --version "$VERSION" --sequence "$RELEASE_SEQUENCE" \

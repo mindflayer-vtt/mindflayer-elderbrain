@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -256,6 +257,10 @@ class PreparedReleaseTests(unittest.TestCase):
         (tree / 'runtime/VERSION').write_text(self.version + '\n')
         (tree / 'runtime/linked').write_bytes(b'expected')
         with self.assertRaisesRegex(ValueError, 'symlink'):
+            approver.compare_host_tree(tree, source, inventory, self.version)
+        (source / 'linked').unlink()
+        os.mkfifo(source / 'linked')
+        with self.assertRaisesRegex(ValueError, 'type'):
             approver.compare_host_tree(tree, source, inventory, self.version)
 
 

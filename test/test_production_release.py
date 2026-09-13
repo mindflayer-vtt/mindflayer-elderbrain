@@ -181,6 +181,11 @@ class ProductionReleaseTests(unittest.TestCase):
         sign_call = sign_step['run'].index('python3 release/sign-manifest.py')
         cleanup_call = sign_step['run'].index('cleanup_signing_material\n', sign_call)
         self.assertLess(sign_call, cleanup_call)
+        for forbidden in ('zstd', 'tar ', 'verify-artifacts.py', 'verify-prepared-release.py'):
+            self.assertNotIn(forbidden, sign_step['run'])
+        deep_step = signing['steps'][deep]['run']
+        self.assertIn("git diff --quiet", deep_step)
+        self.assertIn("HEAD^{tree}", deep_step)
         helper = (ROOT / 'release/sign-manifest.py').read_text()
         for forbidden in ('release_staging', 'stage(', 'tarfile', 'zstd', 'prepared-inputs'):
             self.assertNotIn(forbidden, helper)
