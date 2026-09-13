@@ -24,6 +24,7 @@ COMMANDS.update({kind: [kind] for kind in ("borg-init", "borg-test", "borg-list"
 COMMANDS["backup-encrypted"] = ["backup-encrypted"]
 COMMANDS["restore-preview-encrypted"] = []
 COMMANDS["keypad-install"] = []
+COMMANDS["keypad-provision"] = []
 COMMANDS["snapshot-create"] = ["snapshot-create"]
 COMMANDS["snapshot-recover"] = ["snapshot-recover"]
 COMMANDS["snapshot-restore"] = ["snapshot-restore"]
@@ -114,8 +115,9 @@ class JobStore:
                     else:
                         record.update(state="interrupted", finishedAt=time.time(),
                                       error="Worker stopped before completion. Inspect maintenance state and run the matching recovery operation.")
-                        if record.get("kind") == "keypad-install":
-                            record["error"] = "Installation worker stopped. Retain this job's provisioning backups and private recovery journal; inspect the keypad before retrying."
+                        if record.get("kind") in ("keypad-install", "keypad-provision"):
+                            action = "Installation" if record["kind"] == "keypad-install" else "Provisioning"
+                            record["error"] = action + " worker stopped. Retain this job's provisioning backups and private recovery journal; inspect the keypad before retrying."
                     save_record(path, record)
             finally:
                 os.close(fd)
@@ -202,7 +204,7 @@ class JobStore:
         elif kind == 'update':
             from update_request import request
             details['request'] = request(source)
-        elif kind == "keypad-install":
+        elif kind in ("keypad-install", "keypad-provision"):
             from installation_job import admission
             request, installation_settings = admission(source, self.directory.parent)
             details = {"request": request, "revision": installation_settings["revision"]}
@@ -319,8 +321,8 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             record['result'] = {key: result[key] for key in ('id', 'phase', 'deadline', 'interface')}
             record['state'] = 'completed'
             return
-        if record["kind"] == "keypad-install":
-            from installation_job import run_installation
+        if record["kind"] in ("keypad-install", "keypad-provision"):
+            from installation_job import run_installation, run_provisioning
             from installation_backend import InstallationBackend
             from backup_service import Maintenance, HostServices
             runtime = Path(os.environ.get("ELDERBRAIN_COMPOSE_DIR", "/opt/mindflayer-elderbrain"))
@@ -334,8 +336,9 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
                 def progress(update):
                     record["stage"] = update["stage"]
                     save_record(path, record)
-                result = run_installation(state / "keypad-installations" / identity,
-                                          record["request"], settings, backend, progress)
+                operation = run_installation if record["kind"] == "keypad-install" else run_provisioning
+                result = operation(state / "keypad-installations" / identity,
+                                   record["request"], settings, backend, progress)
                 record["result"] = result
                 record["state"] = "completed"
             return
@@ -422,8 +425,9 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
                 output.flush()
                 os.fsync(output.fileno())
         record.update(state="failed", error="Host operation failed. Inspect the root-private job diagnostics and maintenance state before retrying.")
-        if record["kind"] == "keypad-install":
-            record["error"] = "Installation stopped at " + record.get("stage", "preflight") + "; retain this job's keypad provisioning backups and private recovery journal before retrying."
+        if record["kind"] in ("keypad-install", "keypad-provision"):
+            action = "Installation" if record["kind"] == "keypad-install" else "Provisioning"
+            record["error"] = action + " stopped at " + record.get("stage", "preflight") + "; retain this job's keypad provisioning backups and private recovery journal before retrying."
     finally:
         if secret_fd is not None:
             os.close(secret_fd)

@@ -764,17 +764,34 @@ test("USB installation submits explicit target and saved revision and displays v
   expect(submitted).toMatchObject({ usbId: "4".repeat(32), version: "1.2.3", adopt: false, confirm: true });
   expect(submitted.revision).toBeGreaterThan(0);
   expect(JSON.stringify(submitted)).not.toContain("installation-test-password");
-  await expect(page.getByText(/Authenticated keypad installed-fixture/)).toBeVisible();
+  await expect(page.getByText(/Authenticated keypad installed-fixture · Firmware 1.2.3 installed/)).toBeVisible();
   await expect(page.getByText("installed-fixture", { exact: true })).toBeVisible();
   const inventory = page.locator("div.border").filter({ has: page.getByText("installed-fixture", { exact: true }) }).last();
   await expect(inventory).toContainText(`Applied revision ${submitted.revision}`);
   await expect(inventory).toContainText("Firmware: 1.2.3");
 });
 
+test("USB provisioning applies settings without requesting a firmware write", async ({ page }) => {
+  await page.goto("/elderbrain/keypads");
+  await expect(page.getByText(/It performs no firmware write/)).toBeVisible();
+  await page.getByLabel("Wi-Fi SSID").fill("Provisioning Network");
+  await page.getByLabel("Wi-Fi password", { exact: true }).fill("provisioning-test-password");
+  await page.getByLabel("Appliance address reachable by keypads").fill("192.168.1.42");
+  await page.getByRole("button", { name: "Save desired settings" }).click();
+  const request = page.waitForRequest(request => request.url().endsWith("/api/keypads/provision") && request.method() === "POST");
+  await page.getByRole("button", { name: "Provision settings only Fixture USB adapter" }).click();
+  const submitted = (await request).postDataJSON();
+  expect(submitted).toMatchObject({ usbId: "4".repeat(32), version: "1.2.3", adopt: false, confirm: true });
+  expect(submitted.revision).toBeGreaterThan(0);
+  expect(JSON.stringify(submitted)).not.toContain("provisioning-test-password");
+  await expect(page.getByText(/Authenticated keypad installed-fixture · Firmware 1.2.3 retained/)).toBeVisible();
+});
+
 test("installation stays disabled without a trusted release", async ({ page }) => {
   await page.route("**/api/keypads/release", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "No trusted serial-install release available" }) }));
   await page.goto("/elderbrain/keypads");
   await expect(page.getByText("No trusted serial-install release available", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Provision settings only Fixture USB adapter" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Install & provision Fixture USB adapter" })).toBeDisabled();
 });
 

@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import zlib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "appliance/lib"))
-from installation_job import run_installation, validate_plan
+from installation_job import run_installation, run_provisioning, validate_plan
 
 
 class InstallationJobTests(unittest.TestCase):
@@ -54,6 +54,7 @@ class InstallationJobTests(unittest.TestCase):
         self.assertEqual(order, ["register", "flash", "provision"])
         self.assertEqual(result["state"], "verified")
         self.assertEqual(result["revision"], 3)
+        self.assertTrue(result["firmwareWritten"])
         self.assertEqual([entry["stage"] for entry in self.progress], ["preflight", "backup-provisioning", "prepare-provisioning", "register-credential", "flash-firmware", "serial-provisioning", "verify-online", "completed"])
         public = json.dumps([result, self.progress])
         for secret in [self.settings["psk"], self.plan["envelope"], self.plan["newCredential"]["secret"]]:
@@ -96,6 +97,19 @@ class InstallationJobTests(unittest.TestCase):
         self.run_job()
         self.backend.register.assert_not_called()
         self.serial.flash.assert_called_once()
+
+    def test_provision_only_never_calls_firmware_flash_and_still_verifies(self):
+        result = run_provisioning(self.directory, self.request, self.settings,
+                                  self.backend, self.progress.append)
+        self.serial.flash.assert_not_called()
+        self.backend.provision.assert_called_once_with(self.serial, self.envelope)
+        self.backend.verify_online.assert_called_once_with(
+            "keypad-one", "1.2.3", self.plan["configurationDigest"], 1800000000000)
+        self.assertFalse(result["firmwareWritten"])
+        self.assertEqual(json.loads((self.directory / "installation.json").read_text())["operation"], "provision")
+        self.assertEqual([entry["stage"] for entry in self.progress],
+                         ["preflight", "backup-provisioning", "prepare-provisioning",
+                          "register-credential", "serial-provisioning", "verify-online", "completed"])
 
     def test_stale_cached_connection_does_not_confirm_new_installation(self):
         self.backend.verify_online.return_value["configurationVerifiedAt"] = 1799999999999

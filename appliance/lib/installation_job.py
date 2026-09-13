@@ -68,20 +68,23 @@ def validate_plan(plan):
     return envelope
 
 
-def run_installation(directory, request, settings, backend, progress):
-    """Run under the persistent host-job lock; do not auto-retry failed flashing."""
+def _run(directory, request, settings, backend, progress, *, write_firmware):
+    """Run under the persistent host-job lock; never infer a completed write."""
     if (not isinstance(request, dict) or not isinstance(request.get("usbId"), str) or
             not re.fullmatch(r"[a-f0-9]{32}", request["usbId"]) or
             not isinstance(request.get("version"), str) or
             not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", request["version"]) or
             type(request.get("adopt", False)) is not bool):
         raise ValueError("Invalid installation request")
+    if type(write_firmware) is not bool:
+        raise ValueError("Firmware-write selection must be explicit")
     if not isinstance(settings, dict) or type(settings.get("revision")) is not int or settings["revision"] < 1:
         raise ValueError("Save central keypad settings before installation")
     directory = Path(directory)
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     journal_path = directory / "installation.json"
-    journal = {"state": "running", "request": dict(request), "settings": dict(settings)}
+    journal = {"state": "running", "operation": "install" if write_firmware else "provision",
+               "request": dict(request), "settings": dict(settings)}
 
     def stage(name):
         journal["stage"] = name
@@ -107,8 +110,9 @@ def run_installation(directory, request, settings, backend, progress):
         stage("register-credential")
         if plan["newCredential"] is not None:
             backend.register(plan["newCredential"])
-        stage("flash-firmware")
-        serial.flash()
+        if write_firmware:
+            stage("flash-firmware")
+            serial.flash()
         stage("serial-provisioning")
         journal["provisioningStartedAt"] = int(time.time() * 1000)
         save_record(journal_path, journal)
@@ -125,6 +129,7 @@ def run_installation(directory, request, settings, backend, progress):
         result = {"state": "verified", "deviceId": plan["deviceId"], "revision": settings["revision"],
                   "chipMac": chip_mac,
                   "firmware": request["version"], "hardware": observed["hardware"],
+                  "firmwareWritten": write_firmware,
                   "configurationVerifiedAt": observed["configurationVerifiedAt"],
                   "configurationDigest": plan["configurationDigest"]}
         journal.update(state="completed", result=result)
@@ -133,5 +138,14 @@ def run_installation(directory, request, settings, backend, progress):
     except Exception as error:
         journal.update(state="failed", error=str(error))
         save_record(journal_path, journal)
-        raise RuntimeError("Installation stopped at " + journal["stage"] +
+        action = "Installation" if write_firmware else "Provisioning"
+        raise RuntimeError(action + " stopped at " + journal["stage"] +
                            "; retain this job's provisioning backups and private recovery journal before retrying") from None
+
+
+def run_installation(directory, request, settings, backend, progress):
+    return _run(directory, request, settings, backend, progress, write_firmware=True)
+
+
+def run_provisioning(directory, request, settings, backend, progress):
+    return _run(directory, request, settings, backend, progress, write_firmware=False)

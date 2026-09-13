@@ -138,7 +138,7 @@ on save and reconnect. Sending a command does not confirm device application;
 the applied revision remains unconfirmed. Foundry and Identify may subsequently
 override these colours. Disabling the preference stops automatic sends without
 resetting current colours. Saving central Wi-Fi settings alone does not apply them
-to keypads; the USB installation job sends a snapshot of the selected revision.
+to keypads; a USB install or provision-only job sends a snapshot of the selected revision.
 
 The installation panel checks for the latest stable signed serial-install bundle.
 An OTA download alone is insufficient: installation stays disabled if no suitable
@@ -147,6 +147,11 @@ then click **Install & provision**. Foreign adoption is explicit; local identiti
 are preserved. The job checks server compatibility and hardware, backs up
 provisioning, flashes rBoot/application, delivers settings and requires a fresh
 authenticated firmware/configuration proof. Keep USB connected throughout.
+For a keypad already running the selected stable protocol-v3 firmware,
+**Provision settings only** performs the same identity inspection, sector backup,
+credential preparation, USB delivery and authenticated proof without invoking the
+firmware flash operation. A firmware-version mismatch fails verification and should
+be resolved with **Install & provision** rather than treated as successful provisioning.
 This flow has mocked/browser coverage but has not yet been verified on physical
 hardware; some boards may require a boot/reset button.
 The installation panel can passively scan USB serial devices attached to the

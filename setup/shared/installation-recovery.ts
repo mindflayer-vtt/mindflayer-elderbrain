@@ -1,6 +1,6 @@
 // Fixed guidance only: never render private journal errors, credentials or paths
 // supplied by a failed subprocess as recovery instructions.
-export function installationRecovery(stage?: string): string[] {
+export function installationRecovery(stage?: string, firmwareWritten = true): string[] {
   const retain = "Keep the full installation ID and its private recovery records. Do not delete server credentials, erase flash, or enable foreign adoption to bypass a failure.";
   switch (stage) {
     case "preflight":
@@ -14,7 +14,9 @@ export function installationRecovery(stage?: string): string[] {
     case "flash-firmware":
       return ["Firmware may be incomplete. Wait until no host job is active, keep the same keypad connected, and preserve stable USB power.", "Have an administrator inspect the original provisioning backups and chip MAC before a controlled reinstall. Do not copy sectors from another keypad or run a whole-chip erase.", retain];
     case "serial-provisioning":
-      return ["Firmware was written, but provisioning may or may not have been accepted. Wait until no host job is active, then check whether the keypad reconnects and which identity appears in inventory.", "Have an administrator inspect the exact retained provisioning plan before retrying; generating another identity can leave an unused server credential.", retain];
+      return [firmwareWritten
+        ? "Firmware was written, but provisioning may or may not have been accepted. Wait until no host job is active, then check whether the keypad reconnects and which identity appears in inventory."
+        : "Firmware was not changed, but provisioning may or may not have been accepted. Check whether the keypad reconnects and which identity appears in inventory before retrying.", "Have an administrator inspect the exact retained provisioning plan before retrying; generating another identity can leave an unused server credential.", retain];
     case "verify-online":
       return ["Serial provisioning was accepted, but authenticated online verification did not finish. Check Wi-Fi coverage, saved SSID/password, the reachable appliance address and port, and server health.", "Check inventory for the expected identity and firmware. A connected indicator alone does not prove the saved configuration. This failed job is not automatically marked complete by a later connection.", "Correct connectivity first; do not immediately reflash a keypad that may already be configured.", retain];
     default:

@@ -312,6 +312,23 @@ class JobTests(unittest.TestCase):
             self.store.submit("keypad-install", request)
         self.assertEqual(json.loads(snapshot.read_text())["revision"], 3)
 
+    def test_provisioning_admission_uses_the_same_private_settings_snapshot(self):
+        root = Path(self.temp.name)
+        self.store = JobStore(root / "jobs")
+        settings = {"revision": 2, "ssid": "Table", "psk": "private-wifi-password",
+                    "serverHost": "table.local", "serverPort": 10443}
+        settings_path = root / "elderbrain/secrets/keypad-settings.json"
+        settings_path.parent.mkdir(parents=True)
+        save_record(settings_path, settings)
+        request = {"usbId": "b" * 32, "version": "1.2.3", "revision": 2, "adopt": False}
+        with patch("host_jobs.subprocess.Popen", return_value=SimpleNamespace(wait=lambda: None)):
+            result = self.store.submit("keypad-provision", request)
+        self.assertEqual(result["kind"], "keypad-provision")
+        self.assertNotIn(settings["psk"], json.dumps(result))
+        snapshot = self.store.path(result["id"]).with_suffix(".settings")
+        self.assertEqual(json.loads(snapshot.read_text()), settings)
+        self.assertEqual(snapshot.stat().st_mode & 0o777, 0o600)
+
     def test_installation_worker_publishes_progress_and_result_without_private_settings(self):
         from backup_service import Maintenance
         root = Path(self.temp.name)
@@ -338,6 +355,25 @@ class JobTests(unittest.TestCase):
         self.assertEqual(result["state"], "completed")
         self.assertEqual(result["result"]["deviceId"], "keypad")
         self.assertNotIn("private-wifi-password", json.dumps(result))
+
+    def test_provisioning_worker_cannot_dispatch_the_flashing_coordinator(self):
+        root = Path(self.temp.name)
+        self.store = JobStore(root / "jobs")
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        record.update(kind="keypad-provision", request={"usbId": "b" * 32, "version": "1.2.3", "adopt": False}, revision=3)
+        save_record(path, record)
+        save_record(path.with_suffix(".settings"), {"revision": 3, "psk": "private-wifi-password"})
+        with patch("installation_job.run_installation") as install, \
+             patch("installation_job.run_provisioning", return_value={"state": "verified", "deviceId": "keypad", "revision": 3, "firmwareWritten": False}) as provision, \
+             patch("installation_backend.InstallationBackend"):
+            worker(self.store.directory, self.identity, fd)
+        install.assert_not_called()
+        provision.assert_called_once()
+        result = self.store.read(self.identity)
+        self.assertEqual(result["state"], "completed")
+        self.assertFalse(result["result"]["firmwareWritten"])
 
     def test_encrypted_preview_validates_then_publishes_plaintext_without_secret(self):
         from backup_archive import create

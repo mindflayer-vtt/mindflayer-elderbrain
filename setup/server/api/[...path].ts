@@ -265,14 +265,16 @@ export default defineEventHandler(async (event) => {
       if (!result.ok) throw new Error("No installable stable release is available, or GitHub could not be reached. A signed serial-install bundle is required; OTA firmware alone is insufficient.");
       return JSON.parse(result.output || "null");
     }
-    if (route === "keypads/install" && method === "POST") {
+    if ((route === "keypads/install" || route === "keypads/provision") && method === "POST") {
       const input = await body() as Record<string, unknown>;
       if (!input || input.confirm !== true || typeof input.usbId !== "string" || !/^[a-f0-9]{32}$/.test(input.usbId) ||
           typeof input.version !== "string" || !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(input.version) ||
-          !Number.isSafeInteger(input.revision) || Number(input.revision) < 1 || typeof input.adopt !== "boolean") throw new Error("Confirm the USB target, firmware release and saved settings before installation");
+          !Number.isSafeInteger(input.revision) || Number(input.revision) < 1 || typeof input.adopt !== "boolean") throw new Error("Confirm the USB target, expected firmware release and saved settings");
       const payload = Buffer.from(JSON.stringify({ usbId: input.usbId, version: input.version, revision: input.revision, adopt: input.adopt }));
-      const result = await backupUpload(socket, Readable.from([payload]), payload.length, "keypad-install-start");
-      if (!result.ok) throw new Error("Installation could not start. Check saved settings, active host jobs and USB connection, then refresh.");
+      const provisioning = route === "keypads/provision";
+      const result = await backupUpload(socket, Readable.from([payload]), payload.length,
+        provisioning ? "keypad-provision-start" : "keypad-install-start");
+      if (!result.ok) throw new Error((provisioning ? "Provisioning" : "Installation") + " could not start. Check saved settings, active host jobs and USB connection, then refresh.");
       setResponseStatus(event, 202);
       return JSON.parse(result.output || "null");
     }

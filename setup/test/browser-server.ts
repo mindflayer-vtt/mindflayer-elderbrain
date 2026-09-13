@@ -154,14 +154,15 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
       else socket.on('data', chunk => { payload = Buffer.concat([payload, chunk]); if (payload.length >= size) finish(); });
       return;
     }
-    if (action.startsWith("keypad-install-start ")) {
+    if (action.startsWith("keypad-install-start ") || action.startsWith("keypad-provision-start ")) {
       const end = data.indexOf(10);
       const size = Number(data.subarray(0, end).toString().split(" ")[1]);
       let payload = data.subarray(end + 1);
       const finish = () => {
         const input = JSON.parse(payload.subarray(0, size).toString());
-        const job = { id: "5".repeat(32), kind: "keypad-install", state: "completed", stage: "completed", createdAt: Date.now() / 1000,
-          request: input, result: { deviceId: "installed-fixture", firmware: input.version, revision: input.revision } };
+        const provisioning = action.startsWith("keypad-provision-start ");
+        const job = { id: (provisioning ? "8" : "5").repeat(32), kind: provisioning ? "keypad-provision" : "keypad-install", state: "completed", stage: "completed", createdAt: Date.now() / 1000,
+          request: input, result: { deviceId: "installed-fixture", firmware: input.version, revision: input.revision, firmwareWritten: !provisioning } };
         jobs.unshift(job);
         socket.end(JSON.stringify({ ok: true, output: JSON.stringify(job) }) + "\n");
       };
@@ -174,11 +175,11 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
       return;
     }
     if (action === "keypad-registrations") {
-      socket.end(JSON.stringify({ ok: true, output: JSON.stringify(["test-keypad", "offline-keypad", ...(jobs.some(job => job.kind === "keypad-install") ? ["installed-fixture"] : [])]) }) + "\n");
+      socket.end(JSON.stringify({ ok: true, output: JSON.stringify(["test-keypad", "offline-keypad", ...(jobs.some(job => ["keypad-install", "keypad-provision"].includes(String(job.kind))) ? ["installed-fixture"] : [])]) }) + "\n");
       return;
     }
     if (action === "keypad-installations") {
-      const installed = jobs.find(job => job.kind === "keypad-install");
+      const installed = jobs.find(job => ["keypad-install", "keypad-provision"].includes(String(job.kind)));
       const result = installed?.result as { revision: number } | undefined;
       const current = fs.existsSync(path.join(state, "secrets/keypad-settings.json")) ? JSON.parse(fs.readFileSync(path.join(state, "secrets/keypad-settings.json"), "utf8")) : {};
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify(result ? [{ deviceId: "installed-fixture", revision: result.revision,

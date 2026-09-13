@@ -66,6 +66,12 @@ class ManagementRuntimeTests(unittest.TestCase):
         payload = json.dumps(selected).encode()
         self.assertTrue(send(f'power-start {len(payload)}\n'.encode() + payload)['ok'])
         jobs.submit.assert_called_once_with('power', selected)
+        jobs.submit.reset_mock()
+
+        selected = {'usbId': 'c' * 32, 'version': '1.2.3', 'revision': 4, 'adopt': False}
+        payload = json.dumps(selected).encode()
+        self.assertTrue(send(f'keypad-provision-start {len(payload)}\n'.encode() + payload)['ok'])
+        jobs.submit.assert_called_once_with('keypad-provision', selected)
 
         jobs.directory.parent = Path('/test/state')
         power = types.SimpleNamespace(pending=Mock(return_value=True))

@@ -34,7 +34,7 @@ of keypad flash, and a later online connection does not complete the failed job.
 | `prepare-provisioning` | No firmware write or credential registration | Check settings and local/foreign identity classification. Deliberate adoption applies only to a valid foreign configuration; corrupt sectors need manual review. |
 | `register-credential` | The new credential may exist on the server | Compare the retained plan with the server's registration before retrying. Do not delete a credential that may be in use. |
 | `flash-firmware` | rBoot, metadata or firmware may be partially written | Inspect original provisioning checksums, chip MAC and diagnostics before a controlled reinstall. Do not whole-chip erase. |
-| `serial-provisioning` | Firmware was written; settings may have been accepted | Check online identity first and inspect the exact retained plan before retrying. A fresh install of a still-blank keypad can create another identity. |
+| `serial-provisioning` | A full install wrote firmware; provision-only did not. Settings may have been accepted in either mode. | Check online identity first and inspect the exact retained plan before retrying. A fresh install or provisioning of a still-blank keypad can create another identity. |
 | `verify-online` | Serial acknowledgement succeeded | Check Wi-Fi coverage, SSID/password, reachable appliance address/port and server health before considering another flash. Confirm authenticated identity, firmware and configuration proof, not just a connected indicator. |
 | Missing/unknown | Cannot determine safely | Treat mutation as possible and inspect the retained records before retrying. |
 

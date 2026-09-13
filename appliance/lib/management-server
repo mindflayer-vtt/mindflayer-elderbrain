@@ -104,14 +104,15 @@ class Handler(socketserver.StreamRequestHandler):
                 if len(payload) != size:
                     raise ValueError("Incomplete host job request")
                 result = {"ok": True, "output": json.dumps(JOBS.submit(operation.removesuffix('-start'), json.loads(payload)))}
-            elif action.startswith("keypad-install-start "):
-                size = int(action.removeprefix("keypad-install-start "))
+            elif action.startswith(("keypad-install-start ", "keypad-provision-start ")):
+                operation, length = action.split(" ", 1)
+                size = int(length)
                 if not 0 < size <= 2048:
-                    raise ValueError("Invalid installation request size")
+                    raise ValueError("Invalid keypad operation request size")
                 payload = self.rfile.read(size)
                 if len(payload) != size:
-                    raise ValueError("Incomplete installation request")
-                result = {"ok": True, "output": json.dumps(JOBS.submit("keypad-install", json.loads(payload)))}
+                    raise ValueError("Incomplete keypad operation request")
+                result = {"ok": True, "output": json.dumps(JOBS.submit(operation.removesuffix("-start"), json.loads(payload)))}
             elif action == "keypad-registrations":
                 result = {"ok": True, "output": json.dumps(registered_keypads(JOBS.directory.parent))}
             elif action == "keypad-installations":
