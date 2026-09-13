@@ -1,0 +1,166 @@
+name: Appliance release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable semantic appliance version (for example 1.0.1)
+        required: true
+        type: string
+      release_sequence:
+        description: Monotonic integer greater than every published release
+        required: true
+        type: string
+      notes:
+        description: End-user release notes
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: appliance-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    environment:
+      name: appliance-release
+    env:
+      VERSION: ${{ inputs.version }}
+      RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
+      RELEASE_NOTES: ${{ inputs.notes }}
+      SIGNING_KEY: ${{ runner.temp }}/appliance-release-private.pem
+      GENERATED_PUBLIC_KEY: ${{ runner.temp }}/appliance-release-public.pem
+      RELEASE_DIRECTORY: ${{ runner.temp }}/elderbrain-release
+      DEPENDENCY_DIRECTORY: ${{ runner.temp }}/elderbrain-dependencies
+      NOTES_FILE: ${{ runner.temp }}/release-notes.md
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Require a public production channel
+        if: github.event.repository.private
+        run: |
+          echo 'The appliance stores no GitHub credential; make the repository public before publishing.' >&2
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Install release tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y zstd
+      - name: Validate protected signing key
+        env:
+          APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY"
+          umask 077
+          printf '%s\n' "$APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY" > "$SIGNING_KEY"
+          openssl pkey -in "$SIGNING_KEY" -check -noout
+          openssl pkey -in "$SIGNING_KEY" -pubout -out "$GENERATED_PUBLIC_KEY"
+          cmp "$GENERATED_PUBLIC_KEY" config/releases/appliance-release-public.pem
+      - name: Validate release identity and notes
+        run: |
+          printf '%s\n' "$RELEASE_NOTES" > "$NOTES_FILE"
+          python3 release/production-metadata.py \
+            --version "$VERSION" \
+            --sequence "$RELEASE_SEQUENCE" \
+            --setup-image "ghcr.io/mindflayer-vtt/mindflayer-elderbrain-setup:validation@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+            --notes-file "$NOTES_FILE" \
+            "$RUNNER_TEMP/metadata-validation.json"
+      - name: Require a new tag and release sequence
+        run: |
+          tag="v$VERSION"
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1
+          status=$?
+          set -e
+          if [[ $status -eq 0 ]]; then
+            echo "Tag already exists: $tag" >&2
+            exit 1
+          elif [[ $status -ne 2 ]]; then
+            echo 'Could not verify release tag availability' >&2
+            exit 1
+          fi
+          prior="$RUNNER_TEMP/prior-release"
+          error="$RUNNER_TEMP/latest-release-error"
+          set +e
+          prior_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>"$error")
+          status=$?
+          set -e
+          if [[ $status -eq 0 ]]; then
+            [[ $prior_tag =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+            mkdir -m 700 "$prior"
+            gh release download "$prior_tag" --pattern manifest.json --pattern manifest.sig --dir "$prior"
+            python3 release/verify-sequence.py \
+              --manifest "$prior/manifest.json" \
+              --signature "$prior/manifest.sig" \
+              --public-key config/releases/appliance-release-public.pem \
+              --proposed "$RELEASE_SEQUENCE"
+          elif ! grep -q '(HTTP 404)' "$error"; then
+            echo 'Could not authenticate the current production release sequence' >&2
+            cat "$error" >&2
+            exit 1
+          fi
+      - name: Build and publish immutable Setup image
+        run: |
+          setup_tag="ghcr.io/mindflayer-vtt/mindflayer-elderbrain-setup:${VERSION}-${GITHUB_SHA}"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker build --pull --platform linux/amd64 \
+            --build-arg "SETUP_VERSION=$VERSION" \
+            --build-arg HOST_API_MIN=1 --build-arg HOST_API_MAX=1 \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "$setup_tag" setup
+          docker push "$setup_tag"
+          manifest=$(docker buildx imagetools inspect "$setup_tag" --format '{{json .Manifest}}')
+          digest=$(printf '%s' "$manifest" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "SETUP_IMAGE=$setup_tag@$digest" >> "$GITHUB_ENV"
+          docker logout ghcr.io
+          docker buildx imagetools inspect "$setup_tag@$digest" >/dev/null
+      - name: Verify public runtime images
+        run: |
+          while IFS= read -r image; do
+            docker buildx imagetools inspect "$image" >/dev/null
+          done < <(sed -nE 's/^(TRAEFIK_IMAGE|MINDFLAYER_SERVER_IMAGE|FOUNDRY_IMAGE)=//p' config/defaults/appliance.env)
+      - name: Build offline dependencies and signed artifacts
+        run: |
+          python3 release/build-dependencies.py "$DEPENDENCY_DIRECTORY"
+          python3 release/production-metadata.py \
+            --version "$VERSION" \
+            --sequence "$RELEASE_SEQUENCE" \
+            --setup-image "$SETUP_IMAGE" \
+            --notes-file "$NOTES_FILE" \
+            "$RUNNER_TEMP/release-metadata.json"
+          python3 release/assemble.py \
+            --metadata "$RUNNER_TEMP/release-metadata.json" \
+            --signing-key "$SIGNING_KEY" \
+            --public-key config/releases/appliance-release-public.pem \
+            --dependencies "$DEPENDENCY_DIRECTORY" \
+            "$RELEASE_DIRECTORY"
+      - name: Publish complete release atomically
+        run: |
+          tag="v$VERSION"
+          gh release create "$tag" \
+            "$RELEASE_DIRECTORY/elderbrain-host.tar.zst" \
+            "$RELEASE_DIRECTORY/elderbrain-dependencies.tar.zst" \
+            "$RELEASE_DIRECTORY/manifest.sig" \
+            "$RELEASE_DIRECTORY/manifest.json" \
+            --draft --target "$GITHUB_SHA" --title "Elderbrain $VERSION" \
+            --notes-file "$NOTES_FILE"
+          assets=$(gh release view "$tag" --json assets --jq '[.assets[].name] | sort | join(" ")')
+          test "$assets" = 'elderbrain-dependencies.tar.zst elderbrain-host.tar.zst manifest.json manifest.sig'
+          gh release edit "$tag" --draft=false --prerelease=false --latest
+      - name: Remove transient signing material
+        if: always()
+        run: rm -f "$SIGNING_KEY" "$GENERATED_PUBLIC_KEY"

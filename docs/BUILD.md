@@ -19,6 +19,18 @@ path for another deployment; the corresponding private key is never embedded.
 Copy the resulting ISO as a regular file onto Ventoy's data partition; do not
 write it over the USB device or format the existing Ventoy installation.
 
+Production media should also embed the reviewed GitHub Releases channel and its
+independent public verification key:
+
+```sh
+make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 \
+  SSH_PUBLIC_KEY="$HOME/.ssh/g749-servers.pub" \
+  UPDATE_SOURCE_CONFIG=config/releases/github-releases.json \
+  UPDATE_PUBLIC_KEY=config/releases/appliance-release-public.pem
+```
+
+See [production releases](RELEASING.md) for signing and publication controls.
+
 The builder downloads and caches the pinned Ubuntu 26.04.1 live-server amd64
 image, verifies Ubuntu's signed checksum and the ISO checksum, then embeds only
 the files in the clean, committed Git tree. Staged or modified tracked files make
