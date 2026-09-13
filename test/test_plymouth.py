@@ -31,9 +31,10 @@ class PlymouthTests(unittest.TestCase):
     def test_graphics_handoff_retains_splash_and_failure_exposes_console(self):
         graphics = (ROOT / 'provisioning/systemd/elderbrain-graphics.service').read_text()
         self.assertLess(graphics.index('ExecStartPre=/opt/mindflayer-elderbrain/wait-ready'),
-                        graphics.index('ExecStartPre=+/usr/bin/plymouth quit --retain-splash'))
-        self.assertLess(graphics.index('ExecStartPre=+/usr/bin/plymouth quit --retain-splash'),
+                        graphics.index('ExecStartPre=-+/usr/bin/plymouth quit --retain-splash'))
+        self.assertLess(graphics.index('ExecStartPre=-+/usr/bin/plymouth quit --retain-splash'),
                         graphics.index('ExecStart=/usr/bin/sway'))
+        self.assertIn('must not prevent display previews', graphics)
         self.assertIn('OnFailure=elderbrain-graphics-failure.service', graphics)
         failure = (ROOT / 'provisioning/graphics/boot-failure').read_text()
         self.assertIn('/usr/bin/plymouth quit', failure)

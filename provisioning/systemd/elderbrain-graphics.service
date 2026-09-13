@@ -22,7 +22,9 @@ Environment=XDG_RUNTIME_DIR=/run/elderbrain-kiosk
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 ExecStartPre=/opt/mindflayer-elderbrain/wait-ready
 ExecStartPre=+/usr/bin/python3 /opt/mindflayer-elderbrain/prepare-browser.py
-ExecStartPre=+/usr/bin/plymouth quit --retain-splash
+# Plymouth normally exits after the initial boot. Its later "not running" status
+# must not prevent display previews or other graphics restarts.
+ExecStartPre=-+/usr/bin/plymouth quit --retain-splash
 ExecStart=/usr/bin/sway --config /run/elderbrain-browser/sway.conf
 Restart=always
 RestartSec=2
