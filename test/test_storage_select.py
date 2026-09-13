@@ -18,14 +18,24 @@ class StorageSelectionTests(unittest.TestCase):
     def choose(self, answers):
         return choose([self.disk], ask=Mock(side_effect=answers), tell=Mock())
 
-    def test_fresh_has_no_default_and_needs_exact_erasure_phrase(self):
-        for answers in [[''], ['fresh', '0'], ['fresh', '1', 'yes'],
-                        ['fresh', '1', 'ERASE DISK 2']]:
+    def test_fresh_has_no_default_and_needs_explicit_erasure_phrase(self):
+        for answers in [['cancel'], ['fresh', 'cancel']]:
             with self.assertRaises(ValueError):
                 self.choose(answers)
-        selected = self.choose(['fresh', '1', 'ERASE DISK 1'])
+        selected = self.choose(['FrEsH', '1', 'erase disk 1'])
         self.assertTrue(selected['erase_confirmed'])
         self.assertEqual(selected['serial'], 'test-disk')
+
+    def test_invalid_answers_restart_selection_without_a_traceback(self):
+        tell = Mock()
+        selected = choose([self.disk], ask=Mock(side_effect=[
+            'wrong', 'fresh', '0', 'fresh', '1', 'yes',
+            'fresh', '1', 'ERASE DISK 1']), tell=tell)
+        self.assertTrue(selected['erase_confirmed'])
+        output = '\n'.join(call.args[0] for call in tell.call_args_list)
+        self.assertIn('Invalid installation mode. No changes made; starting over.', output)
+        self.assertIn('Invalid disk number. No changes made; starting over.', output)
+        self.assertIn('Confirmation did not match. No changes made; starting over.', output)
 
     def test_preserve_needs_uuid_and_os_reinstall_confirmation(self):
         selected = self.choose(['preserve', '1', '4', 'REINSTALL OS DISK 1'])
@@ -34,7 +44,7 @@ class StorageSelectionTests(unittest.TestCase):
 
     def test_wrong_number_and_ambiguous_or_unsafe_serials_are_not_selectable(self):
         with self.assertRaises(ValueError):
-            self.choose(['fresh', '2'])
+            self.choose(['fresh', '2', 'cancel'])
         with self.assertRaises(ValueError):
             choose([self.disk, self.disk], ask=Mock(side_effect=['fresh']), tell=Mock())
         unsafe = copy.deepcopy(self.disk)
@@ -59,7 +69,7 @@ class StorageSelectionTests(unittest.TestCase):
     def test_preserve_partition_selection_requires_displayed_btrfs_number(self):
         for answer in ('', '3', fixtures.DATA_UUID):
             with self.subTest(answer=answer), self.assertRaises(ValueError):
-                self.choose(['preserve', '1', answer])
+                self.choose(['preserve', '1', answer, 'cancel'])
 
     def test_document_keeps_other_installer_settings(self):
         document = {'autoinstall': {'version': 1, 'identity': {'hostname': 'elderbrain'},

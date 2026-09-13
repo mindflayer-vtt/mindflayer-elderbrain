@@ -10,12 +10,15 @@ USB after installation when rebooting into the installed system.
 
 The storage console lists only unused, writable, non-removable disks with a unique
 hardware serial. Each entry has a number, path, model, size and serial. Choose the
-target by typing its number; the installer retains and revalidates the exact serial
-internally. A fresh install then requires `ERASE DISK N`, where `N` is the displayed
+target by typing its number; the installer retains and revalidates the exact udev
+`ID_SERIAL` used by Curtin rather than the shorter serial sometimes shown by
+`lsblk`. A fresh install then requires `ERASE DISK N`, where `N` is the displayed
 number. Preserve reinstall lists eligible Btrfs partitions and accepts their
-displayed partition number before requiring `REINSTALL OS DISK N`. Invalid,
-ambiguous, changed or missing identities still cancel installation without choosing
-a fallback disk.
+displayed partition number before requiring `REINSTALL OS DISK N`. Installation
+mode and confirmation phrases are case-insensitive. Invalid interactive input shows
+a concise error and restarts selection without making changes; type `cancel` to stop.
+Ambiguous, changed or missing identities still stop installation without choosing a
+fallback disk.
 
 One screen is sufficient for initial setup (verified in the single-output VM).
 Physical GPU support and two-output placement still require hardware testing.

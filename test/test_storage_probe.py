@@ -27,14 +27,33 @@ class StorageProbeTests(unittest.TestCase):
 
     def test_explicit_tree_command_and_normalization(self):
         run = Mock(side_effect=[SimpleNamespace(), SimpleNamespace(
-            stdout=json.dumps({'blockdevices': [self.disk]}))])
+            stdout=json.dumps({'blockdevices': [self.disk]})), SimpleNamespace(
+                stdout='ID_MODEL=QEMU_HARDDISK\nID_SERIAL=QEMU_HARDDISK_vm-test\n'
+                       'ID_SERIAL_SHORT=vm-test\n')])
         result = probe.probe(run)
         self.assertIn('--tree', run.call_args_list[1].args[0])
+        self.assertEqual(run.call_args_list[2].args[0], [
+            'udevadm', 'info', '--query=property', '--name=/dev/vda'])
         self.assertEqual(result[0]['partitions'][0]['flag'], 'bios_grub')
         self.assertIs(result[0]['in_use'], False)
-        self.assertEqual(result[0]['serial'], 'vm-test')
+        self.assertEqual(result[0]['serial'], 'QEMU_HARDDISK_vm-test')
         self.assertEqual(result[0]['model'], 'QEMU HARDDISK')
         self.assertIn('MODEL', probe.COLUMNS)
+
+    def test_missing_or_ambiguous_curtin_serial_fails_closed(self):
+        for properties in ('ID_SERIAL_SHORT=short\n',
+                           'ID_SERIAL=one\nID_SERIAL=two\n'):
+            with self.subTest(properties=properties), self.assertRaisesRegex(
+                    ValueError, 'no unique udev ID_SERIAL'):
+                probe._udev_serial('/dev/sda', Mock(return_value=SimpleNamespace(
+                    stdout=properties)))
+
+    def test_disk_without_curtin_serial_is_individually_unselectable(self):
+        run = Mock(side_effect=[SimpleNamespace(), SimpleNamespace(
+            stdout=json.dumps({'blockdevices': [self.disk]})), SimpleNamespace(
+                stdout='ID_SERIAL_SHORT=vm-test\n')])
+        result = probe.probe(run)
+        self.assertIsNone(result[0]['serial'])
 
     def test_mounted_swap_and_unknown_mount_information_are_busy(self):
         for mounts in (['/'], ['/cdrom'], ['[SWAP]'], None):

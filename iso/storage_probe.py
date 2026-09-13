@@ -64,13 +64,35 @@ def normalize(document):
     return disks
 
 
+def _udev_serial(device, run):
+    result = run(['udevadm', 'info', '--query=property', f'--name={device}'],
+                 check=True, capture_output=True, text=True, timeout=10)
+    values = [line.removeprefix('ID_SERIAL=') for line in result.stdout.splitlines()
+              if line.startswith('ID_SERIAL=')]
+    if len(values) != 1 or not values[0] or len(values[0]) > 512:
+        raise ValueError(f'Disk {device} has no unique udev ID_SERIAL')
+    return values[0]
+
+
 def probe(run=subprocess.run):
     run(['udevadm', 'settle', '--timeout=15'], check=True, capture_output=True,
         text=True, timeout=20)
     result = run(['lsblk', '--json', '--bytes', '--paths', '--tree',
                   '--output', COLUMNS], check=True, capture_output=True,
                  text=True, timeout=20)
-    return normalize(json.loads(result.stdout))
+    inventory = normalize(json.loads(result.stdout))
+    # Curtin's disk ``serial`` action matches udev ID_SERIAL, which is commonly
+    # model-prefixed on physical SATA disks. lsblk SERIAL is usually the shorter
+    # ID_SERIAL_SHORT and therefore cannot safely identify the Curtin target.
+    for disk in inventory:
+        try:
+            disk['serial'] = _udev_serial(disk['path'], run)
+        except (ValueError, subprocess.SubprocessError):
+            # A disappearing card reader/USB LUN must not hide other valid
+            # disks. With no Curtin-compatible serial this disk remains
+            # unselectable by the shared fail-closed selection policy.
+            disk['serial'] = None
+    return inventory
 
 
 if __name__ == '__main__':

@@ -22,12 +22,6 @@ from iso.storage_console import read_line
 
 
 def choose(inventory, ask=input, tell=print):
-    tell('Mindflayer Elderbrain installation')
-    tell('Fresh: ERASES THE ENTIRE SELECTED DISK. Preserve: reinstalls OS only;')
-    tell('requires an existing supported Elderbrain data volume. Back up first.')
-    mode = ask('Type fresh or preserve (anything else cancels): ').strip()
-    if mode not in ('fresh', 'preserve'):
-        raise ValueError('Installation cancelled')
     targets = []
     for disk in inventory:
         try:
@@ -38,43 +32,66 @@ def choose(inventory, ask=input, tell=print):
             targets.append(disk)
     if not targets:
         raise ValueError('No unused, writable, non-removable installation disk is available')
-    tell('Available installation disks:')
-    for number, disk in enumerate(targets, 1):
-        # JSON quoting prevents probed device strings from injecting controls.
-        description = {key: disk.get(key) for key in ('path', 'model', 'serial')}
-        description['sizeGiB'] = round(disk['size'] / 1024 ** 3, 1)
-        tell(f'  {number}. {json.dumps(description, sort_keys=True)}')
-    answer = ask('Enter the target disk number (anything else cancels): ').strip()
-    if not re.fullmatch(r'[1-9][0-9]*', answer) or int(answer) > len(targets):
-        raise ValueError('Installation cancelled')
-    disk_number = int(answer)
-    target = targets[disk_number - 1]
-    serial = target['serial']
-    tell('Selected disk: ' + json.dumps({key: target.get(key) for key in
-                                        ('path', 'model', 'serial')}, sort_keys=True))
-    data_uuid = None
-    if mode == 'preserve':
-        partitions = [part for part in target.get('partitions', [])
-                      if (part.get('fstype') == 'btrfs' and isinstance(part.get('uuid'), str)
-                          and type(part.get('number')) is int
-                          and 1 <= part['number'] <= 128)]
-        if not partitions:
-            raise ValueError('Selected disk has no persistent Btrfs partition')
-        tell('Available persistent Btrfs partitions:')
-        for partition in partitions:
-            description = {key: partition.get(key) for key in ('path', 'size', 'uuid')}
-            tell(f"  {partition.get('number')}. {json.dumps(description, sort_keys=True)}")
-        answer = ask('Enter the persistent partition number: ').strip()
-        matches = [part for part in partitions if str(part.get('number')) == answer]
-        if len(matches) != 1:
-            raise ValueError('Selected persistent partition is missing or ambiguous')
-        data_uuid = matches[0]['uuid']
-    phrase = (f'ERASE DISK {disk_number}' if mode == 'fresh'
-              else f'REINSTALL OS DISK {disk_number}')
-    if ask(f'Type {json.dumps(phrase)} to confirm: ') != phrase:
-        raise ValueError('Confirmation did not match; installation cancelled')
-    return dict(mode=mode, serial=serial, data_uuid=data_uuid,
-                erase_confirmed=mode == 'fresh')
+    while True:
+        tell('Mindflayer Elderbrain installation')
+        tell('Fresh: ERASES THE ENTIRE SELECTED DISK. Preserve: reinstalls OS only;')
+        tell('requires an existing supported Elderbrain data volume. Back up first.')
+        mode = ask('Type fresh, preserve, or cancel: ').strip().lower()
+        if mode == 'cancel':
+            raise ValueError('Installation cancelled')
+        if mode not in ('fresh', 'preserve'):
+            tell('Invalid installation mode. No changes made; starting over.')
+            continue
+        tell('Available installation disks:')
+        for number, disk in enumerate(targets, 1):
+            # JSON quoting prevents probed device strings from injecting controls.
+            description = {key: disk.get(key) for key in ('path', 'model', 'serial')}
+            description['sizeGiB'] = round(disk['size'] / 1024 ** 3, 1)
+            tell(f'  {number}. {json.dumps(description, sort_keys=True)}')
+        answer = ask('Enter the target disk number, or cancel: ').strip().lower()
+        if answer == 'cancel':
+            raise ValueError('Installation cancelled')
+        if not re.fullmatch(r'[1-9][0-9]*', answer) or int(answer) > len(targets):
+            tell('Invalid disk number. No changes made; starting over.')
+            continue
+        disk_number = int(answer)
+        target = targets[disk_number - 1]
+        serial = target['serial']
+        tell('Selected disk: ' + json.dumps({key: target.get(key) for key in
+                                            ('path', 'model', 'serial')}, sort_keys=True))
+        data_uuid = None
+        if mode == 'preserve':
+            partitions = [part for part in target.get('partitions', [])
+                          if (part.get('fstype') == 'btrfs'
+                              and isinstance(part.get('uuid'), str)
+                              and type(part.get('number')) is int
+                              and 1 <= part['number'] <= 128)]
+            if not partitions:
+                tell('Selected disk has no persistent Btrfs partition. '
+                     'No changes made; starting over.')
+                continue
+            tell('Available persistent Btrfs partitions:')
+            for partition in partitions:
+                description = {key: partition.get(key) for key in ('path', 'size', 'uuid')}
+                tell(f"  {partition.get('number')}. {json.dumps(description, sort_keys=True)}")
+            answer = ask('Enter the persistent partition number, or cancel: ').strip().lower()
+            if answer == 'cancel':
+                raise ValueError('Installation cancelled')
+            matches = [part for part in partitions if str(part.get('number')) == answer]
+            if len(matches) != 1:
+                tell('Invalid persistent partition number. No changes made; starting over.')
+                continue
+            data_uuid = matches[0]['uuid']
+        phrase = (f'ERASE DISK {disk_number}' if mode == 'fresh'
+                  else f'REINSTALL OS DISK {disk_number}')
+        confirmation = ask(f'Type {json.dumps(phrase)} to confirm, or cancel: ').strip()
+        if confirmation.lower() == 'cancel':
+            raise ValueError('Installation cancelled')
+        if confirmation.casefold() != phrase.casefold():
+            tell('Confirmation did not match. No changes made; starting over.')
+            continue
+        return dict(mode=mode, serial=serial, data_uuid=data_uuid,
+                    erase_confirmed=mode == 'fresh')
 
 
 def configure(document, selection, *, inventory_probe=probe, marker_reader=None,
