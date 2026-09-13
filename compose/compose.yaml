@@ -5,6 +5,7 @@ networks:
     ipam:
       config:
         - subnet: 172.31.254.0/24
+          ip_range: 172.31.254.128/25
 
 secrets:
   foundry_config:

@@ -44,6 +44,7 @@ class DomainRoutesTests(unittest.TestCase):
         self.assertNotIn('FOUNDRY_HOSTNAME:', compose)
         self.assertIn('ELDERBRAIN_TRUSTED_PROXY_IP: 172.31.254.2', compose)
         self.assertIn('ipv4_address: 172.31.254.2', compose)
+        self.assertIn('ip_range: 172.31.254.128/25', compose)
         self.assertIn('--entrypoints.websecure.forwardedheaders.notappendxforwardedfor=false', compose)
         prepare = (Path(__file__).resolve().parents[1] / 'provisioning/prepare-admin').read_text()
         self.assertIn('python3 "$runtime/domain_routes.py" "$state"', prepare)
