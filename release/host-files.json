@@ -105,6 +105,11 @@
     "mode": 420
   },
   {
+    "source": "provisioning/graphics/boot-failure",
+    "path": "runtime/boot-failure",
+    "mode": 493
+  },
+  {
     "source": "appliance/lib/borg_repository.py",
     "path": "runtime/borg_repository.py",
     "mode": 420
@@ -522,6 +527,11 @@
   {
     "source": "provisioning/systemd/elderbrain-display-watchdog.service",
     "path": "units/elderbrain-display-watchdog.service",
+    "mode": 420
+  },
+  {
+    "source": "provisioning/systemd/elderbrain-graphics-failure.service",
+    "path": "units/elderbrain-graphics-failure.service",
     "mode": 420
   },
   {

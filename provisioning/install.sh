@@ -56,7 +56,7 @@ curl -fsSL https://dl.google.com/linux/linux_signing_key.pub -o /tmp/google-linu
 gpg --batch --yes --dearmor -o /etc/apt/keyrings/google-chrome.gpg /tmp/google-linux-signing-key.pub
 echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list
 apt-get update
-apt-get install -y sway google-chrome-stable
+apt-get install -y sway google-chrome-stable plymouth plymouth-theme-spinner
 apt-get install -y nodejs npm
 node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)'
 install -d -m 0755 "$RUNTIME/beamer"
@@ -64,6 +64,18 @@ install -m 0644 "$PAYLOAD_DIR/provisioning/graphics/"{package.json,package-lock.
 npm ci --prefix "$RUNTIME/beamer" --ignore-scripts --omit=dev --no-audit --no-fund
 install -d -m 0755 /etc/opt/chrome/policies/managed
 install -m 0644 "$PAYLOAD_DIR/provisioning/chrome/elderbrain.json" /etc/opt/chrome/policies/managed/elderbrain.json
+plymouth_theme=/usr/share/plymouth/themes/mindflayer
+install -d -m 0755 "$plymouth_theme"
+cp /usr/share/plymouth/themes/spinner/*.png "$plymouth_theme/"
+install -m 0644 "$PAYLOAD_DIR/provisioning/plymouth/mindflayer.plymouth" "$plymouth_theme/mindflayer.plymouth"
+install -m 0644 "$PAYLOAD_DIR/provisioning/plymouth/watermark.png" "$plymouth_theme/watermark.png"
+install -d -m 0755 /etc/default/grub.d /etc/systemd/system/plymouth-quit.service.d
+install -m 0644 "$PAYLOAD_DIR/provisioning/plymouth/60-elderbrain-splash.cfg" /etc/default/grub.d/60-elderbrain-splash.cfg
+install -m 0644 "$PAYLOAD_DIR/provisioning/plymouth/elderbrain-graphics.conf" /etc/systemd/system/plymouth-quit.service.d/elderbrain.conf
+update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth "$plymouth_theme/mindflayer.plymouth" 300
+update-alternatives --set default.plymouth "$plymouth_theme/mindflayer.plymouth"
+update-initramfs -u
+update-grub
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
 . /etc/os-release
@@ -151,6 +163,7 @@ install -m 0644 "$PAYLOAD_DIR/appliance/lib/borg_settings.py" "$RUNTIME/borg_set
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/borg_repository.py" "$RUNTIME/borg_repository.py"
 install -m 0644 "$PAYLOAD_DIR/appliance/lib/borg_service.py" "$RUNTIME/borg_service.py"
 cp "$PAYLOAD_DIR/provisioning/graphics/browser-launcher" "$RUNTIME/browser-launcher"
+cp "$PAYLOAD_DIR/provisioning/graphics/boot-failure" "$RUNTIME/boot-failure"
 install -m 0644 "$PAYLOAD_DIR/provisioning/graphics/browser-session.py" "$RUNTIME/browser-session.py"
 install -m 0644 "$PAYLOAD_DIR/provisioning/graphics/browser_process.py" "$RUNTIME/browser_process.py"
 install -m 0644 "$PAYLOAD_DIR/provisioning/graphics/prepare-browser.py" "$RUNTIME/prepare-browser.py"
@@ -159,7 +172,7 @@ if [[ ! -f /etc/elderbrain/storage.json ]]; then
   cp "$PAYLOAD_DIR/provisioning/graphics/sway.conf" "$RUNTIME/sway.conf"
 fi
 install -m 0755 "$PAYLOAD_DIR/appliance/bin/elderbrain" /usr/local/sbin/elderbrain
-chmod 0755 "$RUNTIME"/{management-server,browser-launcher,wait-ready}
+chmod 0755 "$RUNTIME"/{management-server,browser-launcher,boot-failure,wait-ready}
 install -m 0644 "$PAYLOAD_DIR/provisioning/ssh/99-elderbrain.conf" /etc/ssh/sshd_config.d/99-elderbrain.conf
 sshd -t
 

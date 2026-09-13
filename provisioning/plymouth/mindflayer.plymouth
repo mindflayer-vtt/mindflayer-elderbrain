@@ -1,0 +1,45 @@
+[Plymouth Theme]
+Name=Mindflayer Elderbrain
+Description=Mindflayer appliance boot and power transition
+ModuleName=two-step
+
+[two-step]
+Font=Sans 12
+TitleFont=Sans Light 30
+MonospaceFont=Monospace 12
+ImageDir=/usr/share/plymouth/themes/mindflayer
+HorizontalAlignment=0.5
+VerticalAlignment=0.68
+WatermarkHorizontalAlignment=0.5
+WatermarkVerticalAlignment=0.42
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x090b13
+BackgroundEndColor=0x090b13
+MessageBelowAnimation=true
+
+[boot-up]
+UseAnimation=true
+UseEndAnimation=false
+
+[shutdown]
+UseAnimation=true
+UseEndAnimation=false
+
+[reboot]
+UseAnimation=true
+UseEndAnimation=false
+
+[updates]
+UseAnimation=true
+UseProgressBar=true
+ProgressBarShowPercentComplete=true
+Title=Updating Elderbrain
+SubTitle=Do not turn off the appliance
+
+[system-upgrade]
+UseAnimation=true
+UseProgressBar=true
+ProgressBarShowPercentComplete=true
+Title=Updating Elderbrain
+SubTitle=Do not turn off the appliance

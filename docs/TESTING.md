@@ -2,20 +2,21 @@
 
 ## Latest local regression run
 
-2026-09-11, after the network reconnection link and legacy Lenovo repair:
+2026-09-13, after signed-update interruption qualification and branded boot work:
 
-- Setup: 36 tests passed, including the production mail transport's loopback TLS test.
-- Host (rerun after offline linger, default-preservation and payload fixes):
-  211 tests discovered, 206 passed and five opt-in integrations skipped
+- Setup: 39 tests passed, including the production mail transport's loopback TLS test;
+  Nuxt type checking and the production build also passed.
+- Host: 625 tests discovered, 620 passed and five opt-in integrations skipped
   (Borg, Borgmatic, Borg-over-SSH, sibling serial release builder and server image).
-- Production-build browser suite: all 29 tests passed. Its host/network/hardware
+- Production-build browser suite: all 40 tests passed. Its host/network/hardware
   operations use test fixtures; this is not physical integration evidence.
-- Nuxt type checking and static safety checks passed.
+- Static safety and Compose configuration checks passed.
 
-The initial sandbox attempts could not create test sockets; reruns with socket
-access passed. No production permission changes were needed for these tests.
-Live network tests and their remaining gates are in `NETWORK-SAFETY.md`; the
-separately approved physical repair is recorded in `LENOVO-BROWSER-REPAIR.md`.
+The installed Ubuntu 26.04 disposable VM also passed the branded Plymouth reboot,
+graphical handoff and post-boot unit-health check. No production permission changes
+were needed for local test sandbox limitations. Live network tests and their
+remaining gates are in `NETWORK-SAFETY.md`; the separately approved physical
+repair is recorded in `LENOVO-BROWSER-REPAIR.md`.
 
 ## Commands and scope
 
@@ -91,6 +92,13 @@ exit status is accepted as an intentional bounded-degradation result; the timeou
 remains in the journal and network consumers retain explicit retries.
 
 ## Real-hardware checklist
+
+The branded boot path should show the Mindflayer logo and spinner until the local
+browser is ready. Press Esc during Plymouth to reveal boot messages. If graphical
+startup repeatedly fails, tty1 must replace the splash with recovery instructions;
+SSH must remain reachable. VM qualification verifies the installed theme,
+initramfs contents, spinner animation, smooth browser handoff and healthy units,
+but it does not replace a physical GPU/display check.
 
 The setup service uses Nuxt, Vue, TypeScript and Nuxt UI. Its production browser
 regressions run with `cd setup && npm run build && npm run test:browser` after

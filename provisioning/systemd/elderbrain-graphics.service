@@ -6,6 +6,9 @@ Requires=elderbrain-stack.service elderbrain-baseline.service
 After=elderbrain-baseline.service
 Requires=elderbrain-display-watchdog.service
 After=elderbrain-display-watchdog.service
+OnFailure=elderbrain-graphics-failure.service
+StartLimitIntervalSec=120
+StartLimitBurst=3
 
 [Service]
 User=elderbrain-kiosk
@@ -19,6 +22,7 @@ Environment=XDG_RUNTIME_DIR=/run/elderbrain-kiosk
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 ExecStartPre=/opt/mindflayer-elderbrain/wait-ready
 ExecStartPre=+/usr/bin/python3 /opt/mindflayer-elderbrain/prepare-browser.py
+ExecStartPre=+/usr/bin/plymouth quit --retain-splash
 ExecStart=/usr/bin/sway --config /run/elderbrain-browser/sway.conf
 Restart=always
 RestartSec=2

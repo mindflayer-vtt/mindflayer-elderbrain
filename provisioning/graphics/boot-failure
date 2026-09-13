@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+[[ ${1:-} == elderbrain-graphics.service ]] || exit 2
+/usr/bin/plymouth quit || true
+/usr/bin/chvt 1 || true
+exec >/dev/tty1 2>&1
+printf '\033c'
+printf '%s\n' \
+  'Mindflayer Elderbrain could not start the graphical interface.' \
+  '' \
+  'The appliance remains available through SSH and the recovery console.' \
+  'Sign in here, then inspect:' \
+  '  systemctl status elderbrain-graphics.service' \
+  '  journalctl -b -u elderbrain-graphics.service'
+/usr/bin/systemctl status elderbrain-graphics.service --no-pager || true

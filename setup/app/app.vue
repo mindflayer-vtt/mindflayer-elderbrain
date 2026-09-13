@@ -16,7 +16,11 @@ onMounted(async () => {
 </script>
 <template>
   <UApp>
-    <UContainer v-if="!loaded" class="py-12">Loading Elderbrain…</UContainer>
+    <div v-if="!loaded" class="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-[#090b13]" role="status" aria-label="Loading Elderbrain">
+      <img src="~/assets/mindflayer.png" alt="" class="h-64 w-64 object-contain" />
+      <span class="h-8 w-8 animate-spin rounded-full border-4 border-white/25 border-t-white" aria-hidden="true" />
+      <span class="sr-only">Loading Elderbrain…</span>
+    </div>
     <UContainer v-else-if="error" class="py-12"><UAlert color="error" :title="error" /></UContainer>
     <template v-else>
       <div v-if="session.authenticated" class="flex items-center justify-between gap-3 p-4 border-b border-default">

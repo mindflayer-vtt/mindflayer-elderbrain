@@ -21,6 +21,7 @@ def bindings():
     # reject every correctly provisioned appliance as aliased during updates.
     for name in (service for service in SERVICES if service != 'elderbrain-storage'):
         result['etc/systemd/system/' + name + '.service'] = 'units/' + name + '.service'
+    result['etc/systemd/system/elderbrain-graphics-failure.service'] = 'units/elderbrain-graphics-failure.service'
     for name in STORAGE_WRITERS:
         result['etc/systemd/system/' + name + '.service.d/10-storage-required.conf'] = 'units/storage-required.conf'
     for name in ('systemd-networkd', 'NetworkManager'):

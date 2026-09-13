@@ -1,0 +1,6 @@
+[Unit]
+Description=Expose Elderbrain graphical startup failure
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mindflayer-elderbrain/boot-failure elderbrain-graphics.service

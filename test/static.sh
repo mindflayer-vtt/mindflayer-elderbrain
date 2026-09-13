@@ -18,7 +18,7 @@ while IFS= read -r -d '' source; do
     exit 1
   fi
 done < <(find "$root/appliance/lib" -maxdepth 1 -type f \( -name '*.py' -o -name 'management-server' \) -print0)
-for script in "$root/iso/build.sh" "$root/provisioning/install.sh" "$root/provisioning/graphics/browser-launcher" "$root/provisioning/graphics/wait-ready" "$root/appliance/bin/elderbrain"; do bash -n "$script"; done
+for script in "$root/iso/build.sh" "$root/provisioning/install.sh" "$root/provisioning/graphics/browser-launcher" "$root/provisioning/graphics/boot-failure" "$root/provisioning/graphics/wait-ready" "$root/appliance/bin/elderbrain"; do bash -n "$script"; done
 python3 -m py_compile "$root/provisioning/graphics/browser-session.py"
 python3 -m py_compile "$root/provisioning/graphics/prepare-browser.py" "$root/test/qemu/browser-modes.py"
 python3 -m py_compile "$root/appliance/lib/management-server"

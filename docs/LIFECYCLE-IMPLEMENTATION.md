@@ -1,7 +1,10 @@
 # Appliance lifecycle implementation
 
-The September 11 lifecycle goal is implementation work, not yet included in the
-qualified `6116339a` Ventoy image. Keep Elderbrain local and leave physical hosts on.
+The lifecycle implementation is newer than the previously qualified `6116339a`
+Ventoy image and remains local by operator request. The complete non-destructive
+suite and destructive signed-update/recovery qualification pass in a disposable
+VM. A newly built ISO still needs hosted CI and final physical acceptance before
+it should be treated as a production release.
 
 ## Delivery sequence and acceptance gates
 
@@ -35,6 +38,9 @@ qualified `6116339a` Ventoy image. Keep Elderbrain local and leave physical host
    accessible recovery console, tested transition to login without a black gap.
 
 ## Current progress
+
+This section is a chronological engineering record: later qualification entries
+supersede earlier statements that a path was still pending.
 
 `iso/storage_plan.py` implements a pure storage-plan generator with fail-closed
 selection and preserve validation. It emits a stable four-partition GPT layout:
@@ -2291,3 +2297,28 @@ receipt. Abrupt reset booted through the new generation, rewrote the receipt to
 its matching bundle, reconciled the job to `completed / recovery-finished`, and
 retained 1.0.20/sequence 20. Zero temporary selectors and zero failed units
 remained; all four appliance suites passed.
+
+## Branded boot and graphical handoff qualification
+
+The installer now selects a custom Plymouth `two-step` theme with the Mindflayer
+logo, an understated spinner and a matching dark background for boot, reboot,
+shutdown and offline-update phases. It adds `quiet splash` without suppressing
+recoverable kernel failures, rebuilds the initramfs and GRUB configuration, and
+keeps the splash visible while the bounded appliance readiness checks prepare the
+browser. The Setup application's initial client-loading state uses the same logo,
+background and spinner.
+
+Graphical startup has a bounded systemd restart policy and an `OnFailure` unit.
+After repeated failure it quits Plymouth, switches to tty1 and prints SSH/console
+recovery instructions plus the graphics unit status. Plymouth's normal Esc key
+continues to expose boot messages, and SSH is independent of the graphical unit.
+
+The exact installer configuration was applied to the Ubuntu 26.04 disposable VM.
+The selected theme resolved to
+`/usr/share/plymouth/themes/mindflayer/mindflayer.plymouth`; the running kernel's
+initramfs contained the theme, logo and spinner frames; and the boot command line
+contained `quiet splash`. Twenty sequential VNC frames across a graphical reboot
+showed the logo with changing spinner frames until Chromium displayed the
+Elderbrain login page, without a black transition frame. After boot, stack,
+management and graphics were active and `systemctl --failed` was empty. This is
+installed-VM qualification, not physical display/GPU qualification.
