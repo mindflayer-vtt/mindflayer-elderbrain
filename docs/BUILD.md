@@ -59,6 +59,13 @@ public key must not be used for deployment.
 
 The one source of truth for the server image is `MINDFLAYER_SERVER_IMAGE` in `config/defaults/appliance.env`. It currently pins server 0.4.1 with its verified immutable multi-platform manifest digest. To update it, inspect upstream release/publishing metadata, select a compatible semantic tag plus manifest digest (or `edge` plus digest only when no suitable release exists), change that one value, then run the full test suite and fresh-install QEMU test.
 
+Both Setup build stages retain the readable `node:24.16.0-alpine` tag and pin its
+OCI index digest. The reviewed index maps linux/amd64 to
+`sha256:bc23e6976e92708e9eadae437d7dd180b3fd47ed75edf322d6cfa36eba4a7fc8`;
+production release builds explicitly select linux/amd64. Dependabot monitors the
+Dockerfile, but a proposed tag or digest change still requires manifest/platform
+review and the complete Setup image tests.
+
 Before adopting a server image, pull its exact digest and run the opt-in
 published-image installation check:
 
