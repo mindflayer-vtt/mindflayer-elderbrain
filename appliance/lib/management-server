@@ -77,6 +77,16 @@ class Handler(socketserver.StreamRequestHandler):
                 result = {"ok": True, "output": json.dumps(discover())}
             elif action == "host-metrics":
                 result = {"ok": True, "output": json.dumps(METRICS.snapshot())}
+            elif action in ("foundry-admin-key", "foundry-admin-key-ensure", "foundry-admin-key-reset"):
+                from foundry_admin import access_key
+                operation = action.removeprefix("foundry-admin-key").removeprefix("-") or "status"
+                value = access_key(operation)
+                restarted = None
+                if operation == "reset":
+                    proc = subprocess.run(["/usr/local/sbin/elderbrain", "restart-foundry"], text=True,
+                                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+                    restarted = {"ok": proc.returncode == 0}
+                result = {"ok": True, "output": json.dumps({**value, **({"restarted": restarted} if restarted else {})})}
             elif action.startswith("kiosk-keyboard "):
                 from kiosk_keyboard import operate
                 parts = action.split(" ")

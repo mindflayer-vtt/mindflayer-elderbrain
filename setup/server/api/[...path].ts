@@ -3,7 +3,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import path from "node:path";
 import { Readable } from "node:stream";
 import { command, backupDownload, backupUpload } from "../utils/management";
-import { load, validate, saveFoundrySecret } from "../utils/config";
+import { load, validate, saveFoundrySecret, removeFoundryDownloadSecret } from "../utils/config";
 import { beamerStatus, saveBeamer, removeBeamer } from "../utils/beamer";
 import { updateRequest } from '../utils/update-request';
 import type { ControllerMonitor } from "../utils/controllers";
@@ -333,11 +333,26 @@ export default defineEventHandler(async (event) => {
     }
     if (route === "foundry" && method === "PUT") {
       saveFoundrySecret(secret, await body());
+      const administrator = await command(socket, "foundry-admin-key-ensure");
+      if (!administrator.ok) throw new Error("Foundry administrator access could not be prepared");
       const started = await command(socket, "start-foundry").catch((e: Error) => ({ ok: false, error: e.message }));
       return { stored: true, started };
     }
+    if (route === "foundry/admin-key" && method === "GET") {
+      const result = await command(socket, "foundry-admin-key");
+      if (!result.ok) throw new Error("Foundry administrator access is unavailable");
+      return JSON.parse(result.output || "null");
+    }
+    if (route === "foundry/admin-key" && method === "POST") {
+      const input = await body() as { confirmReset?: unknown };
+      if (!input || Array.isArray(input) || Object.keys(input).join(",") !== "confirmReset" || input.confirmReset !== true)
+        throw new Error("Confirm resetting the Foundry administrator access key");
+      const result = await command(socket, "foundry-admin-key-reset", 45000);
+      if (!result.ok) throw new Error("Foundry administrator access could not be reset");
+      return JSON.parse(result.output || "null");
+    }
     if (route === "foundry/credentials" && method === "DELETE") {
-      try { fs.unlinkSync(secret); } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; }
+      removeFoundryDownloadSecret(secret);
       return { removed: true };
     }
     if (route === "controllers" && method === "GET") return monitor.snapshot();

@@ -89,6 +89,12 @@ export function saveAtomic(file: string, value: unknown) {
 export function saveFoundrySecret(file: string, value: unknown) {
   const values = record(value);
   const secret: Record<string, string> = {};
+  try {
+    const existing = record(JSON.parse(fs.readFileSync(file, "utf8")));
+    if (typeof existing.foundry_admin_key === "string") secret.foundry_admin_key = existing.foundry_admin_key;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   if (values.releaseUrl) secret.foundry_release_url = String(values.releaseUrl);
   if (values.username) secret.foundry_username = String(values.username);
   if (values.password) secret.foundry_password = String(values.password);
@@ -100,5 +106,20 @@ export function saveFoundrySecret(file: string, value: unknown) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const temporary = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, `${JSON.stringify(secret)}\n`, { mode: 0o600 });
+  fs.renameSync(temporary, file);
+}
+
+export function removeFoundryDownloadSecret(file: string) {
+  let existing: Record<string, unknown>;
+  try { existing = record(JSON.parse(fs.readFileSync(file, "utf8"))); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  const key = existing.foundry_admin_key;
+  if (typeof key !== "string") { fs.unlinkSync(file); return; }
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify({ foundry_admin_key: key })}\n`, { mode: 0o600 });
   fs.renameSync(temporary, file);
 }

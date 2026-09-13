@@ -117,6 +117,16 @@ recovery media and SSH access available when performing the initial hardware tes
 
 The web UI stores a Foundry timed URL or account credentials in a mode-0600 Docker `config.json` secret and never reads it back. Remove it from the UI once the distribution is cached. Foundry 14.365 and its matching felddy container 14.365.0 are deliberately coordinated. Upgrades require a release change, backup, image pull, and migration review; `elderbrain update` never performs an uncontrolled update.
 
+Before a new Foundry instance starts, Elderbrain generates a separate four-word
+Foundry administrator access key and stores it in the same private configuration.
+The authenticated Foundry page can reveal that key; it is never returned to an
+unauthenticated caller or included in logs. Foundry itself stores only a one-way
+hash, so an administrator key created manually before this feature cannot be
+recovered. Use **Reset and manage access key** to replace it explicitly and
+restart Foundry. This key protects Foundry Administration and is distinct from
+the passwords assigned to Gamemaster or Player users inside a world. Removing
+download credentials retains the managed administrator key.
+
 Administration now requires HTTPS and redirects HTTP requests. First boot prepares
 a local CA and appliance certificate and installs local browser trust. Remote
 clients need to trust the appliance CA after verifying it through a trusted local

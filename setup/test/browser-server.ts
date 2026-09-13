@@ -26,6 +26,7 @@ let displayPreview = { phase: 'idle', id: '', deadline: 0 };
 let displayCandidate: unknown;
 let checkpointRetention = { enabled: false, keep: 10 };
 let powerPending = false;
+let foundryAdministrator = { managed: true, accessKey: "amber-cabin-maple-river", resetRequired: false };
 const management = net.createServer({ allowHalfOpen: true }, (socket) => {
   socket.once("data", (data) => {
     const action = data.toString().trim();
@@ -45,6 +46,14 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
         powerPending = false;
         for (const job of jobs) if (job.kind === 'power' && job.state === 'queued') job.state = 'completed';
       }
+      return;
+    }
+    if (["foundry-admin-key", "foundry-admin-key-ensure", "foundry-admin-key-reset"].includes(action)) {
+      if (action === "foundry-admin-key-reset") foundryAdministrator = {
+        managed: true, accessKey: "cedar-orbit-sunset-willow", resetRequired: false,
+      };
+      socket.end(JSON.stringify({ ok: true, output: JSON.stringify({ ...foundryAdministrator,
+        ...(action === "foundry-admin-key-reset" ? { restarted: { ok: true } } : {}) }) }) + "\n");
       return;
     }
     if (action.startsWith('network-snapshot-restore-start ')) {

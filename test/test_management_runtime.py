@@ -17,7 +17,7 @@ class ManagementRuntimeTests(unittest.TestCase):
     def test_clean_install_release_catalog_has_an_isolated_import_closure(self):
         root = Path(__file__).resolve().parents[1]
         installer = (root / 'provisioning/install.sh').read_text()
-        modules = ('appliance_release', 'release_policy', 'release_recovery_status', 'release_catalog')
+        modules = ('appliance_release', 'release_policy', 'release_recovery_status', 'release_catalog', 'foundry_admin')
         for name in modules:
             self.assertIn(f'appliance/lib/{name}.py" "$RUNTIME/{name}.py', installer)
         with tempfile.TemporaryDirectory() as directory:
@@ -67,6 +67,17 @@ class ManagementRuntimeTests(unittest.TestCase):
         self.assertTrue(send(f'power-start {len(payload)}\n'.encode() + payload)['ok'])
         jobs.submit.assert_called_once_with('power', selected)
         jobs.submit.reset_mock()
+
+        foundry_admin = types.SimpleNamespace(access_key=Mock(return_value={
+            'managed': True, 'accessKey': 'amber-cabin-maple-river', 'resetRequired': False}))
+        with patch.dict(sys.modules, {'foundry_admin': foundry_admin}), patch.object(
+                subprocess, 'run', return_value=types.SimpleNamespace(returncode=0)) as restart:
+            foundry = send(b'foundry-admin-key-reset\n')
+        self.assertTrue(foundry['ok'])
+        self.assertEqual(json.loads(foundry['output'])['accessKey'], 'amber-cabin-maple-river')
+        foundry_admin.access_key.assert_called_once_with('reset')
+        restart.assert_called_once_with(['/usr/local/sbin/elderbrain', 'restart-foundry'], text=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
 
         selected = {'usbId': 'c' * 32, 'version': '1.2.3', 'revision': 4, 'adopt': False}
         payload = json.dumps(selected).encode()

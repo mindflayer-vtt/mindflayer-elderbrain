@@ -8,6 +8,7 @@ import {
   load,
   saveAtomic,
   saveFoundrySecret,
+  removeFoundryDownloadSecret,
   validate,
 } from "../server/utils/config.ts";
 
@@ -66,4 +67,12 @@ test("Foundry credentials are mode 0600 and never need to be read by UI", () => 
     foundry_username: "u",
     foundry_password: "p",
   });
+  fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, "utf8")), foundry_admin_key: "amber-cabin-maple-river" }));
+  saveFoundrySecret(file, { releaseUrl: "https://foundry.example/release" });
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), {
+    foundry_admin_key: "amber-cabin-maple-river",
+    foundry_release_url: "https://foundry.example/release",
+  });
+  removeFoundryDownloadSecret(file);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), { foundry_admin_key: "amber-cabin-maple-river" });
 });

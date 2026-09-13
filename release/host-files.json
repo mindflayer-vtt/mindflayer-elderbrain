@@ -80,6 +80,11 @@
     "mode": 420
   },
   {
+    "source": "appliance/lib/foundry_admin.py",
+    "path": "runtime/foundry_admin.py",
+    "mode": 420
+  },
+  {
     "source": "provisioning/graphics/beamer-login.mjs",
     "path": "runtime/beamer/beamer-login.mjs",
     "mode": 420
