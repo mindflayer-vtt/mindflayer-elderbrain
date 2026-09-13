@@ -8,6 +8,7 @@ import socket
 import ssl
 import struct
 import sys
+import time
 
 # Support isolated Python startup from the independently retained recovery tree.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -23,7 +24,8 @@ from release_policy import ReleasePolicy
 from restore_service import persistent_identity
 
 
-def health(saved, state, *, management_socket=Path('/run/elderbrain/management.sock')):
+def health(saved, state, *, management_socket=Path('/run/elderbrain/management.sock'),
+           proxy_attempts=12, proxy_retry_delay=1):
     """Read-only bridge and CA-verified proxy/Setup checks; never follow redirects."""
     if 'elderbrain-management.service' in saved['hostUnits']:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
@@ -45,18 +47,26 @@ def health(saved, state, *, management_socket=Path('/run/elderbrain/management.s
                 raise ValueError('Management metrics API is unavailable')
     if 'elderbrain-setup' in saved['compose']:
         context = ssl.create_default_context(cafile=str(Path(state) / 'host/admin-ca/ca.crt'))
-        connection = http.client.HTTPSConnection('127.0.0.1', timeout=10, context=context)
-        try:
-            connection.request('GET', '/elderbrain/health', headers={'Accept': 'application/json'})
-            response = connection.getresponse()
-            body = response.read(4097)
-            if response.status != 200 or len(body) > 4096:
-                raise ValueError('Setup proxy health failed')
-            result = json.loads(body)
-            if not isinstance(result, dict) or set(result) != {'ok'} or result['ok'] is not True:
-                raise ValueError('Setup proxy health failed')
-        finally:
-            connection.close()
+        last_error = None
+        for attempt in range(proxy_attempts):
+            connection = http.client.HTTPSConnection('127.0.0.1', timeout=10, context=context)
+            try:
+                connection.request('GET', '/elderbrain/health', headers={'Accept': 'application/json'})
+                response = connection.getresponse()
+                body = response.read(4097)
+                if response.status != 200 or len(body) > 4096:
+                    raise ValueError('Setup proxy health failed')
+                result = json.loads(body)
+                if not isinstance(result, dict) or set(result) != {'ok'} or result['ok'] is not True:
+                    raise ValueError('Setup proxy health failed')
+                return
+            except (OSError, http.client.HTTPException, json.JSONDecodeError, ValueError) as error:
+                last_error = error
+            finally:
+                connection.close()
+            if attempt + 1 < proxy_attempts:
+                time.sleep(proxy_retry_delay)
+        raise ValueError('Setup proxy health failed after bounded readiness retries') from last_error
 
 
 def recover(action, *, host_root=Path('/')):

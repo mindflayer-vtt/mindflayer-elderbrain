@@ -2,11 +2,12 @@ from contextlib import ExitStack
 import io
 import json
 from pathlib import Path
+import ssl
 import struct
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'appliance/lib'))
 from release_recovery import health, recover
@@ -48,7 +49,32 @@ class RecoveryEntryTests(unittest.TestCase):
         for status, body in [(302, b'{}'), (200, b'x' * 4097), (200, b'{"ok":1}')]:
             self.response.status, self.response.read.return_value = status, body
             with self.assertRaisesRegex(ValueError, 'proxy health'):
-                health({'hostUnits': [], 'compose': ['elderbrain-setup']}, Path('/fixture/state'))
+                health({'hostUnits': [], 'compose': ['elderbrain-setup']}, Path('/fixture/state'), proxy_attempts=1)
+
+    def test_proxy_health_retries_a_transient_untrusted_default_certificate(self):
+        transient = ssl.SSLCertVerificationError(1, 'self-signed certificate')
+        first = self.https.return_value
+        second = MagicMock()
+        second_response = second.getresponse.return_value
+        second_response.status = 200
+        second_response.read.return_value = b'{"ok":true}'
+        self.https.side_effect = [first, second]
+        first.request.side_effect = transient
+        with patch('release_recovery.time.sleep') as sleep:
+            health({'hostUnits': [], 'compose': ['elderbrain-setup']}, Path('/fixture/state'),
+                   proxy_attempts=2, proxy_retry_delay=0.25)
+        sleep.assert_called_once_with(0.25)
+        first.close.assert_called_once()
+        second.close.assert_called_once()
+
+    def test_proxy_health_fails_closed_after_bounded_tls_retries(self):
+        self.https.return_value.request.side_effect = ssl.SSLCertVerificationError(1, 'self-signed certificate')
+        with patch('release_recovery.time.sleep') as sleep, \
+                self.assertRaisesRegex(ValueError, 'bounded readiness retries'):
+            health({'hostUnits': [], 'compose': ['elderbrain-setup']}, Path('/fixture/state'),
+                   proxy_attempts=3, proxy_retry_delay=0.5)
+        self.assertEqual(self.https.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
 
     def test_inactive_components_are_not_probed(self):
         health({'hostUnits': [], 'compose': []}, Path('/fixture/state'))
