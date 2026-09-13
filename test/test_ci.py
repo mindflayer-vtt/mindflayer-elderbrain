@@ -17,6 +17,17 @@ class ContinuousIntegrationTests(unittest.TestCase):
                          {"actions/checkout", "actions/setup-python", "actions/setup-node"})
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", revision) for _, revision in actions))
 
+    def test_actionlint_is_version_and_digest_pinned_for_every_workflow(self):
+        script = (ROOT / "test/actionlint.sh").read_text()
+        makefile = (ROOT / "Makefile").read_text()
+        self.assertRegex(script, r"rhysd/actionlint:1[.]7[.]10@sha256:[0-9a-f]{64}")
+        self.assertIn("find \"$root/.github/workflows\" -maxdepth 1 -type f -name '*.yml'", script)
+        self.assertIn("lint: workflow-lint", makefile)
+        self.assertIn("workflow-lint:\n\t@./test/actionlint.sh", makefile)
+        self.assertIn("actionlint-invalid-context.yml", makefile)
+        self.assertIn("INVALID_PATH: ${{ runner.temp }}", (
+            ROOT / "test/fixtures/actionlint-invalid-context.yml").read_text())
+
     def test_static_checks_preflight_required_tools_before_work(self):
         script = (ROOT / "test/static.sh").read_text()
         preflight = 'for required_tool in awk find git grep python3 rg sed wc; do'

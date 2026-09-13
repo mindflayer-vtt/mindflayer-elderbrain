@@ -1,0 +1,10 @@
+name: Invalid runtime context fixture
+on:
+  workflow_dispatch:
+jobs:
+  invalid:
+    runs-on: ubuntu-26.04
+    env:
+      INVALID_PATH: ${{ runner.temp }}/must-not-be-accepted
+    steps:
+      - run: "true"

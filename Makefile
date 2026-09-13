@@ -1,12 +1,13 @@
 SHELL := /bin/bash
 -include local.mk
 
-.PHONY: help iso test lint compose-check setup-image test-iso
+.PHONY: help iso test lint workflow-lint compose-check setup-image test-iso
 help:
 	@printf '%s\n' \
 	  'Mindflayer Elderbrain' \
 	  '  make iso APPLIANCE_VERSION=1.0.0 APPLIANCE_RELEASE_SEQUENCE=1 SSH_PUBLIC_KEY=~/.ssh/id_ed25519.pub  Build appliance ISO' \
 	  '  make test                                      Run unit/static tests' \
+	  '  make workflow-lint                              Validate all GitHub Actions workflows' \
 	  '  make compose-check                             Validate Compose configuration' \
 	  '  make setup-image                               Build setup service image' \
 	  '  make test-iso                                  Destructive QEMU test on a temporary disk' \
@@ -25,9 +26,15 @@ test:
 	@python3 -m unittest discover -s test -t . -p 'test_*.py' -q
 	@./test/static.sh
 
-lint:
+lint: workflow-lint
 	@cd setup && npm run lint
 	@./test/static.sh
+
+workflow-lint:
+	@./test/actionlint.sh
+	@if ./test/actionlint.sh test/fixtures/actionlint-invalid-context.yml >/dev/null 2>&1; then \
+	  echo 'actionlint accepted the invalid runtime-context regression fixture' >&2; exit 1; \
+	fi
 
 compose-check:
 	@docker compose --env-file config/defaults/appliance.env -f compose/compose.yaml config --quiet
