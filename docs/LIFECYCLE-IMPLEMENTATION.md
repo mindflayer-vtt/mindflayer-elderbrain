@@ -2209,3 +2209,23 @@ public job to `rolled-back / recovery-finished`. Installed runtime and anti-repl
 policy remained at the previously successful 1.0.13/sequence 13. No systemd unit
 failed, and all four runtime, storage, ready-admin HTTPS/authentication and
 physical UI suites passed.
+
+The same syscall-level watcher also qualifies the immediately adjacent boundary
+after incoming runtime installation but before any replacement service starts.
+For signed 1.0.15 job `ac6b0da87776489ba25ee68c7670ccb9`, evidence at
+`/root/elderbrain-runtime-switch-interrupt-6_a_w90c` records boot ID
+`fa841013-ebba-4474-bcf6-0bfb06dfa4df`, maintenance operation
+`5adb60acca8140f29a4100a97aed1a9b` and transaction
+`91a2b264bdfb4be4bc8277a1c1caaf5b`, both still installing. The live runtime
+reported 1.0.15, the previous tree was durable, the incoming location had been
+consumed, management and graphics were inactive, and no Compose container was
+running. The stack unit's active/exited state was its expected oneshot bookkeeping,
+not a running application.
+
+An abrupt reset changed the boot ID. Early recovery rejected the uncommitted new
+tree and restored 1.0.13 before writers started; final recovery reconciled the
+operation and job to `rolled-back / recovery-finished`. Anti-replay policy stayed
+at sequence 13, all operational units returned active, no unit failed, and all
+four appliance suites passed. This proves both sides of the runtime rename pair,
+including the case where new code is visible on disk but has never executed as a
+service.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stop one exact disposable update after its old runtime has been renamed."""
+"""Stop one exact disposable update at a selected runtime rename boundary."""
 import argparse
 import ctypes
 import fcntl
@@ -45,6 +45,7 @@ def string(pid, address):
 
 
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('boundary', choices=('old-moved', 'new-installed'))
 parser.add_argument('job')
 parser.add_argument('version')
 parser.add_argument('manifest')
@@ -131,8 +132,11 @@ while time.monotonic() < deadline:
         destination_pointer = {82: registers.rsi, 264: registers.r10, 316: registers.r10}.get(registers.orig_rax)
         if source_pointer and destination_pointer:
             source, destination = string(pid, source_pointer), string(pid, destination_pointer)
-            matched = (source == '/opt/mindflayer-elderbrain'
-                       and re.fullmatch(r'/opt/\.elderbrain-restore-[a-f0-9]{32}-mindflayer-elderbrain/previous', destination))
+            old_moved = (source == '/opt/mindflayer-elderbrain'
+                         and re.fullmatch(r'/opt/\.elderbrain-restore-[a-f0-9]{32}-mindflayer-elderbrain/previous', destination))
+            new_installed = (re.fullmatch(r'/opt/\.elderbrain-restore-[a-f0-9]{32}-mindflayer-elderbrain/incoming', source)
+                             and destination == '/opt/mindflayer-elderbrain')
+            matched = old_moved if args.boundary == 'old-moved' else new_installed
     elif matched:
         if ctypes.c_longlong(registers.rax).value != 0:
             raise RuntimeError('Old runtime rename failed')
@@ -168,15 +172,21 @@ maintenance = json.loads(Path('/var/lib/mindflayer-elderbrain/maintenance/mainte
 transaction_path = Path('/var/lib/mindflayer-elderbrain/maintenance') / ('update-' + maintenance['id'] + '.json')
 transaction = json.loads(transaction_path.read_text())
 location = Path('/opt') / ('.elderbrain-restore-' + transaction['id'] + '-mindflayer-elderbrain')
+runtime_exists = Path('/opt/mindflayer-elderbrain').is_dir()
+previous_exists = (location / 'previous').is_dir()
+incoming_exists = (location / 'incoming').is_dir()
+expected_locations = ((False, True, True) if args.boundary == 'old-moved'
+                      else (True, True, False))
 if (maintenance.get('state') != 'installing-update' or transaction.get('state') != 'installing'
-        or Path('/opt/mindflayer-elderbrain').exists() or not (location / 'previous').is_dir()
-        or not (location / 'incoming').is_dir()):
+        or (runtime_exists, previous_exists, incoming_exists) != expected_locations):
     raise RuntimeError('Interruption did not preserve the exact mid-switch boundary')
 evidence = Path(tempfile.mkdtemp(prefix='elderbrain-runtime-switch-interrupt-', dir='/root'))
 save_record(evidence / 'interruption.json', {
-    'job': job, 'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+    'job': job, 'boundary': args.boundary,
+    'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
     'maintenanceId': maintenance['id'], 'maintenanceState': maintenance['state'],
     'transactionId': transaction['id'], 'transactionState': transaction['state'],
-    'runtimeExists': False, 'previousExists': True, 'incomingExists': True,
+    'runtimeExists': runtime_exists, 'previousExists': previous_exists,
+    'incomingExists': incoming_exists,
 })
 print(evidence, flush=True)
