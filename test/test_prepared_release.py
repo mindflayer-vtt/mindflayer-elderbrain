@@ -111,6 +111,11 @@ class PreparedReleaseTests(unittest.TestCase):
         self.rewrite_receipt(value)
         with self.assertRaises(ValueError):
             self.verify()
+        value.pop('unknown')
+        value['format'] = True
+        self.rewrite_receipt(value)
+        with self.assertRaisesRegex(ValueError, 'format'):
+            self.verify()
         path.write_bytes(original)
         with self.assertRaisesRegex(ValueError, 'identity'):
             prepared.verify(self.inputs, ROOT, 'd' * 40, self.tree,

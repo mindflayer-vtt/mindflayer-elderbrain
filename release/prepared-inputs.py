@@ -91,7 +91,8 @@ def dependency_receipt(directory, source):
     regular(path, 65536)
     value = json.loads(path.read_bytes(), object_pairs_hook=unique)
     required = {'format', 'platform', 'python', 'requirements', 'files', 'inputs', 'offlineInstallVerified'}
-    if not isinstance(value, dict) or set(value) != required or value['format'] != 1:
+    if (not isinstance(value, dict) or set(value) != required
+            or type(value['format']) is not int or value['format'] != 1):
         raise ValueError('Invalid dependency build receipt schema')
     expected = dependency_input_hashes(source)
     if value['inputs'] != expected:
@@ -150,7 +151,7 @@ def read_receipt(path):
     value = json.loads(path.read_bytes(), object_pairs_hook=unique)
     keys(value, 'format sourceCommit sourceTree sourceIdentity version releaseSequence '
                 'setupImage metadataSha256 dependencyInputsSha256 preparedFiles')
-    if value['format'] != 1:
+    if type(value['format']) is not int or value['format'] != 1:
         raise ValueError('Unsupported preparation receipt format')
     pattern(value['version'], VERSION)
     number(value['releaseSequence'], 1, 2 ** 63 - 1)

@@ -24,7 +24,7 @@ def bounded(path, limit):
 def baseline(path):
     value = json.loads(bounded(path, BASELINE_LIMIT), object_pairs_hook=unique)
     keys(value, 'format version releaseSequence')
-    if value['format'] != 1:
+    if type(value['format']) is not int or value['format'] != 1:
         raise ValueError('Unsupported production baseline format')
     pattern(value['version'], VERSION)
     number(value['releaseSequence'], 1, 2 ** 63 - 1)

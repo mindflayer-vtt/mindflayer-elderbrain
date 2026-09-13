@@ -122,6 +122,7 @@ class ProductionReleaseTests(unittest.TestCase):
                 b'{"format":1,"version":"v0.1.0","releaseSequence":1}',
                 b'{"format":1,"version":"0.1.0","releaseSequence":0}',
                 b'{"format":1,"version":"0.1.0","releaseSequence":9223372036854775808}',
+                b'{"format":true,"version":"0.1.0","releaseSequence":1}',
                 b'{',
             )
             for content in invalid:
