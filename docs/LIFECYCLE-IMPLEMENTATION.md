@@ -2229,3 +2229,25 @@ at sequence 13, all operational units returned active, no unit failed, and all
 four appliance suites passed. This proves both sides of the runtime rename pair,
 including the case where new code is visible on disk but has never executed as a
 service.
+
+Checkpoint creation is now interrupted at its meaningful internal publication
+boundary. An exact job/version/digest watcher subscribes to creation events in
+the private snapshot store and kills only the matching update scope after the
+atomic read-only Btrfs capture appears but before metadata, owner pin or the outer
+maintenance record publishes its identity. Signed 1.0.16 job
+`44a8e29d57f54035a3a2720ba44cd6eb` reached that state with maintenance operation
+`2bc817e552a84246ae9f1f3ab26c9be5` still `checkpointing`. Evidence in
+`/root/elderbrain-update-checkpoint-interrupt-es9f54oo` records boot ID
+`1d666954-59b7-41c9-9ed1-cd1422babc16` and unpublished read-only subvolume
+`e5593868b9c26832700515eb1a5aee04`; no metadata, pin or `rollbackCheckpoint`
+field existed and installed runtime remained 1.0.13.
+
+After abrupt reset, recovery correctly treated the update as pre-switch and
+converged its maintenance operation and public job to `rolled-back /
+recovery-finished`. Version and anti-replay policy remained 1.0.13/sequence 13,
+all operational units returned active and no unit failed. The incomplete
+subvolume remains root-private for diagnosis, is not returned by the checkpoint
+list API and cannot participate in restore or retention as a completed record.
+All four appliance suites passed. Because a Btrfs snapshot itself is atomic, this
+capture-before-publication point is the actual durable interruption boundary for
+checkpoint creation rather than a synthetic partial-copy state.
