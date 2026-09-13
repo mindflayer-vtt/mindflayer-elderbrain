@@ -82,9 +82,21 @@ test('System update requires both confirmations and remains visible after reload
   await page.getByRole('checkbox', { name: 'Allow Foundry, Setup and display browsers to stop temporarily.' }).check();
   await button.click();
   expect(submitted).toEqual({ version: '1.2.3', manifestSha256: 'a'.repeat(64), confirmUpdate: true, confirmDowntime: true });
+  await expect(page.getByText('Update submitted. The host job continues if this page closes. Setup will reconnect after service downtime.')).toBeVisible();
   await expect(button).toBeDisabled();
   await page.reload();
   await expect(page.getByText('Update: running — downloading-host', { exact: true })).toBeVisible();
+});
+
+test('System surfaces a failed update beside the update controls', async ({ page }) => {
+  await page.route('**/api/jobs', route => route.fulfill({ json: [{
+    id: 'f'.repeat(32), kind: 'update', state: 'failed', stage: 'preparing-runtime',
+    error: 'Host operation failed. Inspect diagnostics before retrying.',
+  }] }));
+  await page.goto('/elderbrain/system');
+  await page.getByRole('button', { name: 'Check for updates' }).click();
+  await expect(page.getByText('Update failed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Host operation failed. Inspect diagnostics before retrying.', { exact: true }).first()).toBeVisible();
 });
 
 test('power API requires authentication, CSRF and exact confirmation', async ({ request, playwright, baseURL }) => {

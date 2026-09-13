@@ -9,12 +9,14 @@ const confirmDowntime = ref(false);
 const submitting = ref(false);
 const jobsAvailable = ref(false);
 const powerPending = ref(false);
-const notice = ref('');
+const updateNotice = ref('');
+const powerNotice = ref('');
 const powerAction = ref<'' | 'reboot' | 'shutdown'>('');
 const confirmPower = ref(false);
 const jobs = ref<{ id: string; kind: string; state: string; stage?: string; error?: string;
   result?: { remoteBackup?: { state: string; failurePolicy?: string }; backup?: { state: string; checkpoint?: string } } }[]>([]);
 const active = computed(() => powerPending.value || jobs.value.some(job => ['queued', 'running'].includes(job.state)));
+const latestUpdate = computed(() => jobs.value.find(job => job.kind === 'update'));
 let timer: ReturnType<typeof setInterval> | undefined;
 let refreshing = false;
 let disposed = false;
@@ -59,11 +61,11 @@ async function requestPower() {
       body: { action, confirmPower: true },
     });
     jobs.value = [job, ...jobs.value.filter(value => value.id !== job.id)];
-    notice.value = `${action === 'reboot' ? 'Reboot' : 'Shutdown'} accepted. The protected host job will continue if this page disconnects.`;
+    powerNotice.value = `${action === 'reboot' ? 'Reboot' : 'Shutdown'} accepted. The protected host job will continue if this page disconnects.`;
     cancelPower();
   } catch {
     jobsAvailable.value = false;
-    notice.value = 'Power request status is uncertain or was rejected. Wait for host status to reconnect before trying again.';
+    powerNotice.value = 'Power request status is uncertain or was rejected. Wait for host status to reconnect before trying again.';
   } finally { submitting.value = false; }
 }
 async function update() {
@@ -77,10 +79,10 @@ async function update() {
       body: { version: release.version, manifestSha256: release.manifestSha256, confirmUpdate: true, confirmDowntime: true },
     });
     jobs.value = [job, ...jobs.value.filter(value => value.id !== job.id)];
-    notice.value = 'Update submitted. The host job continues if this page closes. Setup will reconnect after service downtime.';
+    updateNotice.value = 'Update submitted. The host job continues if this page closes. Setup will reconnect after service downtime.';
   } catch {
     jobsAvailable.value = false;
-    notice.value = 'Request status uncertain or rejected. Wait for the job list to reconnect and inspect it before retrying.';
+    updateNotice.value = 'Request status uncertain or rejected. Wait for the job list to reconnect and inspect it before retrying.';
   } finally { submitting.value = false; confirmUpdate.value = false; confirmDowntime.value = false; }
 }
 onMounted(() => { void refreshReleaseStatus(); void refreshJobs(); timer = setInterval(() => void refreshJobs(), 5000); });
@@ -127,6 +129,8 @@ async function check() {
               <UCheckbox v-model="confirmUpdate" label="Download and install this signed Elderbrain release." />
               <UCheckbox v-model="confirmDowntime" label="Allow Foundry, Setup and display browsers to stop temporarily." />
               <UButton :loading="submitting" :disabled="submitting || !confirmUpdate || !confirmDowntime || !jobsAvailable || active" @click="update">Update now</UButton>
+              <UAlert v-if="latestUpdate?.state === 'failed'" color="error" title="Update failed" :description="latestUpdate.error || 'Inspect the update job below for details before retrying.'" />
+              <UAlert v-else-if="updateNotice" color="info" :title="updateNotice" />
             </template>
           </template>
         </template>
@@ -150,9 +154,9 @@ async function check() {
             <UButton variant="ghost" :disabled="submitting" @click="cancelPower">Cancel</UButton>
           </div>
         </div>
+        <UAlert v-if="powerNotice" color="info" :title="powerNotice" />
       </div>
     </UCard>
-    <UAlert v-if="notice" color="info" :title="notice" />
     <UAlert v-if="!jobsAvailable" color="warning" title="Host job status unavailable" description="Waiting to reconnect. Update and power submission stay disabled until host status is known." />
     <UAlert v-else-if="active" color="info" title="A host operation is active. Wait for it to finish before starting another operation." />
     <UCard>
