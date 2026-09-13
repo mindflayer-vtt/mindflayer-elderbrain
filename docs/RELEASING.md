@@ -16,8 +16,14 @@ Environment as the Environment secret
 Actions secret. Retain an encrypted or offline recovery copy outside the repository.
 
 Configure the Environment to require approval and restrict deployments to
-`main`. The workflow derives the public half of the supplied secret and compares
-it byte-for-byte with the committed public key before signing anything. A key
+`main`. While `@749` is the sole eligible maintainer, select that maintainer as
+the required reviewer and leave **Prevent self-review** disabled so a deliberately
+initiated release can be approved. This gate prevents accidental publication and
+requires an explicit confirmation; it is not two-person release authorization.
+Enable independent approval and prevent self-review only after a second active
+maintainer is eligible to approve releases. The workflow derives the public half
+of the supplied secret and compares it byte-for-byte with the committed public
+key before signing anything. A key
 mismatch fails the release. The workflow also queries GitHub and refuses to run
 unless at least one required reviewer and exactly the `main` branch policy are
 actually present.
@@ -37,6 +43,16 @@ networked/untrusted build preparation
         v
 fresh protected signing runner
         |
+        | receipt/schema/hash and deep archive validation
+        | host bytes == clean GITHUB_SHA checkout bytes
+        | image, tag and sequence validation
+        v
+minimal private-key manifest signing
+        |
+        | key immediately destroyed
+        v
+independent signed-release verification
+        |
         v
 signed release
 ```
@@ -49,16 +65,26 @@ Checkout credentials are not persisted, and its GitHub package credential is
 passed only to the isolated registry step and removed afterward. PEP 517 build
 isolation and downloaded upstream build dependencies remain a release-runner
 trust boundary; this preparation is not claimed to be hermetic.
+Dependency artifacts remain signed outputs of that process and are not claimed
+to be hermetically reproducible.
 
 The `sign-and-publish` job has `actions: read`, `contents: write`, and
 `packages: read`. It checks out the exact same commit without persisted Git
 credentials, verifies the artifact receipt and every transferred file, rebuilds
-the expected metadata from its own checkout, rechecks anonymous image access,
-and authenticates the current publication sequence. Only then does one step
-materialize the Environment key with mode `0600`, compare its derived public key
-with the committed key, sign, and immediately delete both transient key files.
+the expected metadata from its own checkout, deeply stages both archives with the
+normal bounded safe extractor, and maps every staged host member through the
+reviewed inventory to compare its bytes with the clean `GITHUB_SHA` checkout.
+Preparation-runner code therefore cannot establish host provenance merely by
+rewriting an internally consistent receipt. The protected job then rechecks
+anonymous image access and authenticates the current publication sequence.
+Only after all archive parsing finishes does one step materialize the Environment
+key with mode `0600`, unset the secret environment variable, compare the derived
+public key with the committed key, sign only the already-approved canonical
+manifest, and immediately delete both transient key files.
 An `always()` cleanup is retained as a fallback. No dependency builder, Docker
-build, pip download, or npm retrieval runs in the protected job.
+build, pip download, npm retrieval, archive decompression, or package parsing runs
+while the private-key file exists. After deletion, the four signed assets are
+independently and deeply verified again before publication.
 
 ## Publishing
 

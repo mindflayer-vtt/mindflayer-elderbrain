@@ -72,25 +72,36 @@ duplicate JSON keys, noncanonical metadata, wrong hashes, or a different
 The fresh `sign-and-publish` runner has `actions: read`, `contents: write`, and
 `packages: read`. Before the Environment key is exposed, it independently
 revalidates the receipt and source inputs, regenerates production metadata,
-checks both archives, repeats anonymous exact-digest Setup access and runtime
-image checks, authenticates publication sequence state, and checks tag
-availability. The private key then exists only in the signing step, is compared
-to the independently committed public key, and is deleted immediately after
-signing with an `always()` fallback. The final four assets are verified with the
-committed public key after key deletion and before publication.
+deeply stages both archives, and maps every host destination through the trusted
+`release/host-files.json` inventory to compare it byte-for-byte with the clean
+protected checkout. It then repeats anonymous exact-digest Setup access and
+runtime image checks, authenticates publication sequence state, and checks tag
+availability. Only after all prepared archive decompression and parsing has
+finished is the private key materialized. The signing helper checks and signs
+only the approved canonical `manifest.json`; it imports no archive stager or
+package tooling. The key and derived public key are deleted immediately after
+that signature operation, with an `always()` fallback. The final four assets are
+then deeply verified with the committed public key after key deletion and before
+publication.
 
 This prevents dependency build code from sharing a runner with the private key
-and keeps release contents-write authority out of the build job. It does not make
-the preparation hermetic: PEP 517 build isolation and its fetched upstream build
-inputs remain a reviewed release-runner trust boundary.
+and keeps release contents-write authority out of the build job. It also prevents
+PEP 517 or other preparation-runner code from silently substituting signed host
+source: an internally consistent replacement archive and receipt still fails the
+clean-checkout byte comparison. It does not make preparation hermetic. PEP 517
+build isolation and fetched upstream build inputs remain a preparation
+supply-chain boundary, and the resulting Python dependency artifacts are signed
+outputs rather than claimed reproducible builds.
 
 ## Private host package staging
 
-`release_staging.stage` verifies the signature itself, copies the compressed host
-archive into a fresh private directory, and verifies the copy's signed size/hash
-before decompression. The caller supplies an exact trusted file inventory and
-normalized modes (`0644` or `0755`). Package metadata cannot expand that inventory
-or choose live destinations. `release/host-files.json` is the reviewed repository
+`release_staging.stage` verifies the signature itself; the pre-signing path uses
+the same staging implementation with already strictly validated metadata. Both
+copy the compressed host archive into a fresh private directory and verify the
+copy's declared size/hash before decompression. The caller supplies an exact
+trusted file inventory and normalized modes (`0644` or `0755`). Package metadata
+cannot expand that inventory or choose live destinations.
+`release/host-files.json` is the reviewed repository
 inventory used by `release/build-host.py`; include generated `runtime/VERSION`
 with mode `0644` when constructing the staging allowlist.
 

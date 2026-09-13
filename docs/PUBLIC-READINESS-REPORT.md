@@ -110,10 +110,17 @@ dependency-source inputs, canonical metadata, and every transferred artifact by
 bounded size and SHA-256. The receipt hash also crosses as a job output. The
 protected runner rejects extra names, symlinks, special files, duplicate keys,
 source mismatch, metadata drift and byte changes before exposing the key. It then
-repeats anonymous Setup and runtime digest checks and sequence/tag validation.
-The key exists only for signing, is removed immediately (plus defensive
-`always()` cleanup), and the four final assets are independently verified after
-removal.
+deeply stages both archives and compares every staged host file byte-for-byte
+against the source selected by the reviewed inventory in its clean checkout.
+Tests prove that a malicious candidate with a modified host source, rebuilt host
+archive, regenerated metadata, and fully updated receipt hashes is rejected even
+though its original commit/tree claims and internal hashes are consistent. The
+runner then repeats anonymous Setup and runtime digest checks and sequence/tag
+validation. Only after all archive parsing is complete is the key materialized.
+The secret environment variable is immediately unset; the minimal helper signs
+only the canonical manifest; and the key files are immediately removed (plus
+defensive `always()` cleanup). The four final assets are independently and deeply
+verified after removal.
 
 `config/releases/production-baseline.json` records the already-installed
 `0.1.0` / sequence `1` starting point. Publication requires a sequence above the
@@ -125,15 +132,22 @@ an authenticated sequence `2`, reject `1` and `2` in that state, and exercise
 malformed baseline/latest inputs.
 
 This boundary prevents PEP 517 and other dependency build code from executing on
-the protected signing runner. Preparation still downloads and executes upstream
-build tooling and is intentionally not described as hermetic.
+the protected signing runner or silently altering signed host code. Preparation
+still downloads and executes upstream build tooling and is intentionally not
+described as hermetic. Python dependency artifacts remain signed preparation
+outputs; they are not claimed to be hermetically reproducible.
 
 ## Post-public transition
 
 Follow `PUBLIC-RELEASE-CHECKLIST.md` in order. In particular, make the repository
 public first, immediately protect `main`, require the green `test` check and
-review/CODEOWNERS gates, then protect the `appliance-release` Environment with an
-approving reviewer and a `main`-only deployment policy. Keep
+block force pushes and deletion. Pull requests may be required for CI visibility,
+but do not require approving reviews or CODEOWNER approval while `@749` is the
+only eligible maintainer; enable those gates when a second active maintainer is
+added. Keep CODEOWNERS as ownership documentation. Protect the
+`appliance-release` Environment with `@749` as reviewer, **Prevent self-review**
+disabled, and a `main`-only deployment policy. This is deliberate confirmation
+against accidental release, not two-person authorization. Keep
 `APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY` only in that Environment and establish
 anonymous GHCR visibility before approving a release.
 

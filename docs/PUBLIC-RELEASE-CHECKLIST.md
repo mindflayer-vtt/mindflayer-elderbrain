@@ -9,12 +9,17 @@ has passed. Perform the transition in this order:
 3. Make `mindflayer-vtt/mindflayer-elderbrain` public.
 4. Immediately create or enable the `main` branch ruleset.
 5. Require the green `test` status from the **CI** workflow.
-6. Require changes through a pull request with at least one approving review.
-7. Require review from CODEOWNERS for owned files.
+6. Require changes through a pull request if useful for CI visibility, but set
+   required approving reviews to zero while `@749` is the sole eligible maintainer.
+7. Keep CODEOWNERS as ownership documentation, but do not require CODEOWNER
+   approval while `@749` is the sole eligible CODEOWNER. Enable both review gates
+   after a second active maintainer becomes eligible.
 8. Disable force pushes, including for administrators/bypass actors used normally.
 9. Disable branch deletion.
 10. Open the `appliance-release` GitHub Environment settings.
-11. Require at least one approving reviewer for that Environment.
+11. Require `@749` as an approving reviewer for that Environment, and leave
+    **Prevent self-review** disabled while there is only one maintainer. This is
+    deliberate release confirmation, not independent or two-person authorization.
 12. Retain exactly one deployment branch policy: branch `main`.
 13. Add `APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY` only as an Environment secret.
 14. Run the documented public-key derivation check against
@@ -32,6 +37,11 @@ CI result. Confirm that `prepare` has exactly `contents: read` and
 `appliance-release` Environment or signing secret. Both checkouts must disable
 persisted credentials. The build job must not have release contents-write
 authority or a job-wide `GH_TOKEN`.
+
+Do not add a broad permanent ruleset bypass to compensate for an impossible
+self-review rule. The practical single-maintainer `main` ruleset requires the
+green `test` check, blocks force pushes and deletion, may require the branch to be
+up to date, and may require the pull-request path without requiring an approval.
 
 The appliance deliberately has no GitHub credential. Repository visibility and
 anonymous GHCR access are therefore release correctness requirements, not merely
