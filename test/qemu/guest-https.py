@@ -63,7 +63,12 @@ if credential:
     info = password_file.stat()
     assert info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600
 password = password_file.read_text().strip()
-assert len(password) >= 24, "Initial password is not unique-length random material"
+if credential:
+    assert 12 <= len(password) <= 256, "Test administrator password has an invalid length"
+else:
+    words = password.split('-')
+    vocabulary = json.loads(Path('/opt/mindflayer-elderbrain/bootstrap-words.json').read_text())
+    assert len(words) == 4 and all(word in vocabulary for word in words), "Initial password is not a four-word bootstrap credential"
 code, headers, body = request("/elderbrain/api/auth/login", method="POST", data={"username": "admin", "password": password})
 assert code == 200, "Bootstrap login failed"
 session = json.loads(body)
