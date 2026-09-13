@@ -41,8 +41,12 @@ failures.add_argument('--job', action='store_true')
 failures.add_argument('--download-job', type=Path, help='Reuse the explicitly identified prior disposable job signing fixture')
 failures.add_argument('--serve-download', type=Path,
                       help='Expose a signed HTTPS release using the identified disposable signing fixture without submitting it')
+parser.add_argument('--slow-download', action='store_true',
+                    help='Throttle disposable artifact responses for interruption qualification')
 args = parser.parse_args()
 download_fixture = args.download_job or args.serve_download
+if args.slow_download and not args.serve_download:
+    parser.error('--slow-download requires --serve-download')
 test_source = {'baseUrl': 'https://127.0.0.1:18443/'}
 assert os.geteuid() == 0
 assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
@@ -127,6 +131,8 @@ else:
     if not source_file.exists():
         with source_file.open('x') as stream:
             json.dump(test_source, stream)
+    if args.slow_download:
+        (evidence / 'slow-artifacts').touch(mode=0o600)
     command('systemd-run', '--unit=elderbrain-release-test', '--collect', '--property=Type=exec',
             '/usr/bin/python3', str(ROOT / 'test/qemu/https-release-server.py'), str(evidence))
     from release_catalog import check

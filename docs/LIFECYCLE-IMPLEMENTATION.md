@@ -2130,3 +2130,35 @@ its exact manifest digest remained installed, no systemd unit failed, and all fo
 runtime, storage, ready-admin HTTPS/authentication and physical UI suites passed.
 This qualifies process loss after activation commit but before job completion,
 followed by abrupt reboot and deterministic boot/job convergence.
+
+Artifact-download interruption is now VM-qualified with deterministic stage
+selection. The disposable HTTPS server can throttle only signed archive responses,
+and the guarded watcher can be armed before submission for an exact future
+version/manifest digest, avoiding a race with short download stages. Signed 1.0.8
+job `43e6ab7e3bdf495db27624749dc469c3` was killed while its durable stage was
+`downloading-host`; evidence is retained at
+`/root/elderbrain-update-stage-interrupt-p_5g03lv`. Before abrupt reset, the raw
+job remained running, the incomplete archive existed only under private
+`.download-7ez_w7ez`, and runtime/anti-replay policy remained at 1.0.7/sequence 7.
+After boot all services were healthy and no unit failed, but generic orphan
+handling called this known pre-activation outcome merely `interrupted`.
+
+Unlocked update jobs in queued, verification, artifact-download, runtime
+preparation, recovery preparation or pre-journal activation stages now resolve to
+the explicit terminal state `failed / failed-before-activation`. The public error
+states that installed release state was unchanged and requires an explicit retry;
+the UI still never resubmits an uncertain request. If an exact job/version/digest
+maintenance journal exists, the job remains `interrupted` for recovery instead of
+falsely claiming no activation began. Unit tests cover each pre-activation stage
+and the correlated-maintenance exception.
+
+The fix was installed through signed 1.0.9/sequence 9 (manifest
+`fa9552d2ca4dc42636f130d938ca709e867c805bd1ee100342da075e0e91ed19`).
+A pre-armed watcher then killed signed 1.0.10 job
+`f4e9d56b37534aca9b578e8c0b5e34d7` at the same throttled `downloading-host`
+stage; evidence is `/root/elderbrain-update-stage-interrupt-dycm1vrk`. Runtime and
+policy were still 1.0.9/sequence 9 before reset. After an abrupt reset, a fresh
+authenticated HTTPS client observed `failed / failed-before-activation`, the
+installed version and sequence remained unchanged, and no systemd unit failed.
+Partial bytes remain private, unreferenced and are never treated as a prepared
+release; a later explicit attempt uses a new exclusive temporary directory.

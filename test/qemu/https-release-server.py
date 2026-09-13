@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import ssl
 import sys
+import time
 
 root = Path(sys.argv[1]).resolve()
 assert Path('/sys/class/dmi/id/product_name').read_text().startswith('Standard PC')
@@ -18,7 +19,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Length', str((root / 'bundle' / self.path[1:]).stat().st_size))
             self.end_headers()
-            shutil.copyfileobj(data, self.wfile)
+            if (root / 'slow-artifacts').is_file() and self.path.endswith('.tar.zst'):
+                while chunk := data.read(4096):
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                    time.sleep(0.01)
+            else:
+                shutil.copyfileobj(data, self.wfile)
 
 
 server = http.server.ThreadingHTTPServer(('127.0.0.1', 18443), Handler)

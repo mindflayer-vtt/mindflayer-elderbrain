@@ -18,6 +18,8 @@ from backup_uploads import UploadStore
 COMMANDS = {"backup": ["backup"], "backup-recover": ["backup-recover"],
             "restore-recover": ["restore-recover"], "restore-preview": ["backup-preview"], "restore": ["restore"]}
 ACTIVE = {"queued", "running"}
+PRE_ACTIVATION = {None, 'verifying-release', 'downloading-host', 'downloading-dependencies',
+                  'preparing-runtime', 'preparing-recovery', 'activating'}
 COMMANDS.update({kind: [kind] for kind in ("borg-init", "borg-test", "borg-list", "borg-backup", "borg-fetch", "borg-recovery-kit")})
 COMMANDS["backup-encrypted"] = ["backup-encrypted"]
 COMMANDS["restore-preview-encrypted"] = []
@@ -54,6 +56,16 @@ def _completed_power(record, power):
     return {'state': 'requested', 'action': power['action'], 'backup': dict(backup)}
 
 
+def _has_update_maintenance(record, maintenance):
+    """Prove this update reached the recovery-owned transaction journal."""
+    selected = record.get('request')
+    return (isinstance(maintenance, dict) and isinstance(selected, dict)
+            and maintenance.get('operation') == 'update'
+            and maintenance.get('jobId') == record.get('id')
+            and maintenance.get('version') == selected.get('version')
+            and maintenance.get('manifestSha256') == selected.get('manifestSha256'))
+
+
 class JobStore:
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -86,6 +98,19 @@ class JobStore:
                             pass
                     if result is not None:
                         record.update(state='completed', stage='power-requested', finishedAt=time.time(), result=result)
+                    elif record.get('kind') == 'update' and record.get('stage') in PRE_ACTIVATION:
+                        maintenance_path = self.directory.parent / 'maintenance/maintenance.json'
+                        try:
+                            maintenance = json.loads(maintenance_path.read_text())
+                        except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+                            maintenance = None
+                        if not _has_update_maintenance(record, maintenance):
+                            record.update(state='failed', stage='failed-before-activation', finishedAt=time.time(),
+                                          error='Update worker stopped before activation. The installed release was not changed; check the source and retry explicitly.')
+                            save_record(path, record)
+                            return record
+                        record.update(state='interrupted', finishedAt=time.time(),
+                                      error='Worker stopped during activation. Boot recovery must resolve the matching maintenance transaction.')
                     else:
                         record.update(state="interrupted", finishedAt=time.time(),
                                       error="Worker stopped before completion. Inspect maintenance state and run the matching recovery operation.")

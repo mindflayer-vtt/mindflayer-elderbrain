@@ -144,6 +144,40 @@ class JobTests(unittest.TestCase):
         self.assertIn('private diagnostic fixture', path.with_suffix('.stderr').read_text())
         self.assertEqual(path.with_suffix('.stderr').stat().st_mode & 0o777, 0o600)
 
+    def test_unlocked_pre_activation_update_has_a_clear_terminal_result(self):
+        root = Path(self.temp.name)
+        self.store = JobStore(root / 'jobs')
+        request = {'version': '1.2.3', 'manifestSha256': 'b' * 64,
+                   'confirmUpdate': True, 'confirmDowntime': True}
+        for stage in (None, 'verifying-release', 'downloading-host', 'downloading-dependencies',
+                      'preparing-runtime', 'preparing-recovery', 'activating'):
+            fd = self.queued()
+            save_record(self.store.path(self.identity), {'id': self.identity, 'kind': 'update',
+                        'state': 'running', 'stage': stage, 'createdAt': 1, 'request': request})
+            os.close(fd)
+            saved = self.store.read(self.identity)
+            self.assertEqual(saved['state'], 'failed')
+            self.assertEqual(saved['stage'], 'failed-before-activation')
+            self.assertIn('installed release was not changed', saved['error'])
+
+    def test_matching_update_maintenance_preserves_recovery_required_result(self):
+        root = Path(self.temp.name)
+        self.store = JobStore(root / 'jobs')
+        fd = self.queued()
+        request = {'version': '1.2.3', 'manifestSha256': 'b' * 64,
+                   'confirmUpdate': True, 'confirmDowntime': True}
+        save_record(self.store.path(self.identity), {'id': self.identity, 'kind': 'update',
+                    'state': 'running', 'stage': 'activating', 'createdAt': 1, 'request': request})
+        maintenance = root / 'maintenance'
+        maintenance.mkdir()
+        save_record(maintenance / 'maintenance.json', {'operation': 'update', 'jobId': self.identity,
+                    'version': request['version'], 'manifestSha256': request['manifestSha256'],
+                    'state': 'checkpointing'})
+        os.close(fd)
+        saved = self.store.read(self.identity)
+        self.assertEqual(saved['state'], 'interrupted')
+        self.assertEqual(saved['stage'], 'activating')
+
     def test_network_restore_admission_requires_consent_and_digest(self):
         valid = {'checkpoint': 'b' * 32, 'interface': 'ens3', 'confirmationDigest': 'a' * 64,
                  'confirmRestore': True, 'confirmDowntime': True}
