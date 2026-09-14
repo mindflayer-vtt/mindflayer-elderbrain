@@ -18,3 +18,11 @@ authorizes an unattended installation. See [build](docs/BUILD.md),
 [administration](docs/ADMIN.md).
 
 The appliance exposes SSH on 22, Traefik web access on 80/443, and the intentionally LAN-facing keypad protocol on 10443. See [testing](docs/TESTING.md); documentation does not claim unperformed hardware validation.
+
+## About the installation ISO
+
+This project does **not** distribute a prebuilt Elderbrain installation ISO.
+
+The ISO is created by _modifying_ an official Ubuntu Server installer image. While the build tooling is provided here, redistributing a _modified Ubuntu image_ is subject to Canonical's licensing and trademark policies.
+
+To avoid redistributing Canonical's installer media, users build the Elderbrain ISO locally from an official Ubuntu Server ISO using the scripts in this repository.
