@@ -36,7 +36,10 @@ CI result. Confirm that `prepare` has exactly `contents: read` and
 `contents: write`, and `packages: read`; only the latter may use the
 `appliance-release` Environment or signing secret. Both checkouts must disable
 persisted credentials. The build job must not have release contents-write
-authority or a job-wide `GH_TOKEN`.
+authority or a job-wide `GH_TOKEN`. The protected job must query the normal
+`.github/workflows/ci.yml` identity and require its `test` job to have succeeded
+for the exact `GITHUB_SHA` before the signing-secret step. Dispatching while CI
+is unfinished must fail before signing and be retried after CI is green.
 
 Do not add a broad permanent ruleset bypass to compensate for an impossible
 self-review rule. The practical single-maintainer `main` ruleset requires the

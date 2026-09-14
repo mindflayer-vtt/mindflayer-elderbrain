@@ -76,7 +76,11 @@ deeply stages both archives, and maps every host destination through the trusted
 `release/host-files.json` inventory to compare it byte-for-byte with the clean
 protected checkout. It then repeats anonymous exact-digest Setup access and
 runtime image checks, authenticates publication sequence state, and checks tag
-availability. Only after all prepared archive decompression and parsing has
+availability. Finally, it requires the newest normal `push` CI run for the exact
+`GITHUB_SHA` and its `test` job to be completed with conclusion `success`. This
+uses only the existing `actions: read` permission and a step-local
+`github.token`; it fails rather than waiting when CI is absent or non-successful.
+Only after that gate and all prepared archive decompression and parsing have
 finished is the private key materialized. The signing helper checks and signs
 only the approved canonical `manifest.json`; it imports no archive stager or
 package tooling. The key and derived public key are deleted immediately after
@@ -112,6 +116,15 @@ must retain that mapping: new behavior must fit an already trusted component, or
 ship through new installation media with an explicitly designed inventory
 migration. Never add a destination to an online release and expect an older
 appliance to trust it merely because the new manifest is signed.
+
+The compatibility verifier independently hard-codes that already-installed
+baseline as 119 paths with mapping SHA-256
+`23f0d02a83d199de8bf707752d9473dc5b2d3b2f1b1ea529d78d69c026264f2c`.
+It checks both the human-readable metadata and the current target mapping against
+those constants before signing. The digest is not ordinary mutable release
+metadata: editing both JSON files together still fails. Changing this boundary
+requires an explicit installed-appliance inventory migration design, not a test
+fixture update, version bump, sequence bump, or normal online release.
 
 Packages contain regular file entries only, without directory entries, links,
 special files, sparse/PAX metadata or privileged mode bits. Paths must be canonical

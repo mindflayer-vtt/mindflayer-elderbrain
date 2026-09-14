@@ -47,6 +47,7 @@ fresh protected signing runner
         | receipt/schema/hash and deep archive validation
         | host bytes == clean GITHUB_SHA checkout bytes
         | image, tag and sequence validation
+        | exact GITHUB_SHA has successful CI / test
         v
 minimal private-key manifest signing
         |
@@ -77,7 +78,11 @@ normal bounded safe extractor, and maps every staged host member through the
 reviewed inventory to compare its bytes with the clean `GITHUB_SHA` checkout.
 Preparation-runner code therefore cannot establish host provenance merely by
 rewriting an internally consistent receipt. The protected job then rechecks
-anonymous image access and authenticates the current publication sequence.
+anonymous image access and authenticates the current publication sequence. It
+queries the normal `.github/workflows/ci.yml` workflow using its existing
+step-local `github.token` and requires the newest `push` run for the exact
+`GITHUB_SHA`, including its `test` job, to be completed successfully. An older
+successful run cannot hide a newer failed rerun for the same commit.
 Only after all archive parsing finishes does one step materialize the Environment
 key with mode `0600`, unset the secret environment variable, compare the derived
 public key with the committed key, sign only the already-approved canonical
@@ -94,6 +99,13 @@ Run **Actions → Appliance release → Run workflow** from `main`, supplying:
 - a previously unused stable semantic `version`;
 - a `release_sequence` greater than every published release; and
 - plain-text end-user release notes.
+
+The workflow remains manually dispatched. Wait for normal **CI / test** on the
+selected `main` commit to pass before dispatching. Dispatching earlier is safe:
+queued, in-progress, skipped, cancelled, failed, timed-out, neutral, or
+action-required CI fails the protected job before the signing key is
+materialized. Rerun the release after CI becomes green; the release job does not
+wait indefinitely for CI.
 
 After Environment approval, the workflow validates that the repository is public,
 builds and pushes the amd64 Setup image, and proves that exact image digest is
