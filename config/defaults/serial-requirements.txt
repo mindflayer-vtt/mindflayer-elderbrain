@@ -13,4 +13,4 @@ pyserial==3.5
 PyYAML==6.0.3
 reedsolo==1.7.0
 six==1.17.0
-tibs==0.5.7
+tibs==2.0.1
