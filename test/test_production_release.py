@@ -20,13 +20,13 @@ spec = importlib.util.spec_from_file_location(
 sequence = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sequence)
 spec = importlib.util.spec_from_file_location(
-    'build_host', ROOT / 'release/build-host.py')
-host = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(host)
-spec = importlib.util.spec_from_file_location(
     'verify_ci', ROOT / 'release/verify-ci.py')
 ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
+spec = importlib.util.spec_from_file_location(
+    'verify_host_inventory', ROOT / 'release/verify-host-inventory.py')
+production_inventory = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(production_inventory)
 
 
 class ProductionReleaseTests(unittest.TestCase):
@@ -95,17 +95,45 @@ class ProductionReleaseTests(unittest.TestCase):
                 sequence.require_new(configured, version, 2)
 
     def test_host_targets_remain_compatible_with_installed_production_baseline(self):
-        baseline = json.loads((
-            ROOT / 'config/releases/production-host-inventory.json').read_text())
-        self.assertEqual(set(baseline), {'format', 'files', 'sha256'})
-        self.assertEqual(baseline['format'], 1)
-        paths = {entry['path']: entry['mode'] for entry in host.entries(
-            ROOT / 'release/host-files.json')}
-        paths['runtime/VERSION'] = 0o644
-        encoded = json.dumps(
-            paths, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
-        self.assertEqual(len(paths), baseline['files'])
-        self.assertEqual(hashlib.sha256(encoded).hexdigest(), baseline['sha256'])
+        accepted = production_inventory.require_baseline(
+            ROOT / 'config/releases/production-host-inventory.json',
+            ROOT / 'release/host-files.json')
+        self.assertEqual(accepted, {
+            'format': 1,
+            'files': 119,
+            'sha256': '23f0d02a83d199de8bf707752d9473dc5b2d3b2f1b1ea529d78d69c026264f2c',
+        })
+
+    def test_host_inventory_mutations_cannot_redefine_installed_baseline(self):
+        original = json.loads((ROOT / 'release/host-files.json').read_text())
+        mutations = {}
+        mutations['added destination'] = original + [{
+            'source': 'runtime/new-release-target.py',
+            'path': 'runtime/new-release-target.py', 'mode': 0o644}]
+        mutations['removed destination'] = original[:-1]
+        changed_path = [dict(entry) for entry in original]
+        changed_path[0]['path'] += '-changed'
+        mutations['changed destination'] = changed_path
+        changed_mode = [dict(entry) for entry in original]
+        changed_mode[0]['mode'] = 0o755 if changed_mode[0]['mode'] == 0o644 else 0o644
+        mutations['changed mode'] = changed_mode
+        with tempfile.TemporaryDirectory() as directory:
+            inventory = Path(directory) / 'host-files.json'
+            metadata = ROOT / 'config/releases/production-host-inventory.json'
+            for label, altered in mutations.items():
+                inventory.write_text(json.dumps(altered))
+                with self.subTest(label=label), self.assertRaises(ValueError):
+                    production_inventory.require_baseline(metadata, inventory)
+
+    def test_altered_mapping_and_matching_metadata_still_fail_fixed_baseline(self):
+        altered = json.loads((ROOT / 'release/host-files.json').read_text())[:-1]
+        with tempfile.TemporaryDirectory() as directory:
+            inventory = Path(directory) / 'host-files.json'
+            metadata = Path(directory) / 'production-host-inventory.json'
+            inventory.write_text(json.dumps(altered))
+            metadata.write_text(json.dumps(production_inventory.identity(inventory)))
+            with self.assertRaisesRegex(ValueError, 'metadata differs'):
+                production_inventory.require_baseline(metadata, inventory)
 
     def test_authenticated_latest_release_and_baseline_form_maximum_floor(self):
         configured = {'format': 1, 'version': '0.1.0', 'releaseSequence': 1}
@@ -280,6 +308,7 @@ class ProductionReleaseTests(unittest.TestCase):
         deep_step = signing['steps'][deep]['run']
         self.assertIn("git diff --quiet", deep_step)
         self.assertIn("HEAD^{tree}", deep_step)
+        self.assertIn('release/verify-host-inventory.py', deep_step)
         helper = (ROOT / 'release/sign-manifest.py').read_text()
         for forbidden in ('release_staging', 'stage(', 'tarfile', 'zstd', 'prepared-inputs'):
             self.assertNotIn(forbidden, helper)
