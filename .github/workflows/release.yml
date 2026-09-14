@@ -290,6 +290,12 @@ jobs:
             --public-key config/releases/appliance-release-public.pem \
             --version "$VERSION" --proposed "$RELEASE_SEQUENCE" \
             "${sequence_args[@]}"
+      - name: Require successful CI for release commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 release/verify-ci.py \
+            --repository "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA"
       - name: Materialize key, sign approved manifest, and immediately erase key
         env:
           APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY }}

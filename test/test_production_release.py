@@ -23,6 +23,10 @@ spec = importlib.util.spec_from_file_location(
     'build_host', ROOT / 'release/build-host.py')
 host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
+spec = importlib.util.spec_from_file_location(
+    'verify_ci', ROOT / 'release/verify-ci.py')
+ci = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ci)
 
 
 class ProductionReleaseTests(unittest.TestCase):
@@ -147,6 +151,68 @@ class ProductionReleaseTests(unittest.TestCase):
                 with self.subTest(content=content), self.assertRaises((ValueError, json.JSONDecodeError)):
                     sequence.baseline(path)
 
+    @staticmethod
+    def ci_run(sha='a' * 40, status='completed', conclusion='success', run_id=20,
+               run_number=10, run_attempt=1, event='push', path='.github/workflows/ci.yml'):
+        return {'id': run_id, 'run_number': run_number, 'run_attempt': run_attempt,
+                'head_sha': sha, 'event': event, 'path': path,
+                'status': status, 'conclusion': conclusion}
+
+    @staticmethod
+    def ci_jobs(status='completed', conclusion='success'):
+        return {'jobs': [{'name': 'test', 'status': status, 'conclusion': conclusion}]}
+
+    def test_exact_sha_completed_successful_normal_ci_is_accepted(self):
+        sha = 'a' * 40
+        self.assertEqual(ci.require_success(
+            {'workflow_runs': [self.ci_run(sha=sha)]}, self.ci_jobs(), sha), 20)
+
+    def test_non_successful_or_inexact_ci_is_rejected(self):
+        sha = 'a' * 40
+        cases = (
+            ('wrong sha', {'workflow_runs': [self.ci_run(sha='b' * 40)]}, self.ci_jobs()),
+            ('no runs', {'workflow_runs': []}, self.ci_jobs()),
+            ('queued', {'workflow_runs': [self.ci_run(
+                sha=sha, status='queued', conclusion=None)]}, self.ci_jobs()),
+            ('in progress', {'workflow_runs': [self.ci_run(
+                sha=sha, status='in_progress', conclusion=None)]}, self.ci_jobs()),
+        )
+        for label, runs, jobs in cases:
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                ci.require_success(runs, jobs, sha)
+        for conclusion in ('failure', 'cancelled', 'timed_out', 'action_required',
+                           'neutral', 'skipped'):
+            with self.subTest(conclusion=conclusion), self.assertRaises(ValueError):
+                ci.require_success({'workflow_runs': [self.ci_run(
+                    sha=sha, conclusion=conclusion)]}, self.ci_jobs(), sha)
+
+    def test_expected_ci_job_must_be_completed_and_successful(self):
+        sha = 'a' * 40
+        runs = {'workflow_runs': [self.ci_run(sha=sha)]}
+        for status, conclusion in (('queued', None), ('in_progress', None),
+                                   ('completed', 'failure'), ('completed', 'skipped')):
+            with self.subTest(status=status, conclusion=conclusion), self.assertRaises(ValueError):
+                ci.require_success(runs, self.ci_jobs(status, conclusion), sha)
+        with self.assertRaises(ValueError):
+            ci.require_success(runs, {'jobs': []}, sha)
+
+    def test_newest_exact_sha_ci_run_controls_release_eligibility(self):
+        sha = 'a' * 40
+        old_success = self.ci_run(sha=sha, run_id=20, run_number=10)
+        new_failure = self.ci_run(
+            sha=sha, run_id=21, run_number=11, conclusion='failure')
+        with self.assertRaises(ValueError):
+            ci.require_success(
+                {'workflow_runs': [old_success, new_failure]}, self.ci_jobs(), sha)
+
+    def test_ci_identity_requires_normal_push_workflow(self):
+        sha = 'a' * 40
+        for event, path in (('pull_request', '.github/workflows/ci.yml'),
+                            ('push', '.github/workflows/release.yml')):
+            with self.subTest(event=event, path=path), self.assertRaises(ValueError):
+                ci.require_success({'workflow_runs': [self.ci_run(
+                    sha=sha, event=event, path=path)]}, self.ci_jobs(), sha)
+
     def test_release_workflow_is_manual_and_has_separate_authority_domains(self):
         raw = (ROOT / '.github/workflows/release.yml').read_text()
         workflow = yaml.load(raw, Loader=yaml.BaseLoader)
@@ -186,6 +252,8 @@ class ProductionReleaseTests(unittest.TestCase):
         self.assertLess(step_names.index('Reverify Setup image anonymously by exact digest'), materialize)
         self.assertLess(step_names.index('Require available tag and authenticated sequence advance'),
                         materialize)
+        ci_gate = step_names.index('Require successful CI for release commit')
+        self.assertLess(ci_gate, materialize)
         self.assertLess(materialize, step_names.index('Verify signed release after key removal'))
         self.assertLess(step_names.index('Verify signed release after key removal'),
                         step_names.index('Publish complete release atomically'))
@@ -201,6 +269,14 @@ class ProductionReleaseTests(unittest.TestCase):
         self.assertLess(sign_call, cleanup_call)
         for forbidden in ('zstd', 'tar ', 'verify-artifacts.py', 'verify-prepared-release.py'):
             self.assertNotIn(forbidden, sign_step['run'])
+        ci_step = signing['steps'][ci_gate]
+        self.assertEqual(ci_step['env'], {'GITHUB_TOKEN': '${{ github.token }}'})
+        self.assertNotIn('APPLIANCE_RELEASE_SIGNING_PRIVATE_KEY', json.dumps(ci_step))
+        self.assertIn('release/verify-ci.py', ci_step['run'])
+        self.assertIn('--sha "$GITHUB_SHA"', ci_step['run'])
+        ci_helper = (ROOT / 'release/verify-ci.py').read_text()
+        self.assertIn("WORKFLOW_PATH = '.github/workflows/ci.yml'", ci_helper)
+        self.assertIn("run.get('conclusion') != 'success'", ci_helper)
         deep_step = signing['steps'][deep]['run']
         self.assertIn("git diff --quiet", deep_step)
         self.assertIn("HEAD^{tree}", deep_step)
