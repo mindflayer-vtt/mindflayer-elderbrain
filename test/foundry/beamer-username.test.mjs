@@ -18,7 +18,7 @@ function pageFor(users) {
       click: async () => { game.user = users.find(user => user.id === chosen); } }),
     waitForFunction: async () => {},
     evaluate: async (fn, args) => {
-      globalThis.game = game; globalThis.CONST = { USER_ROLES: { PLAYER: 1 }, USER_PERMISSIONS: {} };
+      globalThis.game = game; globalThis.CONST = { USER_ROLES: { PLAYER: 1, TRUSTED: 2 }, USER_PERMISSIONS: {} };
       try { return fn(args); } finally { delete globalThis.game; delete globalThis.CONST; }
     } };
 }
@@ -31,8 +31,16 @@ test('username resolves to the exact player ID before submission and verificatio
   assert.equal(result.userId, player.id);
   assert.equal(page.chosen(), player.id);
 });
+test('a Trusted Player is accepted as the Beamer user', async () => {
+  const trusted = { ...player, role: 2 };
+  const page = pageFor([trusted]);
+  const result = await loginBeamer(page, config);
+  assert.equal(result.state, 'ready');
+  assert.equal(result.userId, trusted.id);
+});
 test('missing, ambiguous and privileged names never submit a password', async () => {
-  for (const users of [[], [{ ...player, name: 'beamer' }], [player, { ...player, id: 'OtherId0123456789' }], [{ ...player, isGM: true }]]) {
+  for (const users of [[], [{ ...player, name: 'beamer' }], [player, { ...player, id: 'OtherId0123456789' }],
+    [{ ...player, role: 3 }], [{ ...player, isGM: true }]]) {
     const page = pageFor(users);
     assert.notEqual((await loginBeamer(page, config)).state, 'ready');
     assert.equal(page.submitted(), false);

@@ -33,7 +33,7 @@ PLAYER_MESSAGES = {
     'review-required': ('Beamer configuration needs review',
                         'Ask an administrator to review the Beamer user and permissions in Elderbrain Setup.'),
     'role-review-required': ('Beamer role needs review',
-                             'Set the Foundry Beamer user role to Player, then save its credentials again.'),
+                             'Set the Foundry Beamer user role to Player or Trusted Player, then save its credentials again.'),
     'permission-review-required': ('Beamer permissions need review',
                                    'Remove all additional Foundry permissions from the Beamer user role.'),
     'module-review-required': ('Mindflayer Beamer setup needs review',

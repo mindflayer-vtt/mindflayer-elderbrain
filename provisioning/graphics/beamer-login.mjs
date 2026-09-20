@@ -37,7 +37,9 @@ export async function loginBeamer(page, { origin, worldId, userId, username, pas
       if (matches && matches.length !== 1) return { state: 'pairing-required' };
       const user = matches ? matches[0] : game.users?.get(userId);
       if (!user) return { state: 'pairing-required' };
-      if (user.isGM || user.role !== CONST.USER_ROLES.PLAYER) return { state: 'role-review-required' };
+      if (user.isGM || ![CONST.USER_ROLES.PLAYER, CONST.USER_ROLES.TRUSTED].includes(user.role)) {
+        return { state: 'role-review-required' };
+      }
       return { state: 'join', name: user.name, userId: user.id };
     }, { worldId, userId, username });
     if (before.state !== 'join') return { state: before.state };
@@ -51,8 +53,11 @@ export async function loginBeamer(page, { origin, worldId, userId, username, pas
     await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout });
     const result = await page.evaluate(({ worldId, userId }) => {
       if (game.world?.id !== worldId || game.user?.id !== userId) return { state: 'pairing-required' };
-      if (game.user.isGM || game.user.role !== CONST.USER_ROLES.PLAYER) return { state: 'role-review-required' };
-      if (Object.keys(CONST.USER_PERMISSIONS).some(key => game.user.can(key))) return { state: 'permission-review-required' };
+      if (game.user.isGM || ![CONST.USER_ROLES.PLAYER, CONST.USER_ROLES.TRUSTED].includes(game.user.role)) {
+        return { state: 'role-review-required' };
+      }
+      if (game.user.role === CONST.USER_ROLES.PLAYER
+        && Object.keys(CONST.USER_PERMISSIONS).some(key => game.user.can(key))) return { state: 'permission-review-required' };
       const module = game.modules.get('mindflayer-token-controller');
       const service = module?.instance?.modules.BeamerUsers;
       if (!module?.active || !service?.loaded) return { state: 'module-unavailable' };

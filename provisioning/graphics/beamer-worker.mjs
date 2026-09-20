@@ -32,8 +32,11 @@ export async function runBeamer(chromium, config, publish, signal) {
         const state = await page.evaluate(({ worldId, userId }) => {
           if (!globalThis.game?.ready || !game.socket?.connected || game.world?.id !== worldId) return 'world-not-running';
           if (game.user?.id !== userId) return 'pairing-required';
-          if (game.user.isGM || game.user.role !== CONST.USER_ROLES.PLAYER) return 'role-review-required';
-          if (Object.keys(CONST.USER_PERMISSIONS).some(key => game.user.can(key))) return 'permission-review-required';
+          if (game.user.isGM || ![CONST.USER_ROLES.PLAYER, CONST.USER_ROLES.TRUSTED].includes(game.user.role)) {
+            return 'role-review-required';
+          }
+          if (game.user.role === CONST.USER_ROLES.PLAYER
+            && Object.keys(CONST.USER_PERMISSIONS).some(key => game.user.can(key))) return 'permission-review-required';
           const service = game.modules.get('mindflayer-token-controller')?.instance?.modules.BeamerUsers;
           if (!service?.loaded) return 'module-unavailable';
           if (service.selectedId !== userId) return 'pairing-required';
