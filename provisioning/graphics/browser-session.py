@@ -17,21 +17,41 @@ CONFIG = Path('/run/elderbrain-browser/config.json')
 BEAMER = Path('/run/elderbrain-browser/beamer.json')
 STATES = {'ready', 'unavailable', 'world-not-running', 'module-unavailable', 'pairing-required',
           'review-required', 'unsupported-version', 'origin-mismatch', 'login-failed', 'canvas-unavailable', 'stopped'}
-PAIRING_PAGE = '''<!doctype html>
+PLAYER_MESSAGES = {
+    'pairing-required': ('Player display setup required',
+                         'Ask an administrator to configure the Beamer credentials in Elderbrain Setup under Displays.'),
+    'world-not-running': ('No Foundry world is running',
+                          'Ask an administrator to launch the configured Foundry world. This display will connect automatically.'),
+    'module-unavailable': ('Mindflayer module unavailable',
+                           'Ask an administrator to enable the Mindflayer module in the configured Foundry world.'),
+    'review-required': ('Beamer configuration needs review',
+                        'Ask an administrator to review the Beamer user and permissions in Elderbrain Setup.'),
+    'unsupported-version': ('Mindflayer module update required',
+                            'Ask an administrator to install a compatible Mindflayer module version.'),
+    'origin-mismatch': ('Foundry address mismatch',
+                        'Ask an administrator to review the Foundry address and Beamer configuration.'),
+    'login-failed': ('Beamer login failed',
+                     'Ask an administrator to verify the Beamer username and password.'),
+    'canvas-unavailable': ('No player scene is available',
+                           'Ask the game master to activate a scene for players.'),
+    'unavailable': ('Player display unavailable',
+                    'Ask an administrator to check Foundry. This display will retry automatically.'),
+}
+PLAYER_PAGE = '''<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Player display setup required</title>
+<title>{title}</title>
 <style>
-  :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #090b13; color: #f8fafc; }
-  main { max-width: 44rem; padding: 3rem; text-align: center; }
-  h1 { margin: 0 0 1rem; font-size: clamp(2rem, 5vw, 4rem); }
-  p { margin: 0; color: #cbd5e1; font-size: clamp(1.1rem, 2.5vw, 1.75rem); line-height: 1.5; }
+  :root {{ color-scheme: dark; font-family: system-ui, sans-serif; }}
+  body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: #090b13; color: #f8fafc; }}
+  main {{ max-width: 44rem; padding: 3rem; text-align: center; }}
+  h1 {{ margin: 0 0 1rem; font-size: clamp(2rem, 5vw, 4rem); }}
+  p {{ margin: 0; color: #cbd5e1; font-size: clamp(1.1rem, 2.5vw, 1.75rem); line-height: 1.5; }}
 </style>
 <main>
-  <h1>Player display setup required</h1>
-  <p>Ask an administrator to configure the Beamer credentials in Elderbrain Setup under Displays.</p>
+  <h1>{title}</h1>
+  <p>{message}</p>
 </main>
 </html>
 '''
@@ -144,19 +164,22 @@ def browser_args(browser, view):
             *(['--kiosk'] if view['mode'] == 'player' else ['--new-window']), *view['urls']]
 
 
-def pairing_page(directory):
-    path = directory / 'beamer-pairing-required.html'
+def player_status_page(directory, index, state):
+    if index not in (0, 1) or state not in PLAYER_MESSAGES:
+        raise ValueError('Invalid player display state')
+    title, message = PLAYER_MESSAGES[state]
+    path = directory / f'beamer-status-{index}.html'
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w') as stream:
         os.fchmod(stream.fileno(), 0o600)
-        stream.write(PAIRING_PAGE)
+        stream.write(PLAYER_PAGE.format(title=title, message=message))
     return path.as_uri()
 
 
-def pairing_args(browser, view, runtime):
-    placeholder = {**view, 'urls': [pairing_page(runtime)]}
+def player_status_args(browser, view, runtime, state):
+    placeholder = {**view, 'urls': [player_status_page(runtime, view['index'], state)]}
     args = browser_args(browser, placeholder)
-    profile = f'--user-data-dir={runtime}/profile-{view["index"]}-pairing'
+    profile = f'--user-data-dir={runtime}/profile-{view["index"]}-status'
     args[next(index for index, value in enumerate(args) if value.startswith('--user-data-dir='))] = profile
     return args
 
@@ -208,9 +231,16 @@ def main():
                 continue
             desired = {view['index']: view for view in plan(config, outputs, token)}
             credential = read_beamer()
-            for view in desired.values():
+            for index, view in desired.items():
                 if view['mode'] == 'player':
                     view['beamerRevision'] = credential['revision'] if credential else None
+                    if credential is None:
+                        view['placeholderState'] = 'pairing-required'
+                    else:
+                        revision, deadline = retry_after.get(index, (None, 0))
+                        if revision == view['beamerRevision'] and time.monotonic() < deadline:
+                            state = statuses.get(index, {}).get('state', 'unavailable')
+                            view['placeholderState'] = state if state in PLAYER_MESSAGES else 'unavailable'
             for index, (view, child) in list(children.items()):
                 if view['mode'] == 'player' and child.stdout is not None:
                     statuses[index] = drain_status(child, statuses.get(index), view['beamerRevision'])
@@ -226,7 +256,8 @@ def main():
             for index, view in desired.items():
                 if index in children:
                     continue
-                if view['mode'] == 'player' and credential is not None:
+                if (view['mode'] == 'player' and credential is not None
+                        and 'placeholderState' not in view):
                     revision, deadline = retry_after.get(index, (None, 0))
                     if revision == view['beamerRevision'] and time.monotonic() < deadline:
                         continue
@@ -238,7 +269,12 @@ def main():
                     if not all(item.get('success') for item in json.loads(result.stdout)):
                         raise RuntimeError('Unable to assign browser output')
                     rules[index] = rule
-                if view['mode'] == 'player' and credential is not None:
+                if view.get('placeholderState'):
+                    state = view['placeholderState']
+                    child = launch(index, player_status_args(browser, view, runtime, state))
+                    statuses[index] = {'state': state, 'revision': view['beamerRevision'],
+                                       'observedAt': time.time()}
+                elif view['mode'] == 'player' and credential is not None:
                     child = launch(index, ['/usr/bin/node', '/opt/mindflayer-elderbrain/beamer/beamer-worker.mjs'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
                     os.set_blocking(child.stdout.fileno(), False)
                     statuses[index] = {'state': 'pending-verification', 'revision': view['beamerRevision'], 'observedAt': time.time()}
@@ -250,13 +286,6 @@ def main():
                         child.stdout.close()
                         retry_after[index] = (view['beamerRevision'], time.monotonic() + 60)
                         continue
-                elif view['mode'] == 'player':
-                    # Never reopen a formerly authenticated player profile after
-                    # credentials are removed. The runtime-only profile shows an
-                    # offline-safe instruction page until the administrator pairs it.
-                    child = launch(index, pairing_args(browser, view, runtime))
-                    statuses[index] = {'state': 'pairing-required', 'revision': None,
-                                       'observedAt': time.time()}
                 else:
                     child = launch(index, browser_args(browser, view))
                 children[index] = view, child
