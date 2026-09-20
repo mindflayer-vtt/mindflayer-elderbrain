@@ -63,7 +63,7 @@ def coordinator(state='/var/lib/mindflayer-elderbrain', runtime='/opt/mindflayer
         require_compatible(records[identifier].get('compatibility'), capture(runtime), ['network'])
 
     return NetworkCheckpointRestore(
-        maintenance or Maintenance(state / 'maintenance', HostServices(runtime)), snapshots,
+        maintenance or Maintenance(state / 'maintenance', HostServices(runtime, state)), snapshots,
         network or transaction(), compatible=compatible,
         exclusive=lambda: stable_settings(state), stage=restore_files)
 

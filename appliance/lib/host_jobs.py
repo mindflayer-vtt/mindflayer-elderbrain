@@ -476,7 +476,7 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             runtime = Path(os.environ.get("ELDERBRAIN_COMPOSE_DIR", "/opt/mindflayer-elderbrain"))
             state = store.directory.parent
             settings = json.loads(path.with_suffix(".settings").read_text())
-            maintenance = Maintenance(state / "maintenance", HostServices(runtime))
+            maintenance = Maintenance(state / "maintenance", HostServices(runtime, state))
             with maintenance.locked() as maintenance_fd:
                 if maintenance.previous().get("state") not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
                     raise RuntimeError("Recover appliance maintenance before installation")
@@ -565,7 +565,7 @@ def worker(directory, identity, lock_fd, *, executable="/usr/local/sbin/elderbra
             record["result"] = {"state": result["state"]}
         record["state"] = "completed"
     except Exception:
-        if record['kind'] == 'update':
+        if record['kind'] in ('update', 'power'):
             import traceback
             diagnostic = os.open(path.with_suffix('.stderr'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
             with os.fdopen(diagnostic, 'w') as output:

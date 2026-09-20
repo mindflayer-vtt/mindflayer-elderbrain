@@ -37,6 +37,21 @@ class JobTests(unittest.TestCase):
         self.assertEqual(saved['state'], 'completed')
         self.assertEqual(saved['result'], {'state': 'requested', 'action': 'reboot'})
 
+    def test_power_failure_keeps_diagnostics_private(self):
+        fd = self.queued()
+        path = self.store.path(self.identity)
+        record = json.loads(path.read_text())
+        record.update(kind='power', request={'action': 'shutdown', 'confirmPower': True})
+        save_record(path, record)
+        with patch('power_service.run_job', side_effect=ValueError('private power diagnostic')):
+            worker(self.store.directory, self.identity, fd)
+        saved = self.store.read(self.identity)
+        self.assertEqual(saved['state'], 'failed')
+        self.assertNotIn('private power diagnostic', saved['error'])
+        diagnostic = path.with_suffix('.stderr')
+        self.assertIn('private power diagnostic', diagnostic.read_text())
+        self.assertEqual(diagnostic.stat().st_mode & 0o777, 0o600)
+
     def test_power_job_reconciles_only_after_its_exact_requested_boot(self):
         root = Path(self.temp.name)
         self.store = JobStore(root / 'jobs')

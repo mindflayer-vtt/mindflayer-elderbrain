@@ -5,6 +5,7 @@ import fcntl
 import json
 import os
 import re
+import stat
 from pathlib import Path
 import shutil
 import subprocess
@@ -100,8 +101,9 @@ class Maintenance:
 class HostServices:
     ALLOWED = {"elderbrain-setup", "mindflayer-server", "foundry", "traefik"}
 
-    def __init__(self, runtime):
+    def __init__(self, runtime, state=Path('/var/lib/mindflayer-elderbrain')):
         self.runtime = runtime
+        self.state = Path(state)
         self.compose = ["docker", "compose", "--env-file", str(runtime / "appliance.env"),
                         "-f", str(runtime / "compose.yaml"), "--profile", "foundry"]
 
@@ -160,6 +162,33 @@ class HostServices:
             ids = self.run(["docker", "ps", "-q", "--filter", "label=com.docker.compose.project=" + project]).stdout.split()
             if ids:
                 self.run(["docker", "stop", "--time", "60", *ids])
+            if "foundry" in saved["compose"]:
+                self.remove_stale_foundry_lock()
+
+    def remove_stale_foundry_lock(self):
+        """Remove Foundry's empty runtime lock only after its container stopped."""
+        config = self.state / "foundry/Config"
+        try:
+            config_fd = os.open(config, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return
+        try:
+            name = "options.json.lock"
+            try:
+                info = os.stat(name, dir_fd=config_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            if not stat.S_ISDIR(info.st_mode):
+                raise ValueError("Foundry runtime lock has an unexpected type")
+            lock_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=config_fd)
+            try:
+                if os.listdir(lock_fd):
+                    raise ValueError("Foundry runtime lock is not empty")
+            finally:
+                os.close(lock_fd)
+            os.rmdir(name, dir_fd=config_fd)
+        finally:
+            os.close(config_fd)
 
     def resume(self, saved):
         self.checked(saved)
@@ -270,7 +299,7 @@ def main():
         parser.error("must run as root")
     state = Path(os.environ.get("ELDERBRAIN_STATE_DIR", "/var/lib/mindflayer-elderbrain"))
     runtime = Path(os.environ.get("ELDERBRAIN_COMPOSE_DIR", "/opt/mindflayer-elderbrain"))
-    maintenance = Maintenance(state / "maintenance", HostServices(runtime))
+    maintenance = Maintenance(state / "maintenance", HostServices(runtime, state))
     passphrase = None
     if args.encrypted:
         from backup_crypto import validate_passphrase

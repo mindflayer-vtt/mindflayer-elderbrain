@@ -45,7 +45,7 @@ def store(state='/var/lib/mindflayer-elderbrain', runtime='/opt/mindflayer-elder
     state = Path(state)
     guard = lambda: check(target=str(state))
     guard()
-    maintenance = Maintenance(state / 'maintenance', HostServices(Path(runtime)))
+    maintenance = Maintenance(state / 'maintenance', HostServices(Path(runtime), state))
     @contextmanager
     def quiesce():
         # The existing maintenance lock also excludes backup, restore and flashing.
@@ -60,7 +60,7 @@ def retention_settings(value=None, state='/var/lib/mindflayer-elderbrain', runti
     snapshots = store(state, runtime)
     if value is None:
         return snapshots.retention()
-    maintenance = Maintenance(Path(state) / 'maintenance', HostServices(Path(runtime)))
+    maintenance = Maintenance(Path(state) / 'maintenance', HostServices(Path(runtime), state))
     with maintenance.locked():
         if maintenance.previous().get('state') not in (None, 'completed', 'failed', 'recovered', 'rolled-back'):
             raise RuntimeError('Recover interrupted maintenance before changing retention')
@@ -86,11 +86,11 @@ def main():
             parser.error('restore requires --checkpoint ID --component NAME --confirm-restore')
         from checkpoint_restore import restore
         runtime = Path('/opt/mindflayer-elderbrain')
-        maintenance = Maintenance(snapshots.state / 'maintenance', HostServices(runtime))
+        maintenance = Maintenance(snapshots.state / 'maintenance', HostServices(runtime, snapshots.state))
         result = restore(args.checkpoint, args.component, snapshots.state, runtime, maintenance)
     else:
         runtime = Path('/opt/mindflayer-elderbrain')
-        maintenance = Maintenance(snapshots.state / 'maintenance', HostServices(runtime))
+        maintenance = Maintenance(snapshots.state / 'maintenance', HostServices(runtime, snapshots.state))
         if maintenance.previous().get('operation') == 'restore':
             from restore_service import recover_host
             recover_host(snapshots.state, runtime, maintenance)

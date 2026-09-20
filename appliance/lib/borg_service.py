@@ -65,7 +65,7 @@ def execute(action, repository, *, archive=None):
         archives = repository.list_archives()
         return {"state": "connected", "archives": archives}
     if action == "backup":
-        maintenance = Maintenance(repository.state / "maintenance", HostServices(repository.runtime))
+        maintenance = Maintenance(repository.state / "maintenance", HostServices(repository.runtime, repository.state))
         return repository.backup(lambda deadline: create_backup(
             repository.state / "backups", repository.state, repository.runtime, maintenance,
             deadline=deadline))

@@ -100,6 +100,31 @@ class MaintenanceTests(unittest.TestCase):
             self.assertEqual(run.call_args_list[0].args[0], ["docker", "ps", "-q", "--filter", "label=com.docker.compose.project=mindflayer-elderbrain"])
             self.assertEqual(run.call_args_list[1].args[0], ["docker", "stop", "--time", "60", "abc123"])
 
+    def test_host_stop_removes_only_empty_foundry_runtime_lock(self):
+        state = Path(self.temp.name) / "state"
+        lock = state / "foundry/Config/options.json.lock"
+        lock.mkdir(parents=True)
+        host = HostServices(Path("/opt/test-runtime"), state)
+        with patch.object(host, "run", side_effect=[SimpleNamespace(stdout="abc123\n"), SimpleNamespace(stdout="")]):
+            host.stop({"compose": ["foundry"], "graphics": False, "project": "mindflayer-elderbrain"})
+        self.assertFalse(lock.exists())
+
+    def test_foundry_runtime_lock_cleanup_rejects_content_and_non_directory(self):
+        state = Path(self.temp.name) / "state"
+        lock = state / "foundry/Config/options.json.lock"
+        lock.mkdir(parents=True)
+        (lock / "unexpected").write_text("retain")
+        host = HostServices(Path("/opt/test-runtime"), state)
+        with self.assertRaisesRegex(ValueError, "not empty"):
+            host.remove_stale_foundry_lock()
+        self.assertTrue(lock.exists())
+        (lock / "unexpected").unlink()
+        lock.rmdir()
+        lock.write_text("retain")
+        with self.assertRaisesRegex(ValueError, "unexpected type"):
+            host.remove_stale_foundry_lock()
+        self.assertTrue(lock.exists())
+
     def test_coordinator_backs_up_all_configured_sources_with_secrets(self):
         # This fixture runs unprivileged locally. Root-owned policy metadata is
         # exercised separately by the same test running as root in the VM.
