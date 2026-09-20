@@ -42,11 +42,16 @@ export function validate(value: unknown): ApplianceConfig {
     if (output && !/^[A-Za-z0-9_.:-]{1,128}$/.test(output)) throw new Error("invalid display connector");
     const displayId = String(view.displayId || "");
     if (displayId && !/^monitor-[a-f0-9]{64}$/.test(displayId)) throw new Error("invalid display identity");
+    const resolution = String(view.resolution || "");
+    const dimensions = /^(\d{2,5})x(\d{2,5})$/.exec(resolution);
+    if (resolution && (!dimensions || Number(dimensions[1]) < 320 || Number(dimensions[1]) > 32768
+      || Number(dimensions[2]) < 200 || Number(dimensions[2]) > 32768)) throw new Error("invalid display resolution");
     const mode = view.mode ?? "player"; // Preserve old kiosk behavior for legacy configuration.
     if (mode !== "admin" && mode !== "player") throw new Error("invalid browser mode");
     const tabs = view.tabs ?? [];
     if (!Array.isArray(tabs) || tabs.length > 10) throw new Error("at most ten additional tabs are allowed");
-    return { output, ...(displayId ? { displayId } : {}), url: browserUrl(view.url), mode, tabs: tabs.map(browserUrl) };
+    return { output, ...(displayId ? { displayId } : {}), ...(resolution ? { resolution } : {}),
+      url: browserUrl(view.url), mode, tabs: tabs.map(browserUrl) };
   });
   const selectedOutputs = views.map(view => view.output).filter(Boolean);
   if (new Set(selectedOutputs).size !== selectedOutputs.length) throw new Error("each display must have a distinct output");

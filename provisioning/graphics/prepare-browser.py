@@ -12,7 +12,7 @@ from beamer_runtime import refresh as refresh_beamer
 
 def project(value):
     return {'configured': value.get('configured') is True,
-            'views': [{key: view[key] for key in ('output', 'displayId', 'url', 'mode', 'tabs') if key in view}
+            'views': [{key: view[key] for key in ('output', 'displayId', 'resolution', 'url', 'mode', 'tabs') if key in view}
                       for view in value.get('views', [])]}
 
 

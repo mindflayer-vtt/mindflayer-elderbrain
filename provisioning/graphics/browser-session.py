@@ -229,6 +229,11 @@ def plan(config, outputs, token):
         mode = view.get('mode', 'player')
         if mode not in ('admin', 'player'):
             raise ValueError('Invalid browser mode')
+        resolution = view.get('resolution', '')
+        match = re.fullmatch(r'(\d{2,5})x(\d{2,5})', resolution) if isinstance(resolution, str) else None
+        if resolution and (not match or not 320 <= int(match.group(1)) <= 32768
+                           or not 200 <= int(match.group(2)) <= 32768):
+            raise ValueError('Invalid display resolution')
         target = safe_url(view.get('url'))
         extras = view.get('tabs', [])
         if not isinstance(extras, list) or len(extras) > 10:
@@ -236,9 +241,65 @@ def plan(config, outputs, token):
         extras = [safe_url(value) for value in extras]
         setup = SETUP + '#kiosk-keyboard=' + token
         urls = [setup, target, *extras] if mode == 'admin' else [setup if target == SETUP else target]
-        result.append({'index': index, 'output': output, 'mode': mode, 'urls': urls})
+        result.append({'index': index, 'output': output, 'resolution': resolution,
+                       'mode': mode, 'urls': urls})
         used.add(output)
     return result
+
+
+def output_modes(output):
+    raw = output.get('modes')
+    if not isinstance(raw, list):
+        return []
+    modes = []
+    for mode in raw[:256]:
+        if not isinstance(mode, dict):
+            continue
+        width, height, refresh = (mode.get(key) for key in ('width', 'height', 'refresh'))
+        if (type(width) is int and type(height) is int and type(refresh) is int
+                and 320 <= width <= 32768 and 200 <= height <= 32768
+                and 1000 <= refresh <= 1000000):
+            value = (width, height, refresh)
+            if value not in modes:
+                modes.append(value)
+    return modes
+
+
+def preferred_mode(view, output):
+    modes = output_modes(output)
+    if not modes:
+        return None
+    requested = view.get('resolution', '')
+    if requested:
+        width, height = map(int, requested.split('x'))
+        matching = [mode for mode in modes if mode[:2] == (width, height)]
+        if matching:
+            return max(matching, key=lambda mode: mode[2])
+    return max(modes, key=lambda mode: (mode[0] * mode[1], mode[0], mode[1], mode[2]))
+
+
+def apply_output_modes(desired, outputs):
+    """Apply advertised modes only; unavailable saved choices fall back to highest."""
+    changed = False
+    by_name = {output.get('name'): output for output in outputs if output.get('active')}
+    for view in desired.values():
+        output = by_name.get(view.get('output'))
+        selected = preferred_mode(view, output) if isinstance(output, dict) else None
+        if selected is None:
+            continue
+        current = output.get('current_mode') or {}
+        if tuple(current.get(key) for key in ('width', 'height', 'refresh')) == selected:
+            continue
+        width, height, refresh = selected
+        command = (f'output "{view["output"]}" mode '
+                   f'{width}x{height}@{refresh / 1000:.3f}Hz')
+        try:
+            response = subprocess.run(['swaymsg', '-r', command], capture_output=True,
+                                      text=True, check=True, timeout=5)
+            changed = all(item.get('success') for item in json.loads(response.stdout)) or changed
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+            continue
+    return changed
 
 
 def admin_cursor_target(desired, outputs):
@@ -371,6 +432,9 @@ def main():
                 time.sleep(2)
                 continue
             desired = {view['index']: view for view in plan(config, outputs, token)}
+            if apply_output_modes(desired, outputs):
+                time.sleep(2)
+                continue
             credential = read_beamer()
             for index, view in desired.items():
                 if view['mode'] == 'player':

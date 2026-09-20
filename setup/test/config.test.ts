@@ -30,6 +30,10 @@ test("browser modes support one screen, legacy kiosks, and bounded safe tabs", (
   assert.equal(validate({ ...defaults, views: [identified] }).views[0]?.displayId, identified.displayId);
   assert.throws(() => validate({ ...defaults, views: [{ ...admin, displayId: "monitor-invalid" }] }), /identity/);
   assert.throws(() => validate({ ...defaults, views: [identified, { ...identified, output: "DP-2" }] }), /monitor/);
+  assert.equal(validate({ ...defaults, views: [{ ...identified, resolution: "1920x1080" }] }).views[0]?.resolution, "1920x1080");
+  for (const resolution of ["0x0", "1920;bad", "99999x1080", "1920x100"]) {
+    assert.throws(() => validate({ ...defaults, views: [{ ...admin, resolution }] }), /resolution/);
+  }
 });
 test("configuration persists atomically and reloads", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "elderbrain-"));

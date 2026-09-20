@@ -2,8 +2,24 @@ export interface ApplianceConfig {
   version: number;
   configured: boolean;
   domain: string;
-  views: { output: string; displayId?: string; url: string; mode?: "admin" | "player"; tabs?: string[] }[];
+  views: { output: string; displayId?: string; resolution?: string; url: string; mode?: "admin" | "player"; tabs?: string[] }[];
   controllers: Record<string, { name: string }>;
+}
+export interface DisplayMode {
+  width: number;
+  height: number;
+  refresh: number;
+}
+export interface DisplayOutput {
+  name: string;
+  id: string;
+  make: string;
+  model: string;
+  active: boolean;
+  width: number | null;
+  height: number | null;
+  refresh: number | null;
+  modes: DisplayMode[];
 }
 export interface Controller {
   id: string;

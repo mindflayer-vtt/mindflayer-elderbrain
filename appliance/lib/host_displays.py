@@ -17,6 +17,26 @@ def monitor_id(output):
     return 'monitor-' + hashlib.sha256(identity.encode()).hexdigest()
 
 
+def display_modes(output):
+    raw = output.get('modes')
+    if not isinstance(raw, list):
+        return []
+    modes = []
+    for mode in raw[:256]:
+        if not isinstance(mode, dict):
+            continue
+        width, height, refresh = (mode.get(key) for key in ('width', 'height', 'refresh'))
+        if (type(width) is not int or type(height) is not int or type(refresh) is not int
+                or not 320 <= width <= 32768 or not 200 <= height <= 32768
+                or not 1000 <= refresh <= 1000000):
+            continue
+        value = {'width': width, 'height': height, 'refresh': refresh}
+        if value not in modes:
+            modes.append(value)
+    return sorted(modes, key=lambda mode: (
+        mode['width'] * mode['height'], mode['width'], mode['height'], mode['refresh']), reverse=True)
+
+
 def normalize(outputs):
     identities = [monitor_id(output) for output in outputs]
     result = []
@@ -31,7 +51,8 @@ def normalize(outputs):
                        'model': str(output.get('model') or '')[:128],
                        'active': output.get('active') is True,
                        'width': mode.get('width'), 'height': mode.get('height'),
-                       'refresh': mode.get('refresh'), 'scale': output.get('scale')})
+                       'refresh': mode.get('refresh'), 'scale': output.get('scale'),
+                       'modes': display_modes(output)})
     return result
 
 

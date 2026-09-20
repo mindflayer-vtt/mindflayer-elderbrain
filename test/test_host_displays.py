@@ -13,7 +13,10 @@ class HostDisplaysTests(unittest.TestCase):
     def test_normalizes_active_and_inactive_outputs_without_exposing_other_state(self):
         result = module.normalize([
             {'name': 'DP-1', 'make': 'Vendor', 'model': 'Monitor', 'active': True,
-             'current_mode': {'width': 1920, 'height': 1080, 'refresh': 60000}, 'scale': 1, 'serial': 'private'},
+             'current_mode': {'width': 1920, 'height': 1080, 'refresh': 60000}, 'scale': 1, 'serial': 'private',
+             'modes': [{'width': 1920, 'height': 1080, 'refresh': 60000},
+                       {'width': 1280, 'height': 720, 'refresh': 120000},
+                       {'width': 1920, 'height': 1080, 'refresh': 59940}]},
             {'name': 'HDMI-A-1', 'active': False, 'current_mode': None},
             {'name': 'bad"; exec arbitrary'},
         ])
@@ -21,6 +24,11 @@ class HostDisplaysTests(unittest.TestCase):
         self.assertEqual(result[0]['width'], 1920)
         self.assertRegex(result[0]['id'], r'^monitor-[a-f0-9]{64}$')
         self.assertNotIn('serial', result[0])
+        self.assertEqual(result[0]['modes'], [
+            {'width': 1920, 'height': 1080, 'refresh': 60000},
+            {'width': 1920, 'height': 1080, 'refresh': 59940},
+            {'width': 1280, 'height': 720, 'refresh': 120000},
+        ])
         self.assertFalse(result[1]['active'])
         self.assertIsNone(result[1]['width'])
 

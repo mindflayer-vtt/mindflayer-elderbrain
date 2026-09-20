@@ -97,3 +97,8 @@ class DisplayPreviewTests(unittest.TestCase):
         for value in ({}, {'configured': True, 'views': []}, {'configured': True, 'views': [{'url': 'file:///etc/passwd'}]}):
             with self.assertRaises(ValueError):
                 self.store.begin(value)
+        valid = {**self.new, 'views': [{**self.new['views'][0], 'resolution': '1920x1080'}]}
+        self.assertEqual(module.validate(valid)['views'][0]['resolution'], '1920x1080')
+        invalid = {**self.new, 'views': [{**self.new['views'][0], 'resolution': '1920; exec bad'}]}
+        with self.assertRaisesRegex(ValueError, 'resolution'):
+            module.validate(invalid)

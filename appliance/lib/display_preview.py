@@ -31,6 +31,11 @@ def validate(candidate):
         if output and output in selected:
             raise ValueError('Duplicate output')
         selected.add(output)
+        resolution = view.get('resolution', '')
+        match = re.fullmatch(r'(\d{2,5})x(\d{2,5})', resolution) if isinstance(resolution, str) else None
+        if resolution and (not match or not 320 <= int(match.group(1)) <= 32768
+                           or not 200 <= int(match.group(2)) <= 32768):
+            raise ValueError('Invalid display resolution')
         if view.get('mode', 'player') not in ('admin', 'player'):
             raise ValueError('Invalid browser mode')
         tabs = view.get('tabs', [])

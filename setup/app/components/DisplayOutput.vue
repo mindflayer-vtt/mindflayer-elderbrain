@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { DisplayOutput } from "../../shared/types";
 const selected = defineModel<string>({ required: true });
 const displayId = defineModel<string>("displayId", { default: "" });
-const props = defineProps<{ label: string; outputs: { name: string; id: string; make: string; model: string; active: boolean; width: number | null; height: number | null; refresh: number | null }[]; unavailable: boolean }>();
+const props = defineProps<{ label: string; outputs: DisplayOutput[]; unavailable: boolean }>();
 const choice = computed({
   get: () => selected.value || "__automatic__",
   set: value => {

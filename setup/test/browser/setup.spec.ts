@@ -484,15 +484,22 @@ test("display dropdown preserves disconnected monitors and follows their stable 
   await output.click();
   await page.getByRole("option", { name: /DP-1 · Fixture Monitor · 1920×1080 · Active/ }).click();
   await expect(output).toContainText("DP-1");
+  const resolution = page.getByRole("combobox", { name: "Resolution 1", exact: true });
+  await expect(resolution).toContainText("Highest available · 1920×1080");
+  await resolution.click();
+  await page.getByRole("option", { name: "1280×720 · up to 120 Hz", exact: true }).click();
   await page.route("**/elderbrain/api/displays", route => route.fulfill({ json: { at: Date.now() / 1000, outputs: [] } }));
   await expect(output).toContainText("Disconnected / not detected", { timeout: 10000 });
   await page.getByRole("button", { name: "Preview display changes" }).click();
   await page.getByRole("button", { name: "Keep display settings", exact: true }).click();
   await expect(page.getByText("Configuration saved", { exact: true })).toBeVisible();
-  expect((await (await request.get("/elderbrain/api/config")).json()).views[0].displayId).toBe(identity);
+  const saved = (await (await request.get("/elderbrain/api/config")).json()).views[0];
+  expect(saved.displayId).toBe(identity);
+  expect(saved.resolution).toBe("1280x720");
   await page.unroute("**/elderbrain/api/displays");
   await page.route("**/elderbrain/api/displays", route => route.fulfill({ json: { at: Date.now() / 1000, outputs: [
-    { name: "DP-9", id: identity, make: "Fixture", model: "Monitor", active: true, width: 1920, height: 1080, refresh: 60000 },
+    { name: "DP-9", id: identity, make: "Fixture", model: "Monitor", active: true, width: 1920, height: 1080, refresh: 60000,
+      modes: [{ width: 1920, height: 1080, refresh: 60000 }, { width: 1280, height: 720, refresh: 120000 }] },
   ] } }));
   await page.reload();
   await expect(output).toContainText("DP-9");

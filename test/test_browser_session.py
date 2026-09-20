@@ -132,6 +132,31 @@ class BrowserSessionTests(unittest.TestCase):
         outputs[1]['rect']['width'] = 0
         self.assertIsNone(module.admin_cursor_target(desired, outputs))
 
+    def test_resolution_uses_highest_mode_by_default_and_refresh_for_selection(self):
+        output = {'name': 'DP-5', 'active': True, 'modes': [
+            {'width': 1920, 'height': 1080, 'refresh': 59940},
+            {'width': 1920, 'height': 1080, 'refresh': 60000},
+            {'width': 1280, 'height': 720, 'refresh': 120000},
+        ]}
+        self.assertEqual(module.preferred_mode({'resolution': ''}, output), (1920, 1080, 60000))
+        self.assertEqual(module.preferred_mode({'resolution': '1280x720'}, output), (1280, 720, 120000))
+        self.assertEqual(module.preferred_mode({'resolution': '3840x2160'}, output), (1920, 1080, 60000))
+
+    def test_resolution_applies_only_an_advertised_changed_mode(self):
+        desired = {0: {'output': 'DP-5', 'resolution': '1280x720'}}
+        outputs = [{'name': 'DP-5', 'active': True,
+                    'current_mode': {'width': 1920, 'height': 1080, 'refresh': 60000},
+                    'modes': [{'width': 1280, 'height': 720, 'refresh': 120000}]}]
+        response = SimpleNamespace(stdout='[{"success":true}]')
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.apply_output_modes(desired, outputs))
+        self.assertEqual(run.call_args.args[0],
+                         ['swaymsg', '-r', 'output "DP-5" mode 1280x720@120.000Hz'])
+        outputs[0]['current_mode'] = {'width': 1280, 'height': 720, 'refresh': 120000}
+        with patch.object(module.subprocess, 'run') as run:
+            self.assertFalse(module.apply_output_modes(desired, outputs))
+            run.assert_not_called()
+
     def test_cursor_placement_is_best_effort_and_uses_fixed_seat(self):
         response = SimpleNamespace(stdout='[{"success":true}]')
         with patch.object(module.subprocess, 'run', return_value=response) as run:
@@ -269,6 +294,7 @@ class BrowserSessionTests(unittest.TestCase):
         display_id = 'monitor-' + 'a' * 64
         self.assertEqual(projection.project({'configured': True, 'controllers': {'private': {}}, 'password': 'private',
             'views': [{'output': 'DP-1', 'displayId': display_id, 'mode': 'admin',
-                       'url': 'https://foundry.example', 'unrelated': 'private'}]}),
+                       'resolution': '1920x1080', 'url': 'https://foundry.example', 'unrelated': 'private'}]}),
             {'configured': True, 'views': [{'output': 'DP-1', 'displayId': display_id,
-                                            'mode': 'admin', 'url': 'https://foundry.example'}]})
+                                            'resolution': '1920x1080', 'mode': 'admin',
+                                            'url': 'https://foundry.example'}]})
