@@ -42,6 +42,42 @@ FOUNDRY_SECRET_KEYS = {
     'foundry_release_url', 'foundry_username', 'foundry_password', 'foundry_admin_key'}
 
 
+def foundry_worlds(root=None):
+    """Return a bounded, read-only catalogue of locally installed worlds."""
+    root = root or FOUNDRY_STATE / 'foundry/Data/worlds'
+    try:
+        directories = list(root.iterdir())
+    except FileNotFoundError:
+        return []
+    worlds = []
+    for directory in directories:
+        identifier = directory.name
+        try:
+            if (not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', identifier)
+                    or directory.is_symlink() or not directory.is_dir()):
+                continue
+            descriptor = os.open(
+                directory / 'world.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                info = os.fstat(descriptor)
+                if not stat.S_ISREG(info.st_mode) or info.st_size > 65536:
+                    continue
+                with os.fdopen(descriptor, closefd=False) as stream:
+                    value = json.loads(stream.read(65537))
+            finally:
+                os.close(descriptor)
+            if not isinstance(value, dict) or value.get('id') not in (None, identifier):
+                continue
+            title = value.get('title')
+            if (not isinstance(title, str) or not title.strip() or len(title) > 128
+                    or re.search(r'[\x00-\x1f\x7f]', title)):
+                title = identifier
+            worlds.append({'id': identifier, 'title': title.strip()})
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+    return sorted(worlds, key=lambda world: (world['title'].casefold(), world['id']))
+
+
 def _foundry_read_json(path):
     try:
         info = path.lstat()

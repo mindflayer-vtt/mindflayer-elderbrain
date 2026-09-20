@@ -92,6 +92,12 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify({ state: 'module-unavailable', views: [{ index: 1, state: 'module-unavailable' }] }) }) + '\n');
       return;
     }
+    if (action === 'foundry-worlds') {
+      socket.end(JSON.stringify({ ok: true, output: JSON.stringify([
+        { id: 'ardin-3-era-lennart', title: 'Ardin 3. Era -- Lennart' },
+      ]) }) + '\n');
+      return;
+    }
     if (action.startsWith('display-preview-start ')) {
       const end = data.indexOf(10);
       const size = Number(data.subarray(0, end).toString().split(' ')[1]);

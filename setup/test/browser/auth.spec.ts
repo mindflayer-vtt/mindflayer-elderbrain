@@ -30,6 +30,7 @@ test("unauthenticated callers cannot read or change administration through eithe
     expect((await request.get(prefix + "config")).status()).toBe(401);
     expect((await request.get(prefix + "status")).status()).toBe(401);
     expect((await request.get(prefix + "foundry/beamer")).status()).toBe(401);
+    expect((await request.get(prefix + "foundry/worlds")).status()).toBe(401);
     expect((await request.get(prefix + "foundry/admin-key")).status()).toBe(401);
     expect((await request.post(prefix + "foundry/admin-key", { headers: { "x-elderbrain-request": "1" }, data: { confirmReset: true } })).status()).toBe(401);
     expect((await request.put(prefix + "foundry/beamer", { headers: { "x-elderbrain-request": "1" }, data: {} })).status()).toBe(401);

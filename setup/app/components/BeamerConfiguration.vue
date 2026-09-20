@@ -2,6 +2,14 @@
 const { api, perform, busy } = useAppliance("foundry");
 const form = reactive({ worldId: "", username: "Beamer", password: "" });
 const saved = useUnsavedChanges(() => form);
+const worlds = ref<{ id: string; title: string }[]>([]);
+const worldError = ref("");
+const worldItems = computed(() => {
+  const items = worlds.value.map(world => ({ value: world.id, label: `${world.title} · ${world.id}` }));
+  if (form.worldId && !items.some(item => item.value === form.worldId))
+    items.push({ value: form.worldId, label: `${form.worldId} · saved selection` });
+  return items;
+});
 const status = ref<{ state: string; worldId: string; username?: string; userId?: string; views?: { index: number; state: string }[] }>();
 const error = ref("");
 const labels: Record<string, string> = { ready: "Player display connected", "pairing-required": "Pairing required",
@@ -14,14 +22,26 @@ const labels: Record<string, string> = { ready: "Player display connected", "pai
 let timer: ReturnType<typeof setInterval> | undefined;
 let refreshing = false;
 let disposed = false;
+let populated = false;
 async function refresh() {
   if (refreshing) return;
   refreshing = true;
-  try { const value = await api<typeof status.value>("foundry/beamer"); if (!disposed) { status.value = value; error.value = ""; } }
+  try { const value = await api<typeof status.value>("foundry/beamer"); if (!disposed) {
+    status.value = value; error.value = "";
+    if (!populated) {
+      if (value?.worldId) form.worldId = value.worldId;
+      if (value?.username) form.username = value.username;
+      populated = true; saved();
+    }
+  } }
   catch { error.value = "Beamer configuration is unavailable."; if (status.value) status.value = { ...status.value, state: "unavailable", views: [] }; }
   finally { refreshing = false; }
 }
-onMounted(() => { void refresh(); timer = setInterval(() => void refresh(), 5000); });
+async function loadWorlds() {
+  try { worlds.value = await api<{ id: string; title: string }[]>("foundry/worlds"); worldError.value = ""; }
+  catch { worldError.value = "Installed-world discovery is unavailable. The saved selection is preserved."; }
+}
+onMounted(() => { void refresh(); void loadWorlds(); timer = setInterval(() => void refresh(), 5000); });
 onBeforeUnmount(() => { disposed = true; if (timer) clearInterval(timer); });
 async function save() {
   await perform(async () => {
@@ -41,12 +61,16 @@ async function remove() {
     <template #header><h2 class="text-xl font-semibold">Beamer display login</h2></template>
     <div class="space-y-4">
       <UAlert v-if="error" color="error" :title="error" />
+      <UAlert v-if="worldError" color="warning" :title="worldError" />
       <UAlert v-if="status" :color="status.state === 'ready' ? 'success' : 'warning'" :title="labels[status.state] || 'Kiosk status unavailable'" description="Status is checked every five seconds. Saving credentials alone does not confirm a successful login." />
       <p v-if="status?.worldId">World {{ status.worldId }}, user {{ status.username || 'existing ID-based pairing' }}.</p>
       <p v-for="view in status?.views || []" :key="view.index">Screen {{ view.index + 1 }}: {{ labels[view.state] || 'Unavailable' }}</p>
-      <p class="text-muted">First create or explicitly adopt a dedicated Player using Mindflayer’s Beamer display user settings in Foundry. Enter that world ID, username and existing password below. The username must match exactly and be unique. This never changes the Foundry user's password.</p>
+      <p class="text-muted">First create or explicitly adopt a dedicated Player using Mindflayer’s Beamer display user settings in Foundry. Select that world, then enter the username and existing password below. The username must match exactly and be unique. This never changes the Foundry user's password.</p>
       <form class="space-y-4" @submit.prevent="save">
-        <UFormField label="Foundry world ID"><UInput v-model="form.worldId" required pattern="[A-Za-z0-9_-]{1,128}" class="w-full" /></UFormField>
+        <UFormField label="Foundry world" description="Select an installed world. Its internal ID is shown after the title.">
+          <USelect v-model="form.worldId" :items="worldItems" value-key="value" required
+            placeholder="Select a Foundry world" aria-label="Foundry world" class="w-full" />
+        </UFormField>
         <UFormField label="Beamer username"><UInput v-model="form.username" required maxlength="128" autocomplete="username" class="w-full" /></UFormField>
         <UFormField label="Beamer password"><SecretInput v-model="form.password" required minlength="12" maxlength="256" autocomplete="new-password" class="w-full" /></UFormField>
         <div class="flex flex-wrap gap-3">

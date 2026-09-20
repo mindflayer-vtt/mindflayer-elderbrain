@@ -99,6 +99,11 @@ export default defineEventHandler(async (event) => {
       if (!result.ok) throw new Error("Local checkpoints require a healthy persistent Btrfs installation. Check maintenance status if unavailable.");
       return JSON.parse(result.output || "[]");
     }
+    if (route === "foundry/worlds" && method === "GET") {
+      const result = await command(socket, "foundry-worlds");
+      if (!result.ok) throw new Error("Foundry world discovery unavailable");
+      return JSON.parse(result.output || "[]");
+    }
     if (route === 'snapshots/restore' && method === 'POST') {
       const input = await body() as { checkpoint?: unknown; components?: unknown; confirmRestore?: unknown; confirmDowntime?: unknown };
       if (input?.confirmRestore !== true || input.confirmDowntime !== true) throw new Error('Confirm replacement of selected configuration and service downtime');

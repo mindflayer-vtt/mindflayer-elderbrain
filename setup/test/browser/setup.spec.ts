@@ -280,18 +280,29 @@ test('local checkpoints require downtime confirmation and show persistent jobs',
 
 test('Beamer credentials stay private and live status polling preserves edits', async ({ page, request }) => {
   await page.goto('/elderbrain/foundry');
-  await page.getByLabel('Foundry world ID', { exact: true }).fill('test-world');
+  await expect(page.getByText('Pairing required', { exact: true })).toBeVisible();
+  const world = page.getByRole('combobox', { name: 'Foundry world', exact: true });
+  await world.click();
+  await page.getByRole('option', { name: 'Ardin 3. Era -- Lennart · ardin-3-era-lennart', exact: true }).click();
+  await expect(world).toContainText('Ardin 3. Era -- Lennart');
   await expect(page.getByLabel('Beamer username', { exact: true })).toHaveValue('Beamer');
   const password = page.getByLabel('Beamer password', { exact: true });
   await password.fill('browser-private-beamer-canary');
   const form = page.locator('form').filter({ has: password });
-  await form.getByRole('button', { name: 'Show password', exact: true }).click();
-  await expect(password).toHaveAttribute('type', 'text');
+  const savedRequest = page.waitForRequest(request => request.url().includes('/elderbrain/api/foundry/beamer')
+    && request.method() !== 'GET');
   await form.getByRole('button', { name: 'Save for verification' }).click();
+  const saveRequest = await savedRequest;
+  const response = await saveRequest.response();
+  expect(response).not.toBeNull();
+  expect(response!.ok()).toBe(true);
+  expect((await response!.json()).worldId).toBe('ardin-3-era-lennart');
   await expect(password).toHaveValue('');
   await expect(page.getByText('Mindflayer module unavailable', { exact: true })).toBeVisible({ timeout: 10000 });
   const publicStatus = await request.get('/elderbrain/api/foundry/beamer');
-  expect(await publicStatus.text()).not.toContain('browser-private-beamer-canary');
+  const publicText = await publicStatus.text();
+  expect(publicText).not.toContain('browser-private-beamer-canary');
+  expect(JSON.parse(publicText).worldId).toBe('ardin-3-era-lennart');
   await password.fill('another-unsaved-private-password');
   await expect(page.getByText('Screen 2: Mindflayer module unavailable')).toBeVisible();
   await page.waitForTimeout(5500);
