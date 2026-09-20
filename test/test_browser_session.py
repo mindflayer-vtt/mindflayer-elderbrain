@@ -176,7 +176,9 @@ class BrowserSessionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             runtime = Path(temporary)
             for state, expected in [('pairing-required', 'configure the Beamer credentials'),
-                                    ('world-not-running', 'launch the configured Foundry world')]:
+                                    ('world-not-running', 'launch the configured Foundry world'),
+                                    ('permission-review-required', 'additional Foundry permissions'),
+                                    ('module-review-required', 'Mindflayer module Beamer user settings')]:
                 args = module.player_status_args('chrome', view, runtime, state)
                 page = runtime / 'beamer-status-1.html'
                 self.assertEqual(page.stat().st_mode & 0o777, 0o600)

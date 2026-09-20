@@ -95,7 +95,7 @@ try {
   console.log('PASS: GM creation/reveal and explicit adoption forms.');
   stage = 'login safety guards';
   const gmId = await gm.evaluate(() => game.user.id);
-  for (const [worldId, userId, expected] of [["not-the-running-world", identifier, "world-not-running"], [world, gmId, "review-required"]]) {
+  for (const [worldId, userId, expected] of [["not-the-running-world", identifier, "world-not-running"], [world, gmId, "role-review-required"]]) {
     const context = await browser.newContext();
     try {
       const page = await context.newPage();

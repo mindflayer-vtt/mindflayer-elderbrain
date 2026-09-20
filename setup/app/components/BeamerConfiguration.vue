@@ -16,6 +16,9 @@ const labels: Record<string, string> = { ready: "Player display connected", "pai
   "pending-verification": "Awaiting login verification", unavailable: "Kiosk status unavailable or stale",
   "world-not-running": "Selected world is not running", "module-unavailable": "Mindflayer module unavailable",
   "review-required": "Beamer account requires permission review", "unsupported-version": "Foundry version not supported",
+  "role-review-required": "Beamer user must have the Player role",
+  "permission-review-required": "Beamer user has additional Foundry permissions",
+  "module-review-required": "Mindflayer module Beamer-user setup needs review",
   "origin-mismatch": "Unexpected Foundry address", "login-failed": "Beamer login failed",
   "canvas-unavailable": "Foundry canvas unavailable", stopped: "Player browser stopped",
   "display-disconnected": "No connected player display" };

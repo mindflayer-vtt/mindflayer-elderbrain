@@ -17,8 +17,11 @@ SETUP = 'https://127.0.0.1/elderbrain/'
 CONFIG = Path('/run/elderbrain-browser/config.json')
 BEAMER = Path('/run/elderbrain-browser/beamer.json')
 STATES = {'ready', 'unavailable', 'world-not-running', 'module-unavailable', 'pairing-required',
-          'review-required', 'unsupported-version', 'origin-mismatch', 'login-failed', 'canvas-unavailable', 'stopped'}
-TERMINAL_STATES = {'pairing-required', 'review-required', 'unsupported-version',
+          'review-required', 'role-review-required', 'permission-review-required',
+          'module-review-required', 'unsupported-version', 'origin-mismatch', 'login-failed',
+          'canvas-unavailable', 'stopped'}
+TERMINAL_STATES = {'pairing-required', 'review-required', 'role-review-required',
+                   'permission-review-required', 'module-review-required', 'unsupported-version',
                    'origin-mismatch', 'login-failed'}
 PLAYER_MESSAGES = {
     'pairing-required': ('Player display setup required',
@@ -29,6 +32,12 @@ PLAYER_MESSAGES = {
                            'Ask an administrator to enable the Mindflayer module in the configured Foundry world.'),
     'review-required': ('Beamer configuration needs review',
                         'Ask an administrator to review the Beamer user and permissions in Elderbrain Setup.'),
+    'role-review-required': ('Beamer role needs review',
+                             'Set the Foundry Beamer user role to Player, then save its credentials again.'),
+    'permission-review-required': ('Beamer permissions need review',
+                                   'Remove all additional Foundry permissions from the Beamer user role.'),
+    'module-review-required': ('Mindflayer Beamer setup needs review',
+                               'Configure or adopt this user in the Mindflayer module Beamer user settings.'),
     'unsupported-version': ('Mindflayer module update required',
                             'Ask an administrator to install a compatible Mindflayer module version.'),
     'origin-mismatch': ('Foundry address mismatch',

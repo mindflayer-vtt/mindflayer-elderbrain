@@ -13,8 +13,9 @@ import time
 SOURCE = Path('/var/lib/mindflayer-elderbrain/elderbrain/secrets/beamer.json')
 DIRECTORY = Path('/run/elderbrain-browser')
 STATES = {'ready', 'unavailable', 'world-not-running', 'module-unavailable', 'pairing-required',
-          'review-required', 'unsupported-version', 'origin-mismatch', 'login-failed', 'canvas-unavailable',
-          'stopped', 'pending-verification'}
+          'review-required', 'role-review-required', 'permission-review-required',
+          'module-review-required', 'unsupported-version', 'origin-mismatch', 'login-failed',
+          'canvas-unavailable', 'stopped', 'pending-verification'}
 
 
 def public_status(value, revision, now):
