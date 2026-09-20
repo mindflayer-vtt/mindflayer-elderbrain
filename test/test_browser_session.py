@@ -102,6 +102,19 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual(len(plan[1]['urls']), 1)
         self.assertNotEqual(next(arg for arg in admin if arg.startswith('--user-data-dir')), next(arg for arg in player if arg.startswith('--user-data-dir')))
 
+    def test_unpaired_player_uses_offline_instruction_page_and_isolated_profile(self):
+        view = {'index': 1, 'output': 'DP-2', 'mode': 'player', 'urls': ['https://foundry.example']}
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime = Path(temporary)
+            args = module.pairing_args('chrome', view, runtime)
+            page = runtime / 'beamer-pairing-required.html'
+            self.assertEqual(page.stat().st_mode & 0o777, 0o600)
+            self.assertIn('configure the Beamer credentials', page.read_text())
+            self.assertIn('--kiosk', args)
+            self.assertIn(f'--user-data-dir={runtime}/profile-1-pairing', args)
+            self.assertIn(page.as_uri(), args)
+            self.assertNotIn('https://foundry.example', args)
+
     def test_first_boot_uses_one_admin_browser_and_unsafe_urls_fail(self):
         result = module.plan({'configured': False}, [{'name': 'DP-1', 'active': True}, {'name': 'DP-2', 'active': True}], 'token')
         self.assertEqual(len(result), 1)
