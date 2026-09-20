@@ -2,12 +2,24 @@
 definePageMeta({ alias: ["/elderbrain/displays"] });
 const { config, error, busy, saveConfig } = useAppliance("displays");
 const { locked: previewLocked } = useDisplayPreview();
-const outputs = ref<{ name: string; make: string; model: string; active: boolean; width: number | null; height: number | null; refresh: number | null }[]>([]);
+const outputs = ref<{ name: string; id: string; make: string; model: string; active: boolean; width: number | null; height: number | null; refresh: number | null }[]>([]);
 const discoveryError = ref("");
 const unavailable = ref(true);
 let timer: ReturnType<typeof setInterval>;
 let stopped = false;
 let pending = false;
+function saveDisplays() {
+  if (config.value) {
+    for (const view of config.value.views) {
+      if (!view.output) delete view.displayId;
+      else {
+        const identity = outputs.value.find(output => output.name === view.output)?.id;
+        if (identity) view.displayId = identity;
+      }
+    }
+  }
+  return saveConfig();
+}
 async function discover() {
   if (pending) return;
   pending = true;
@@ -31,11 +43,11 @@ onBeforeUnmount(() => { stopped = true; clearInterval(timer); });
     <UAlert v-if="discoveryError" color="warning" :title="discoveryError" />
     <UCard v-if="config">
       <template #header><h2 class="text-xl font-semibold">Displays and URLs</h2></template>
-      <form class="space-y-5" @submit.prevent="saveConfig">
+      <form class="space-y-5" @submit.prevent="saveDisplays">
         <fieldset :disabled="previewLocked || busy" class="space-y-5">
         <UFormField label="Base LAN domain" description="Example: home.example creates foundry.home.example, mindflayer.home.example and elderbrain.home.example."><UInput v-model="config.domain" required class="w-full" /></UFormField>
         <div v-for="(view, index) in config.views" :key="index" class="border border-default rounded p-4 space-y-4">
-          <DisplayOutput v-model="view.output" :label="'Output ' + (index + 1)" :outputs="outputs" :unavailable="unavailable" />
+          <DisplayOutput v-model="view.output" v-model:display-id="view.displayId" :label="'Output ' + (index + 1)" :outputs="outputs" :unavailable="unavailable" />
           <UFormField :label="'Browser mode ' + (index + 1)"><USelect v-model="view.mode" :items="[{ value: 'admin', label: 'Administration browser' }, { value: 'player', label: 'Player map kiosk' }]" class="w-full" /></UFormField>
           <UFormField v-if="view.mode === 'admin'" :label="'View ' + (index + 1) + ' URL'" description="Foundry URL: opened as the second tab, after Setup."><UInput v-model="view.url" type="url" required class="w-full" /></UFormField>
           <p v-else class="text-muted">Player mode uses this appliance’s local Foundry and the Beamer account configured on the Foundry page. It waits for pairing before opening a browser; credentials are never sent to a custom URL.</p>

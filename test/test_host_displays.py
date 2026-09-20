@@ -19,9 +19,17 @@ class HostDisplaysTests(unittest.TestCase):
         ])
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]['width'], 1920)
+        self.assertRegex(result[0]['id'], r'^monitor-[a-f0-9]{64}$')
         self.assertNotIn('serial', result[0])
         self.assertFalse(result[1]['active'])
         self.assertIsNone(result[1]['width'])
+
+    def test_identical_monitor_identities_fall_back_to_connectors(self):
+        result = module.normalize([
+            {'name': 'DP-1', 'make': 'Same', 'model': 'Panel', 'serial': ''},
+            {'name': 'DP-2', 'make': 'Same', 'model': 'Panel', 'serial': ''},
+        ])
+        self.assertEqual([output['id'] for output in result], ['', ''])
 
     def test_missing_kiosk_socket_is_not_an_empty_success(self):
         with patch.object(module.pwd, 'getpwnam') as user, patch.object(Path, 'glob', return_value=[]):

@@ -465,7 +465,8 @@ test("administration browser mode saves additional tabs and supports one screen"
   await expect(page.getByText("Configuration saved", { exact: true })).toBeVisible();
 });
 
-test("display dropdown discovers monitors and preserves a disconnected selection", async ({ page }) => {
+test("display dropdown preserves disconnected monitors and follows their stable identity", async ({ page, request }) => {
+  const identity = `monitor-${"1".repeat(64)}`;
   await page.goto("/elderbrain/displays");
   const output = page.getByRole("combobox", { name: "Output 1", exact: true });
   await expect(output).toBeEnabled();
@@ -477,12 +478,17 @@ test("display dropdown discovers monitors and preserves a disconnected selection
   await page.getByRole("button", { name: "Preview display changes" }).click();
   await page.getByRole("button", { name: "Keep display settings", exact: true }).click();
   await expect(page.getByText("Configuration saved", { exact: true })).toBeVisible();
+  expect((await (await request.get("/elderbrain/api/config")).json()).views[0].displayId).toBe(identity);
+  await page.unroute("**/elderbrain/api/displays");
+  await page.route("**/elderbrain/api/displays", route => route.fulfill({ json: { at: Date.now() / 1000, outputs: [
+    { name: "DP-9", id: identity, make: "Fixture", model: "Monitor", active: true, width: 1920, height: 1080, refresh: 60000 },
+  ] } }));
   await page.reload();
-  await expect(output).toContainText("DP-1");
-  await expect(output).toContainText("Disconnected / not detected");
+  await expect(output).toContainText("DP-9");
+  await page.unroute("**/elderbrain/api/displays");
   await page.route("**/elderbrain/api/displays", route => route.fulfill({ status: 503, json: { error: "Unavailable" } }));
   await expect(output).toBeDisabled({ timeout: 10000 });
-  await expect(output).toContainText("DP-1");
+  await expect(output).toContainText("DP-9");
   await expect(page.getByText("Display discovery unavailable. Saved selections are preserved.")).toBeVisible();
 });
 

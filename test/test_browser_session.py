@@ -124,6 +124,23 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual([(view['output'], view['mode']) for view in plan],
                          [('DP-3', 'admin'), ('DP-8', 'player')])
 
+    def test_monitor_identity_wins_when_connectors_swap(self):
+        admin_monitor = {'make': 'Desk', 'model': 'Panel', 'serial': 'admin'}
+        player_monitor = {'make': 'Acer', 'model': 'Projector', 'serial': 'player'}
+        views = [
+            {'output': 'DP-3', 'displayId': module.monitor_id(admin_monitor),
+             'mode': 'admin', 'url': 'https://setup.example'},
+            {'output': 'DP-4', 'displayId': module.monitor_id(player_monitor),
+             'mode': 'player', 'url': 'https://foundry.example'},
+        ]
+        outputs = [
+            {'name': 'DP-3', 'active': True, **player_monitor},
+            {'name': 'DP-4', 'active': True, **admin_monitor},
+        ]
+        plan = module.plan({'configured': True, 'views': views}, outputs, 'token')
+        self.assertEqual([(view['output'], view['mode']) for view in plan],
+                         [('DP-4', 'admin'), ('DP-3', 'player')])
+
     def test_virtual_terminal_output_suspension_keeps_existing_views(self):
         self.assertTrue(module.outputs_suspended([], {0: object()}))
         self.assertFalse(module.outputs_suspended([], {}))
@@ -200,6 +217,9 @@ class BrowserSessionTests(unittest.TestCase):
             self.assertEqual((target / 'sway.conf').stat().st_mode & 0o777, 0o640)
             self.assertEqual([p.name for p in target.iterdir()], ['sway.conf'])
             self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+        display_id = 'monitor-' + 'a' * 64
         self.assertEqual(projection.project({'configured': True, 'controllers': {'private': {}}, 'password': 'private',
-            'views': [{'output': 'DP-1', 'mode': 'admin', 'url': 'https://foundry.example', 'unrelated': 'private'}]}),
-            {'configured': True, 'views': [{'output': 'DP-1', 'mode': 'admin', 'url': 'https://foundry.example'}]})
+            'views': [{'output': 'DP-1', 'displayId': display_id, 'mode': 'admin',
+                       'url': 'https://foundry.example', 'unrelated': 'private'}]}),
+            {'configured': True, 'views': [{'output': 'DP-1', 'displayId': display_id,
+                                            'mode': 'admin', 'url': 'https://foundry.example'}]})

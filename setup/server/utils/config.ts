@@ -40,14 +40,18 @@ export function validate(value: unknown): ApplianceConfig {
     const view = record(value);
     const output = String(view.output || "");
     if (output && !/^[A-Za-z0-9_.:-]{1,128}$/.test(output)) throw new Error("invalid display connector");
+    const displayId = String(view.displayId || "");
+    if (displayId && !/^monitor-[a-f0-9]{64}$/.test(displayId)) throw new Error("invalid display identity");
     const mode = view.mode ?? "player"; // Preserve old kiosk behavior for legacy configuration.
     if (mode !== "admin" && mode !== "player") throw new Error("invalid browser mode");
     const tabs = view.tabs ?? [];
     if (!Array.isArray(tabs) || tabs.length > 10) throw new Error("at most ten additional tabs are allowed");
-    return { output, url: browserUrl(view.url), mode, tabs: tabs.map(browserUrl) };
+    return { output, ...(displayId ? { displayId } : {}), url: browserUrl(view.url), mode, tabs: tabs.map(browserUrl) };
   });
-  const selected = views.map(view => view.output).filter(Boolean);
-  if (new Set(selected).size !== selected.length) throw new Error("each display must have a distinct output");
+  const selectedOutputs = views.map(view => view.output).filter(Boolean);
+  if (new Set(selectedOutputs).size !== selectedOutputs.length) throw new Error("each display must have a distinct output");
+  const selectedMonitors = views.map(view => view.displayId).filter(Boolean);
+  if (new Set(selectedMonitors).size !== selectedMonitors.length) throw new Error("each display must have a distinct monitor");
   const controllers: ApplianceConfig["controllers"] = {};
   for (const [id, value] of Object.entries(record(input.controllers || {}))) {
     if (!/^[A-Za-z0-9._-]{1,64}$/.test(id))

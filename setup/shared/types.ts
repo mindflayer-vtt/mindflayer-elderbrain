@@ -2,7 +2,7 @@ export interface ApplianceConfig {
   version: number;
   configured: boolean;
   domain: string;
-  views: { output: string; url: string; mode?: "admin" | "player"; tabs?: string[] }[];
+  views: { output: string; displayId?: string; url: string; mode?: "admin" | "player"; tabs?: string[] }[];
   controllers: Record<string, { name: string }>;
 }
 export interface Controller {

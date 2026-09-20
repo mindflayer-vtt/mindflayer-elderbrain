@@ -1,4 +1,5 @@
 """One isolated browser per connected output, reconciled across hotplug events."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -129,6 +130,14 @@ def connector_family(name):
     return re.sub(r'\d+$', '', name)
 
 
+def monitor_id(output):
+    identity = '\0'.join(str(output.get(key) or '').strip()[:128]
+                         for key in ('make', 'model', 'serial'))
+    if not identity.replace('\0', ''):
+        return ''
+    return 'monitor-' + hashlib.sha256(identity.encode()).hexdigest()
+
+
 def renumbered_outputs(views, connected):
     """Map a completely renumbered connector set while preserving display order."""
     configured = [view.get('output') for view in views]
@@ -143,13 +152,16 @@ def renumbered_outputs(views, connected):
     return dict(zip(previous, current))
 
 
-def assigned_outputs(views, connected):
+def assigned_outputs(views, connected, identities):
     """Resolve configured outputs, keeping administration visible during hotplug."""
     renumbered = renumbered_outputs(views, connected)
     requested = [renumbered.get(view.get('output'), view.get('output')) for view in views]
     assigned = {}
     for index, output in enumerate(requested):
-        if output in connected and output not in assigned.values():
+        identity_output = identities.get(views[index].get('displayId'))
+        if identity_output and identity_output not in assigned.values():
+            assigned[index] = identity_output
+        elif output in connected and output not in assigned.values():
             assigned[index] = output
 
     admin = next((index for index, view in enumerate(views)
@@ -179,14 +191,19 @@ def assigned_outputs(views, connected):
 
 
 def plan(config, outputs, token):
-    connected = sorted({item['name'] for item in outputs if item.get('active') and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', item.get('name', ''))})
+    active = [item for item in outputs
+              if item.get('active') and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', item.get('name', ''))]
+    connected = sorted({item['name'] for item in active})
+    observed = [monitor_id(item) for item in active]
+    identities = {identity: item['name'] for item, identity in zip(active, observed)
+                  if identity and observed.count(identity) == 1}
     # Completion is an onboarding indicator, not an override of saved displays.
     views = config.get('views')
     if views is None or views == [] and not config.get('configured'):
         views = [{'mode': 'admin', 'url': 'https://foundry.elderbrain.local', 'output': ''}]
     if not isinstance(views, list) or not 1 <= len(views) <= 2:
         raise ValueError('Invalid browser views')
-    assigned = assigned_outputs(views, connected)
+    assigned = assigned_outputs(views, connected, identities)
     used = set()
     result = []
     for index, view in enumerate(views):

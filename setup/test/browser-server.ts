@@ -119,7 +119,7 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
     }
     if (action === "host-displays") {
       socket.end(JSON.stringify({ ok: true, output: JSON.stringify({ at: Date.now() / 1000, outputs: [
-        { name: "DP-1", make: "Fixture", model: "Monitor", active: true, width: 1920, height: 1080, refresh: 60000 },
+        { name: "DP-1", id: `monitor-${"1".repeat(64)}`, make: "Fixture", model: "Monitor", active: true, width: 1920, height: 1080, refresh: 60000 },
       ] }) }) + "\n");
       return;
     }
