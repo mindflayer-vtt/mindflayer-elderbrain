@@ -241,6 +241,61 @@ def plan(config, outputs, token):
     return result
 
 
+def admin_cursor_target(desired, outputs):
+    """Return the centre of the first connected administration display."""
+    admin = next((desired[index] for index in sorted(desired)
+                  if desired[index].get('mode') == 'admin'), None)
+    if admin is None:
+        return None
+    output = next((item for item in outputs if item.get('active')
+                   and item.get('name') == admin.get('output')), None)
+    rect = output.get('rect') if isinstance(output, dict) else None
+    if (not isinstance(rect, dict)
+            or any(type(rect.get(key)) is not int for key in ('x', 'y', 'width', 'height'))
+            or not 0 < rect['width'] <= 100000 or not 0 < rect['height'] <= 100000
+            or not -1000000 <= rect['x'] <= 1000000 or not -1000000 <= rect['y'] <= 1000000):
+        return None
+    return admin['output'], rect['x'] + rect['width'] // 2, rect['y'] + rect['height'] // 2
+
+
+def move_cursor(target):
+    """Best-effort pointer placement must never take down the display session."""
+    if target is None:
+        return False
+    output, x, y = target
+    try:
+        response = subprocess.run(
+            ['swaymsg', '-r',
+             f'focus output "{output}"; seat seat0 cursor set {x} {y}'], capture_output=True,
+            text=True, check=True, timeout=5)
+        return all(item.get('success') for item in json.loads(response.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return False
+
+
+def views_mapped(desired):
+    """Wait to place the cursor until later-mapping windows cannot steal focus."""
+    try:
+        response = subprocess.run(
+            ['swaymsg', '-r', '-t', 'get_tree'], capture_output=True, text=True,
+            check=True, timeout=5)
+        tree = json.loads(response.stdout)
+        stack = [tree]
+        app_ids = set()
+        while stack:
+            node = stack.pop()
+            if not isinstance(node, dict):
+                continue
+            if isinstance(node.get('app_id'), str):
+                app_ids.add(node['app_id'])
+            for key in ('nodes', 'floating_nodes'):
+                if isinstance(node.get(key), list):
+                    stack.extend(node[key])
+        return all(f'elderbrain-view-{index}' in app_ids for index in desired)
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return False
+
+
 def browser_args(browser, view):
     return [browser, f'--class=elderbrain-view-{view["index"]}', '--ozone-platform=wayland',
             '--enable-features=UseOzonePlatform', '--no-first-run', '--no-default-browser-check',
@@ -294,6 +349,7 @@ def main():
     rules = {}
     retry_after = {}
     statuses = {}
+    cursor_signature = None
     status_file = Path(os.environ['XDG_RUNTIME_DIR']) / 'beamer-status.json'
     runtime = Path(os.environ['XDG_RUNTIME_DIR'])
     running = True
@@ -376,6 +432,16 @@ def main():
                 else:
                     child = launch(index, browser_args(browser, view))
                 children[index] = view, child
+            target = admin_cursor_target(desired, outputs)
+            topology = tuple(sorted(
+                (item.get('name'), json.dumps(item.get('rect'), sort_keys=True))
+                for item in outputs if item.get('active')))
+            signature = (topology, target)
+            if (target is not None and signature != cursor_signature
+                    and all(index in children for index in desired)
+                    and views_mapped(desired)
+                    and move_cursor(target)):
+                cursor_signature = signature
             report = []
             for index, view in desired.items():
                 if view['mode'] == 'player':

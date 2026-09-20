@@ -114,6 +114,46 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual([(view['index'], view['output'], view['mode']) for view in plan],
                          [(0, 'DP-8', 'admin')])
 
+    def test_cursor_defaults_to_centre_of_first_connected_admin_display(self):
+        desired = {
+            0: {'index': 0, 'output': 'DP-5', 'mode': 'admin'},
+            1: {'index': 1, 'output': 'DP-6', 'mode': 'player'},
+        }
+        outputs = [
+            {'name': 'DP-6', 'active': True,
+             'rect': {'x': 0, 'y': 0, 'width': 1920, 'height': 1080}},
+            {'name': 'DP-5', 'active': True,
+             'rect': {'x': 1920, 'y': 0, 'width': 1920, 'height': 1080}},
+        ]
+        self.assertEqual(module.admin_cursor_target(desired, outputs), ('DP-5', 2880, 540))
+        desired[0]['mode'] = 'player'
+        self.assertIsNone(module.admin_cursor_target(desired, outputs))
+        desired[0]['mode'] = 'admin'
+        outputs[1]['rect']['width'] = 0
+        self.assertIsNone(module.admin_cursor_target(desired, outputs))
+
+    def test_cursor_placement_is_best_effort_and_uses_fixed_seat(self):
+        response = SimpleNamespace(stdout='[{"success":true}]')
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.move_cursor(('DP-5', 2880, 540)))
+        self.assertEqual(run.call_args.args[0],
+                         ['swaymsg', '-r',
+                          'focus output "DP-5"; seat seat0 cursor set 2880 540'])
+        with patch.object(module.subprocess, 'run', side_effect=OSError):
+            self.assertFalse(module.move_cursor(('DP-5', 2880, 540)))
+
+    def test_cursor_waits_until_all_planned_windows_are_mapped(self):
+        desired = {0: {'mode': 'admin'}, 1: {'mode': 'player'}}
+        partial = SimpleNamespace(stdout='{"nodes":[{"app_id":"elderbrain-view-0"}]}')
+        complete = SimpleNamespace(stdout=(
+            '{"nodes":[{"app_id":"elderbrain-view-0"}],'
+            '"floating_nodes":[{"nodes":[{"app_id":"elderbrain-view-1"}]}]}'))
+        with patch.object(module.subprocess, 'run', return_value=partial):
+            self.assertFalse(module.views_mapped(desired))
+        with patch.object(module.subprocess, 'run', return_value=complete) as run:
+            self.assertTrue(module.views_mapped(desired))
+        self.assertEqual(run.call_args.args[0], ['swaymsg', '-r', '-t', 'get_tree'])
+
     def test_one_renumbered_screen_recovers_without_moving_connected_admin(self):
         views = [
             {'output': 'DP-3', 'mode': 'admin', 'url': 'https://setup.example'},
