@@ -147,6 +147,13 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertFalse(module.outputs_suspended(
             [{'name': 'DP-1', 'active': True}], {0: object()}))
 
+    def test_actionable_beamer_errors_wait_for_configuration_change(self):
+        for state in module.TERMINAL_STATES:
+            self.assertEqual(module.next_retry(state, 100), float('inf'))
+        for state in ('unavailable', 'world-not-running', 'module-unavailable',
+                      'canvas-unavailable', 'stopped'):
+            self.assertEqual(module.next_retry(state, 100), 160)
+
     def test_modes_and_profile_isolation(self):
         views = [{'mode': mode, 'url': 'https://foundry.example', 'tabs': ['https://notes.example']} for mode in ('admin', 'player')]
         plan = module.plan({'configured': True, 'views': views}, [{'name': name, 'active': True} for name in ('DP-1', 'DP-2')], 'token')

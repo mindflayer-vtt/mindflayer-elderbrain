@@ -18,6 +18,8 @@ CONFIG = Path('/run/elderbrain-browser/config.json')
 BEAMER = Path('/run/elderbrain-browser/beamer.json')
 STATES = {'ready', 'unavailable', 'world-not-running', 'module-unavailable', 'pairing-required',
           'review-required', 'unsupported-version', 'origin-mismatch', 'login-failed', 'canvas-unavailable', 'stopped'}
+TERMINAL_STATES = {'pairing-required', 'review-required', 'unsupported-version',
+                   'origin-mismatch', 'login-failed'}
 PLAYER_MESSAGES = {
     'pairing-required': ('Player display setup required',
                          'Ask an administrator to configure the Beamer credentials in Elderbrain Setup under Displays.'),
@@ -124,6 +126,11 @@ def safe_url(value):
 def outputs_suspended(outputs, children):
     """Keep existing views while Sway temporarily releases DRM for another VT."""
     return isinstance(outputs, list) and not outputs and bool(children)
+
+
+def next_retry(state, now):
+    """Keep actionable configuration errors stable until credentials change."""
+    return float('inf') if state in TERMINAL_STATES else now + 60
 
 
 def connector_family(name):
@@ -315,7 +322,9 @@ def main():
                     statuses[index] = drain_status(child, statuses.get(index), view['beamerRevision'])
                 if desired.get(index) != view or child.poll() is not None:
                     if desired.get(index) == view and view['mode'] == 'player':
-                        retry_after[index] = (view.get('beamerRevision'), time.monotonic() + 60)
+                        state = statuses.get(index, {}).get('state', 'unavailable')
+                        retry_after[index] = (view.get('beamerRevision'),
+                                              next_retry(state, time.monotonic()))
                     terminate(child)
                     if view['mode'] == 'player' and child.stdout is not None:
                         if statuses.get(index, {}).get('state') == 'ready':
