@@ -125,19 +125,57 @@ def outputs_suspended(outputs, children):
     return isinstance(outputs, list) and not outputs and bool(children)
 
 
+def connector_family(name):
+    return re.sub(r'\d+$', '', name)
+
+
 def renumbered_outputs(views, connected):
     """Map a completely renumbered connector set while preserving display order."""
     configured = [view.get('output') for view in views]
     if (len(configured) != len(connected) or not all(configured)
             or set(configured) & set(connected)):
         return {}
-    def family(name):
-        return re.sub(r'\d+$', '', name)
     previous = sorted(configured)
     current = sorted(connected)
-    if [family(name) for name in previous] != [family(name) for name in current]:
+    if ([connector_family(name) for name in previous]
+            != [connector_family(name) for name in current]):
         return {}
     return dict(zip(previous, current))
+
+
+def assigned_outputs(views, connected):
+    """Resolve configured outputs, keeping administration visible during hotplug."""
+    renumbered = renumbered_outputs(views, connected)
+    requested = [renumbered.get(view.get('output'), view.get('output')) for view in views]
+    assigned = {}
+    for index, output in enumerate(requested):
+        if output in connected and output not in assigned.values():
+            assigned[index] = output
+
+    admin = next((index for index, view in enumerate(views)
+                  if view.get('mode', 'player') == 'admin'), None)
+    if admin is not None and admin not in assigned and connected:
+        free = [name for name in connected if name not in assigned.values()]
+        if free:
+            expected = requested[admin]
+            matching = [name for name in free
+                        if expected and connector_family(name) == connector_family(expected)]
+            assigned[admin] = (matching or free)[0]
+        elif len(connected) == 1:
+            assigned = {admin: connected[0]}
+
+    for index, output in enumerate(requested):
+        if index in assigned:
+            continue
+        free = [name for name in connected if name not in assigned.values()]
+        if not free:
+            continue
+        if output:
+            free = [name for name in free
+                    if connector_family(name) == connector_family(output)]
+        if free:
+            assigned[index] = free[0]
+    return assigned
 
 
 def plan(config, outputs, token):
@@ -148,15 +186,11 @@ def plan(config, outputs, token):
         views = [{'mode': 'admin', 'url': 'https://foundry.elderbrain.local', 'output': ''}]
     if not isinstance(views, list) or not 1 <= len(views) <= 2:
         raise ValueError('Invalid browser views')
-    renumbered = renumbered_outputs(views, connected)
-    # Explicit assignments take priority over automatic selection.
-    reserved = {renumbered.get(view.get('output'), view.get('output'))
-                for view in views if view.get('output')}
+    assigned = assigned_outputs(views, connected)
     used = set()
     result = []
     for index, view in enumerate(views):
-        requested = renumbered.get(view.get('output'), view.get('output'))
-        output = requested or next((name for name in connected if name not in used and name not in reserved), None)
+        output = assigned.get(index)
         if output not in connected or output in used:
             continue
         mode = view.get('mode', 'player')

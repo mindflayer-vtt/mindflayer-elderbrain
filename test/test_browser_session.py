@@ -89,15 +89,40 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual([(view['output'], view['mode']) for view in plan],
                          [('DP-5', 'admin'), ('DP-6', 'player')])
 
-    def test_connector_renumber_requires_complete_matching_family(self):
+    def test_connector_renumber_does_not_cross_connector_families(self):
         views = [
             {'output': 'DP-3', 'mode': 'admin', 'url': 'https://setup.example'},
             {'output': 'DP-4', 'mode': 'player', 'url': 'https://foundry.example'},
         ]
         config = {'configured': True, 'views': views}
-        self.assertEqual(module.plan(config, [{'name': 'DP-5', 'active': True}], 'token'), [])
+        single = module.plan(config, [{'name': 'DP-5', 'active': True}], 'token')
+        self.assertEqual([(view['output'], view['mode']) for view in single], [('DP-5', 'admin')])
         mixed = [{'name': 'DP-5', 'active': True}, {'name': 'HDMI-A-1', 'active': True}]
-        self.assertEqual(module.plan(config, mixed, 'token'), [])
+        plan = module.plan(config, mixed, 'token')
+        self.assertEqual([(view['output'], view['mode']) for view in plan], [('DP-5', 'admin')])
+
+    def test_admin_fails_over_to_only_remaining_screen(self):
+        views = [
+            {'output': 'DP-3', 'mode': 'admin', 'url': 'https://setup.example'},
+            {'output': 'DP-4', 'mode': 'player', 'url': 'https://foundry.example'},
+        ]
+        config = {'configured': True, 'views': views}
+        plan = module.plan(config, [{'name': 'DP-4', 'active': True}], 'token')
+        self.assertEqual([(view['index'], view['output'], view['mode']) for view in plan],
+                         [(0, 'DP-4', 'admin')])
+        plan = module.plan(config, [{'name': 'DP-8', 'active': True}], 'token')
+        self.assertEqual([(view['index'], view['output'], view['mode']) for view in plan],
+                         [(0, 'DP-8', 'admin')])
+
+    def test_one_renumbered_screen_recovers_without_moving_connected_admin(self):
+        views = [
+            {'output': 'DP-3', 'mode': 'admin', 'url': 'https://setup.example'},
+            {'output': 'DP-4', 'mode': 'player', 'url': 'https://foundry.example'},
+        ]
+        outputs = [{'name': name, 'active': True} for name in ('DP-3', 'DP-8')]
+        plan = module.plan({'configured': True, 'views': views}, outputs, 'token')
+        self.assertEqual([(view['output'], view['mode']) for view in plan],
+                         [('DP-3', 'admin'), ('DP-8', 'player')])
 
     def test_virtual_terminal_output_suspension_keeps_existing_views(self):
         self.assertTrue(module.outputs_suspended([], {0: object()}))
