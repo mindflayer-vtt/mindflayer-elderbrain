@@ -10,6 +10,9 @@ export async function runBeamer(chromium, config, publish, signal) {
     for (const key of Object.keys(env)) if (/^(DEBUG|PWDEBUG|PW_|PLAYWRIGHT_)/.test(key)) delete env[key];
     context = await chromium.launchPersistentContext(config.profile, {
       executablePath: config.browser, headless: config.headless === true,
+      // A fixed Playwright viewport leaves Foundry at its 1280x720 default even
+      // after Sway expands the kiosk window to fill a larger output.
+      viewport: config.headless ? { width: 1280, height: 720 } : null,
       chromiumSandbox: true, env, serviceWorkers: 'block',
       args: [`--class=elderbrain-view-${config.index}`, '--kiosk', '--no-first-run',
         '--no-default-browser-check', '--hide-crash-restore-bubble',

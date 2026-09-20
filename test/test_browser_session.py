@@ -231,6 +231,7 @@ class BrowserSessionTests(unittest.TestCase):
             self.assertNotIn('--disable-session-crashed-bubble', args)
         worker = (ROOT / 'provisioning/graphics/beamer-worker.mjs').read_text()
         self.assertIn("'--hide-crash-restore-bubble'", worker)
+        self.assertIn('viewport: config.headless ? { width: 1280, height: 720 } : null', worker)
         self.assertNotIn('--disable-session-crashed-bubble', worker)
         self.assertEqual(plan[0]['urls'][-1], 'https://notes.example')
         self.assertEqual(len(plan[1]['urls']), 1)
