@@ -79,6 +79,26 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual(len(module.plan(config, outputs, 'token')), 1)
         self.assertEqual(module.plan(config, [], 'token'), [])
 
+    def test_complete_connector_renumber_preserves_display_order(self):
+        views = [
+            {'output': 'DP-3', 'mode': 'admin', 'url': 'https://setup.example'},
+            {'output': 'DP-4', 'mode': 'player', 'url': 'https://foundry.example'},
+        ]
+        outputs = [{'name': name, 'active': True} for name in ('DP-5', 'DP-6')]
+        plan = module.plan({'configured': True, 'views': views}, outputs, 'token')
+        self.assertEqual([(view['output'], view['mode']) for view in plan],
+                         [('DP-5', 'admin'), ('DP-6', 'player')])
+
+    def test_connector_renumber_requires_complete_matching_family(self):
+        views = [
+            {'output': 'DP-3', 'mode': 'admin', 'url': 'https://setup.example'},
+            {'output': 'DP-4', 'mode': 'player', 'url': 'https://foundry.example'},
+        ]
+        config = {'configured': True, 'views': views}
+        self.assertEqual(module.plan(config, [{'name': 'DP-5', 'active': True}], 'token'), [])
+        mixed = [{'name': 'DP-5', 'active': True}, {'name': 'HDMI-A-1', 'active': True}]
+        self.assertEqual(module.plan(config, mixed, 'token'), [])
+
     def test_virtual_terminal_output_suspension_keeps_existing_views(self):
         self.assertTrue(module.outputs_suspended([], {0: object()}))
         self.assertFalse(module.outputs_suspended([], {}))

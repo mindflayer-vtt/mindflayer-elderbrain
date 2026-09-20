@@ -125,6 +125,21 @@ def outputs_suspended(outputs, children):
     return isinstance(outputs, list) and not outputs and bool(children)
 
 
+def renumbered_outputs(views, connected):
+    """Map a completely renumbered connector set while preserving display order."""
+    configured = [view.get('output') for view in views]
+    if (len(configured) != len(connected) or not all(configured)
+            or set(configured) & set(connected)):
+        return {}
+    def family(name):
+        return re.sub(r'\d+$', '', name)
+    previous = sorted(configured)
+    current = sorted(connected)
+    if [family(name) for name in previous] != [family(name) for name in current]:
+        return {}
+    return dict(zip(previous, current))
+
+
 def plan(config, outputs, token):
     connected = sorted({item['name'] for item in outputs if item.get('active') and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', item.get('name', ''))})
     # Completion is an onboarding indicator, not an override of saved displays.
@@ -133,12 +148,15 @@ def plan(config, outputs, token):
         views = [{'mode': 'admin', 'url': 'https://foundry.elderbrain.local', 'output': ''}]
     if not isinstance(views, list) or not 1 <= len(views) <= 2:
         raise ValueError('Invalid browser views')
+    renumbered = renumbered_outputs(views, connected)
     # Explicit assignments take priority over automatic selection.
-    reserved = {view.get('output') for view in views if view.get('output')}
+    reserved = {renumbered.get(view.get('output'), view.get('output'))
+                for view in views if view.get('output')}
     used = set()
     result = []
     for index, view in enumerate(views):
-        output = view.get('output') or next((name for name in connected if name not in used and name not in reserved), None)
+        requested = renumbered.get(view.get('output'), view.get('output'))
+        output = requested or next((name for name in connected if name not in used and name not in reserved), None)
         if output not in connected or output in used:
             continue
         mode = view.get('mode', 'player')
