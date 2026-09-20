@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 import sys
@@ -178,6 +179,30 @@ class BrowserSessionTests(unittest.TestCase):
         with patch.object(module.subprocess, 'run', return_value=complete) as run:
             self.assertTrue(module.views_mapped(desired))
         self.assertEqual(run.call_args.args[0], ['swaymsg', '-r', '-t', 'get_tree'])
+
+    def test_window_output_mapping_and_hotplug_repair(self):
+        tree = {'nodes': [
+            {'type': 'output', 'name': 'DP-6', 'nodes': [
+                {'nodes': [{'app_id': 'elderbrain-view-0'}]}]},
+            {'type': 'output', 'name': 'DP-5', 'nodes': [
+                {'floating_nodes': [{'app_id': 'elderbrain-view-1'}]}]},
+        ]}
+        response = SimpleNamespace(stdout=json.dumps(tree))
+        with patch.object(module.subprocess, 'run', return_value=response):
+            self.assertEqual(module.window_outputs(), {0: 'DP-6', 1: 'DP-5'})
+
+        response.stdout = '[{"success":true},{"success":true}]'
+        view = {'index': 0, 'output': 'DP-5', 'mode': 'admin'}
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.place_view(view))
+        self.assertEqual(run.call_args.args[0], ['swaymsg', '-r',
+            '[app_id="elderbrain-view-0"] move container to output "DP-5"; '
+            '[app_id="elderbrain-view-0"] fullscreen disable'])
+
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.place_view({**view, 'mode': 'player'}, future=True))
+        self.assertIn('for_window [app_id="elderbrain-view-0"]', run.call_args.args[0][2])
+        self.assertIn('fullscreen enable', run.call_args.args[0][2])
 
     def test_one_renumbered_screen_recovers_without_moving_connected_admin(self):
         views = [

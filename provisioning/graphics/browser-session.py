@@ -357,6 +357,46 @@ def views_mapped(desired):
         return False
 
 
+def window_outputs():
+    """Map managed browser indexes to their current Sway output."""
+    try:
+        response = subprocess.run(
+            ['swaymsg', '-r', '-t', 'get_tree'], capture_output=True, text=True,
+            check=True, timeout=5)
+        result = {}
+        stack = [(json.loads(response.stdout), None)]
+        while stack:
+            node, output = stack.pop()
+            if not isinstance(node, dict):
+                continue
+            if node.get('type') == 'output' and node.get('name') != '__i3':
+                output = node.get('name')
+            app_id = node.get('app_id')
+            match = re.fullmatch(r'elderbrain-view-([01])', app_id) if isinstance(app_id, str) else None
+            if match and isinstance(output, str):
+                result[int(match.group(1))] = output
+            for key in ('nodes', 'floating_nodes'):
+                if isinstance(node.get(key), list):
+                    stack.extend((child, output) for child in node[key])
+        return result
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return {}
+
+
+def place_view(view, future=False):
+    """Assign a future or existing managed window to its configured output."""
+    criteria = f'[app_id="elderbrain-view-{view["index"]}"]'
+    prefix = 'for_window ' if future else ''
+    commands = (f'{prefix}{criteria} move container to output "{view["output"]}"; '
+                f'{prefix}{criteria} fullscreen {"enable" if view["mode"] == "player" else "disable"}')
+    try:
+        response = subprocess.run(['swaymsg', '-r', commands], capture_output=True,
+                                  text=True, check=True, timeout=5)
+        return all(item.get('success') for item in json.loads(response.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return False
+
+
 def browser_args(browser, view):
     return [browser, f'--class=elderbrain-view-{view["index"]}', '--ozone-platform=wayland',
             '--enable-features=UseOzonePlatform', '--no-first-run', '--no-default-browser-check',
@@ -460,6 +500,7 @@ def main():
                             statuses[index] = {'state': 'unavailable', 'revision': view['beamerRevision'], 'observedAt': time.time()}
                         child.stdout.close()
                     del children[index]
+                    rules.pop(index, None)
             for index, view in desired.items():
                 if index in children:
                     continue
@@ -470,10 +511,7 @@ def main():
                         continue
                 rule = (index, view['output'], view['mode'])
                 if rules.get(index) != rule:
-                    criteria = f'[app_id="elderbrain-view-{index}"]'
-                    commands = f'for_window {criteria} move container to output "{view["output"]}"; for_window {criteria} fullscreen {"enable" if view["mode"] == "player" else "disable"}'
-                    result = subprocess.run(['swaymsg', '-r', commands], capture_output=True, text=True, check=True, timeout=5)
-                    if not all(item.get('success') for item in json.loads(result.stdout)):
+                    if not place_view(view, future=True):
                         raise RuntimeError('Unable to assign browser output')
                     rules[index] = rule
                 if view.get('placeholderState'):
@@ -496,6 +534,10 @@ def main():
                 else:
                     child = launch(index, browser_args(browser, view))
                 children[index] = view, child
+            placements = window_outputs()
+            for index, view in desired.items():
+                if index in children and index in placements and placements[index] != view['output']:
+                    place_view(view)
             target = admin_cursor_target(desired, outputs)
             topology = tuple(sorted(
                 (item.get('name'), json.dumps(item.get('rect'), sort_keys=True))
