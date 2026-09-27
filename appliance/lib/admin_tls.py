@@ -191,7 +191,8 @@ def ensure_domain(domain, directory='/var/lib/mindflayer-elderbrain/traefik',
                   ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
     from domain_routes import validate_domain
     domain = validate_domain(domain)
-    return ensure_names([f'DNS:elderbrain.{domain}', f'DNS:foundry.{domain}'], directory, ca_directory)
+    return ensure_names([f'DNS:elderbrain.{domain}', f'DNS:foundry.{domain}',
+                         f'DNS:mindflayer.{domain}'], directory, ca_directory)
 
 
 if __name__ == '__main__':

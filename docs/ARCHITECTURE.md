@@ -6,7 +6,9 @@ Traefik owns host ports 80/443. Its file-provider configuration declares the
 fixed internal service endpoints, routers and middleware; it has no Docker
 provider, container labels or Docker-socket mount. Foundry (30000) and the
 browser-facing Mindflayer endpoint (8080, including `/ws`) remain on the `proxy`
-network. Physical keypads are the documented exception: they use restricted-CBOR
+network. Traefik also serves `wss://mindflayer.<domain>/ws` on 443 using an
+appliance-CA-signed certificate; the existing HTTP route remains available for
+older LAN clients. Physical keypads are the documented exception: they use restricted-CBOR
 WebSocket over a separate self-signed TLS identity at `/device/v1` on 10443.
 Their firmware pins that identity, so host 10443 maps directly to the server.
 

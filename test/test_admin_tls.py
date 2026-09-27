@@ -41,8 +41,11 @@ class AdminTLSTests(unittest.TestCase):
             self.assertTrue(ensure_domain('table.example', root, ca))
             self.assertIn('DNS:elderbrain.table.example', names(tls / 'admin.crt'))
             self.assertIn('DNS:foundry.table.example', names(tls / 'admin.crt'))
+            self.assertIn('DNS:mindflayer.table.example', names(tls / 'admin.crt'))
             openssl(['verify', '-CAfile', tls / 'ca.crt', '-verify_hostname',
                      'foundry.table.example', tls / 'admin.crt'])
+            openssl(['verify', '-CAfile', tls / 'ca.crt', '-verify_hostname',
+                     'mindflayer.table.example', tls / 'admin.crt'])
             self.assertFalse(ensure_domain('table.example', root, ca))
             for path, original in preserved.items():
                 self.assertEqual(path.read_bytes(), original)

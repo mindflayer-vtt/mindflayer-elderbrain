@@ -22,8 +22,9 @@ def document(domain):
     for name in ('foundry', 'mindflayer', 'elderbrain'):
         router = {'rule': f'Host(`{name}.{domain}`)', 'entryPoints': ['web'],
                   'service': name, 'priority': 100}
-        if name in ('foundry', 'elderbrain'):
-            router['middlewares'] = [name + '-https']
+        if name in ('foundry', 'mindflayer', 'elderbrain'):
+            if name != 'mindflayer':
+                router['middlewares'] = [name + '-https']
             routers['lan-' + name + '-tls'] = {
                 'rule': router['rule'], 'entryPoints': ['websecure'],
                 'service': name, 'priority': 100, 'tls': {},

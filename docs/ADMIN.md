@@ -18,6 +18,12 @@ docker compose --env-file /opt/mindflayer-elderbrain/appliance.env -f /opt/mindf
 docker image inspect "$(sed -n 's/^MINDFLAYER_SERVER_IMAGE=//p' /opt/mindflayer-elderbrain/appliance.env)"
 ```
 
+The Foundry Mind Flayer module connects to the browser-facing server with
+`wss://mindflayer.<configured-domain>/ws` (host `mindflayer.<configured-domain>`,
+port `443`, path `/ws`). Its WebSocket settings are per browser; update them in
+each Foundry client still using port `80` or the old `/ws/vtt` path. The
+appliance CA must be trusted by that browser, as for the Foundry HTTPS page.
+
 `elderbrain backup [destination]` now creates a versioned `.tar.zst` archive,
 including Foundry data, appliance configuration and secrets, Mindflayer identity
 and device credentials, firmware, Traefik state, browser state, managed service

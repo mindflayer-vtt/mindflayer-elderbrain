@@ -19,6 +19,10 @@ class DomainRoutesTests(unittest.TestCase):
         self.assertEqual(routes['lan-foundry-tls']['tls'], {})
         self.assertEqual(routes['lan-foundry-tls']['entryPoints'], ['websecure'])
         self.assertEqual(routes['lan-mindflayer']['service'], 'mindflayer')
+        self.assertEqual(routes['lan-mindflayer-tls']['rule'], 'Host(`mindflayer.table.example`)')
+        self.assertEqual(routes['lan-mindflayer-tls']['entryPoints'], ['websecure'])
+        self.assertEqual(routes['lan-mindflayer-tls']['service'], 'mindflayer')
+        self.assertEqual(routes['lan-mindflayer-tls']['tls'], {})
         self.assertEqual(routes['lan-elderbrain-tls']['tls'], {})
         self.assertEqual(routes['lan-elderbrain']['middlewares'], ['elderbrain-https'])
         self.assertIn('PathPrefix(`/elderbrain`)', routes['lan-elderbrain']['rule'])
@@ -90,6 +94,7 @@ class DomainRoutesTests(unittest.TestCase):
                 publish(root)
             ensure.assert_called_once_with('table.example', root / 'traefik', root / 'host/admin-ca')
             self.assertIn('lan-foundry-tls', target.read_text())
+            self.assertIn('lan-mindflayer-tls', target.read_text())
 
     def test_cancel_keeps_committed_routes(self):
         with tempfile.TemporaryDirectory() as directory:

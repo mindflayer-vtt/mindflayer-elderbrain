@@ -57,6 +57,24 @@ for name in ("installation_job.py", "installation_backend.py", "installation_ser
 '
 [[ $("${compose[@]}" ps --services --status running | wc -l) -eq 3 ]]
 curl --noproxy '*' -fsS -H 'Host: mindflayer.elderbrain.local' http://127.0.0.1/ >/dev/null
+curl --noproxy '*' --resolve mindflayer.elderbrain.local:443:127.0.0.1 \
+  --cacert /var/lib/mindflayer-elderbrain/traefik/tls/ca.crt \
+  -fsS https://mindflayer.elderbrain.local/ >/dev/null
+python3 - <<'PY'
+import socket
+import ssl
+
+host = 'mindflayer.elderbrain.local'
+context = ssl.create_default_context(cafile='/var/lib/mindflayer-elderbrain/traefik/tls/ca.crt')
+with socket.create_connection(('127.0.0.1', 443), timeout=5) as connection:
+    with context.wrap_socket(connection, server_hostname=host) as secure:
+        secure.sendall((f'GET /ws HTTP/1.1\r\nHost: {host}\r\n'
+                        'Connection: Upgrade\r\nUpgrade: websocket\r\n'
+                        'Sec-WebSocket-Version: 13\r\n'
+                        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n').encode())
+        response = secure.recv(4096)
+        assert response.startswith(b'HTTP/1.1 101 '), response
+PY
 # Device TLS uses a separately pinned key, not the administration CA.
 [[ $(curl --noproxy '*' -ksS -o /dev/null -w '%{http_code}' https://127.0.0.1:10443/) == 404 ]]
 ! dpkg -s ubuntu-desktop >/dev/null 2>&1
