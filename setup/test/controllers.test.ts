@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { ControllerMonitor } from "../server/utils/controllers.ts";
+import { ControllerMonitor } from "../server/services/controller-monitor.ts";
 import type WebSocket from "ws";
 
 class FakeSocket extends EventEmitter {

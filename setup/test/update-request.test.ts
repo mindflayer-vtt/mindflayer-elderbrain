@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { updateRequest } from '../server/utils/update-request';
+import { updateRequest } from '../server/services/update-request';
 
 const selected = { version: '1.2.3', manifestSha256: 'a'.repeat(64), confirmUpdate: true, confirmDowntime: true };
 test('update request retains exact version, digest and explicit confirmations', () => {

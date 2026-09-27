@@ -1,4 +1,4 @@
-import { AuthError, type AuthStore } from "../utils/auth";
+import { AuthError, type AuthStore } from "../services/auth-store";
 
 export default defineEventHandler((event) => {
   const pathname = event.path.split("?")[0]!;

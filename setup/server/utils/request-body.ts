@@ -1,4 +1,4 @@
-import { AuthError } from "./auth";
+import { AuthError } from "../services/auth-store";
 import type { H3Event } from "h3";
 export async function smallBody(event: H3Event): Promise<Record<string, unknown>> {
   let size = 0;

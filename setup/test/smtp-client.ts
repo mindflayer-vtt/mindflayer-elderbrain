@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { AuthStore } from "../server/utils/auth.ts";
+import { AuthStore } from "../server/services/auth-store.ts";
 
 const mode = process.argv[2]!;
 const root = process.env.SMTP_TEST_ROOT!;

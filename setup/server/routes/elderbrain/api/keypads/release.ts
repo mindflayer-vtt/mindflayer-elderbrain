@@ -1,4 +1,4 @@
-import { apiRoute } from "../../../../utils/api-route";
-import { keypadsApi } from "../../../../utils/api/keypads";
+import { apiRoute, unsupportedMethod } from "../../../../utils/api-route";
+import { installableRelease } from "../../../../services/keypads";
 
-export default apiRoute(event => keypadsApi(event, "keypads/release"));
+export default apiRoute(event => event.method === "GET" ? installableRelease() : unsupportedMethod(event));

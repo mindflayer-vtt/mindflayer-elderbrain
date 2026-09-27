@@ -1,4 +1,4 @@
-import { apiRoute } from "../../../../utils/api-route";
-import { systemApi } from "../../../../utils/api/system";
+import { apiRoute, unsupportedMethod } from "../../../../utils/api-route";
+import { releaseStatus } from "../../../../services/system";
 
-export default apiRoute(event => systemApi(event, "system/release"));
+export default apiRoute(event => event.method === "GET" ? releaseStatus() : unsupportedMethod(event));

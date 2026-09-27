@@ -1,4 +1,9 @@
-import { apiRoute } from "../../../../utils/api-route";
-import { systemApi } from "../../../../utils/api/system";
+import { apiRoute, apiBody, unsupportedMethod } from "../../../../utils/api-route";
+import { startUpdate } from "../../../../services/system";
 
-export default apiRoute(event => systemApi(event, "system/update"));
+export default apiRoute(async event => {
+  if (event.method !== "POST") return unsupportedMethod(event);
+  const result = await startUpdate(await apiBody(event));
+  setResponseStatus(event, 202);
+  return result;
+});

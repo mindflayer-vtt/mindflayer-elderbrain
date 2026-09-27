@@ -14,6 +14,12 @@ Setup has one API path, `/elderbrain/api/`. Traefik forwards that path unchanged
 to Nitro; the general `/elderbrain/` page and asset route still strips the prefix.
 Unprefixed `/api/` requests return 404.
 
+Each setup API endpoint has its own Nitro controller in `setup/server/routes`.
+Controllers select HTTP methods, read requests, and set HTTP responses; named
+operations in `setup/server/services` own validation, persistent state, and host
+management calls. `setup/server/utils` contains only shared request and route
+helpers, not endpoint dispatchers.
+
 The administration CA certificate and signing key live in root-only persistent
 host state at `host/admin-ca`. Traefik receives only the read-only dynamic and
 leaf-certificate directories: its dynamic TLS/routing documents and the leaf

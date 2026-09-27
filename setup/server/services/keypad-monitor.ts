@@ -1,5 +1,5 @@
-import type { ControllerMonitor } from "./controllers";
-import type { KeypadInventory } from "./keypads";
+import type { ControllerMonitor } from "./controller-monitor";
+import type { KeypadInventory } from "./keypad-inventory";
 
 export function bindKeypadInventory(monitor: ControllerMonitor, inventory: KeypadInventory) {
   monitor.on("change", controller => {

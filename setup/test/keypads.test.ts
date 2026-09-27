@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { KeypadInventory } from "../server/utils/keypads.ts";
-import { bindKeypadInventory } from "../server/utils/keypad-monitor.ts";
-import { ControllerMonitor } from "../server/utils/controllers.ts";
+import { KeypadInventory } from "../server/services/keypad-inventory.ts";
+import { bindKeypadInventory } from "../server/services/keypad-monitor.ts";
+import { ControllerMonitor } from "../server/services/controller-monitor.ts";
 
 test("registered offline devices persist without inventing device confirmation", (t) => {
   const state = fs.mkdtempSync(path.join(os.tmpdir(), "elderbrain-keypads-"));

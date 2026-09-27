@@ -10,7 +10,7 @@ import {
   saveFoundrySecret,
   removeFoundryDownloadSecret,
   validate,
-} from "../server/utils/config.ts";
+} from "../server/services/configuration.ts";
 
 test("defaults represent an unconfigured two-view appliance", () => {
   assert.equal(defaults.configured, false);

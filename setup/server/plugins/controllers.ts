@@ -1,6 +1,6 @@
-import { ControllerMonitor } from "../utils/controllers";
-import { KeypadInventory } from "../utils/keypads";
-import { bindKeypadInventory } from "../utils/keypad-monitor";
+import { ControllerMonitor } from "../services/controller-monitor";
+import { KeypadInventory } from "../services/keypad-inventory";
+import { bindKeypadInventory } from "../services/keypad-monitor";
 
 export default defineNitroPlugin((app) => {
   const inventory = new KeypadInventory(process.env.STATE_DIR || "/state");

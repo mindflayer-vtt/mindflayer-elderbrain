@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { AuthError } from "./auth";
+import { AuthError } from "../services/auth-store";
 
 function address(value: unknown, label: string): string {
   if (typeof value !== "string" || !value || value !== value.trim() || !isIP(value))

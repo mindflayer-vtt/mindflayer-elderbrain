@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { AuthStore, AuthError, passwordHash, bootstrapPassword, offlineRecoveryCode } from "../server/utils/auth.ts";
+import { AuthStore, AuthError, passwordHash, bootstrapPassword, offlineRecoveryCode } from "../server/services/auth-store.ts";
 import bootstrapWords from "../shared/bootstrap-words.json";
 
 test("bootstrap passphrases have four independently selected words", () => {

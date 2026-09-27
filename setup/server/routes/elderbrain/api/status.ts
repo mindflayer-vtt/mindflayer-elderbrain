@@ -1,4 +1,4 @@
-import { apiRoute } from "../../../utils/api-route";
-import { miscApi } from "../../../utils/api/misc";
+import { apiRoute, unsupportedMethod } from "../../../utils/api-route";
+import { applianceStatus } from "../../../services/status";
 
-export default apiRoute(event => miscApi(event, "status"));
+export default apiRoute(event => event.method === "GET" ? applianceStatus() : unsupportedMethod(event));

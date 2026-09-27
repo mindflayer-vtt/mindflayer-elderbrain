@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { clientAddress } from "../server/utils/client-address.ts";
-import { AuthError, AuthStore } from "../server/utils/auth.ts";
+import { AuthError, AuthStore } from "../server/services/auth-store.ts";
 
 test("trusted proxy identifies distinct clients from the authoritative rightmost address", () => {
   assert.equal(clientAddress("172.31.254.2", "192.0.2.10", false, "172.31.254.2"), "proxy:192.0.2.10");

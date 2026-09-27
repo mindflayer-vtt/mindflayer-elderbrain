@@ -1,4 +1,4 @@
-import { apiRoute } from "../../../utils/api-route";
-import { displayApi } from "../../../utils/api/display";
+import { apiRoute, unsupportedMethod } from "../../../utils/api-route";
+import { hostDisplays } from "../../../services/display";
 
-export default apiRoute(event => displayApi(event, "displays"));
+export default apiRoute(event => event.method === "GET" ? hostDisplays() : unsupportedMethod(event));

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beamerStatus, readBeamer, saveBeamer, removeBeamer } from "../server/utils/beamer.ts";
+import { beamerStatus, readBeamer, saveBeamer, removeBeamer } from "../server/services/beamer-config.ts";
 
 const input = { worldId: "test-world", userId: "AbCdEf0123456789", password: "test-only-beamer-password" };
 test("username pairing defaults to Beamer and retains legacy ID compatibility", t => {

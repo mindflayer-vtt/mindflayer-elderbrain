@@ -11,6 +11,11 @@ export function apiRoute(handler: (event: H3Event) => unknown | Promise<unknown>
   });
 }
 
+export function unsupportedMethod(event: H3Event) {
+  setResponseStatus(event, 404);
+  return { error: "not found" };
+}
+
 export async function apiBody(event: H3Event): Promise<unknown> {
   let size = 0;
   const chunks: Buffer[] = [];

@@ -25,15 +25,21 @@ test("administration API uses explicit Nitro route files", () => {
     "keypad-settings.ts", "logs/foundry.ts", "logs/foundry/download.ts",
     "config.ts", "controllers.ts", "controllers/[id]/identify.ts",
     "status.ts", "actions/restart-foundry.ts", "actions/restart-mindflayer.ts",
-    "actions/restart-browser-session.ts",
+    "actions/restart-browser-session.ts", "auth/session.ts", "auth/login.ts",
+    "auth/recover.ts", "auth/reset.ts", "auth/logout.ts", "auth/password.ts",
+    "auth/email.ts", "auth/verify.ts",
   ];
   const fallback = path.join(api, "[...path].ts");
   const legacyRoutes = fs.existsSync(legacy) ? fs.readdirSync(legacy, { recursive: true }).filter(value => String(value).endsWith(".ts")) : [];
   assert.deepEqual(legacyRoutes, [], "API handlers must only be mounted under /elderbrain/api");
   assert.equal(fs.existsSync(fallback), true, "unknown API paths need a 404 route");
+  assert.equal(fs.existsSync(path.join(api, "auth/[...action].ts")), false,
+    "authentication actions need independent controllers");
   assert.match(fs.readFileSync(fallback, "utf8"), /setResponseStatus\(event, 404\)/);
   for (const route of routes) {
     assert.equal(fs.existsSync(path.join(api, route)) && fs.statSync(path.join(api, route)).isFile(), true, route);
-    assert.match(fs.readFileSync(path.join(api, route), "utf8"), /apiRoute\(event =>/);
+    const source = fs.readFileSync(path.join(api, route), "utf8");
+    assert.match(source, /(?:apiRoute|authRoute)\((?:async )?(?:event|\()/);
+    assert.match(source, /services\/|authRoute/, `${route} must delegate work to a service`);
   }
 });

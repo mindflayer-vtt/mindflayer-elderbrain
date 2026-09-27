@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { AuthStore } from '../server/utils/auth.ts';
+import { AuthStore } from '../server/services/auth-store.ts';
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'elderbrain-vm-auth-'));
 let verification = '';

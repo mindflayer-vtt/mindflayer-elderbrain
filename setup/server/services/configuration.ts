@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ApplianceConfig } from "../../shared/types";
 
+export function currentConfig() {
+  return load(path.join(process.env.STATE_DIR || "/state", "config.json"));
+}
+
 export const defaults: ApplianceConfig = {
   version: 1,
   configured: false,

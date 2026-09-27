@@ -4,7 +4,7 @@ import net from "node:net";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { backupDownload, backupUpload } from "../server/utils/management";
+import { backupDownload, backupUpload } from "../server/services/management-client";
 import { Readable } from "node:stream";
 
 async function fixture(t: test.TestContext, respond: (socket: net.Socket) => void) {

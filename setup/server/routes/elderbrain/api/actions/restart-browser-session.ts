@@ -1,4 +1,4 @@
-import { apiRoute } from "../../../../utils/api-route";
-import { miscApi } from "../../../../utils/api/misc";
+import { apiRoute, unsupportedMethod } from "../../../../utils/api-route";
+import { restartService } from "../../../../services/actions";
 
-export default apiRoute(event => miscApi(event, "actions/restart-browser-session"));
+export default apiRoute(event => event.method === "POST" ? restartService("restart-browser-session") : unsupportedMethod(event));

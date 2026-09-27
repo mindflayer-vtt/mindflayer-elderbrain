@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { WebSocketServer } from "ws";
-import { AuthStore } from "../server/utils/auth";
-import { saveAtomic } from "../server/utils/config";
+import { AuthStore } from "../server/services/auth-store";
+import { saveAtomic } from "../server/services/configuration";
 
 const state = fs.mkdtempSync(path.join(os.tmpdir(), "elderbrain-browser-"));
 let verification = "";
