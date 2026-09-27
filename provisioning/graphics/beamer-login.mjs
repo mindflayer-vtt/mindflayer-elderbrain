@@ -50,7 +50,16 @@ export async function loginBeamer(page, { origin, worldId, userId, username, pas
     await page.locator('input[name="password"]').fill(password, { timeout });
     state = 'login-failed';
     await page.locator('button[name="join"]').click({ timeout });
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout });
+    try {
+      await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout });
+    } catch {
+      // Foundry can accept the password and navigate to /game before its
+      // world finishes loading. Only a form still on /join is a login failure.
+      try {
+        if (new URL(page.url()).pathname !== '/join') state = 'unavailable';
+      } catch { state = 'unavailable'; }
+      return { state };
+    }
     const result = await page.evaluate(({ worldId, userId }) => {
       if (game.world?.id !== worldId || game.user?.id !== userId) return { state: 'pairing-required' };
       if (game.user.isGM || ![CONST.USER_ROLES.PLAYER, CONST.USER_ROLES.TRUSTED].includes(game.user.role)) {

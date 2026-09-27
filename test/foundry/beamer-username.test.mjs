@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loginBeamer } from '../../provisioning/graphics/beamer-login.mjs';
 
-function pageFor(users) {
+function pageFor(users, { afterClickPath, waitError } = {}) {
   let location = 'about:blank', chosen, submitted = false;
   const game = { version: '14.367', world: { id: 'test-world' },
     users: { filter: fn => users.filter(fn), get: id => users.find(u => u.id === id) },
@@ -15,8 +15,11 @@ function pageFor(users) {
     getByText: () => ({ isVisible: async () => false }),
     locator: selector => ({ waitFor: async () => {}, count: async () => 1,
       selectOption: async id => { chosen = id; }, fill: async () => { submitted = true; },
-      click: async () => { game.user = users.find(user => user.id === chosen); } }),
-    waitForFunction: async () => {},
+      click: async () => {
+        game.user = users.find(user => user.id === chosen);
+        if (afterClickPath) location = new URL(afterClickPath, config.origin).href;
+      } }),
+    waitForFunction: async () => { if (waitError) throw new Error('Timed out waiting for Foundry'); },
     evaluate: async (fn, args) => {
       globalThis.game = game; globalThis.CONST = { USER_ROLES: { PLAYER: 1, TRUSTED: 2 }, USER_PERMISSIONS: {} };
       try { return fn(args); } finally { delete globalThis.game; delete globalThis.CONST; }
@@ -46,4 +49,12 @@ test('missing, ambiguous and privileged names never submit a password', async ()
     assert.equal(page.submitted(), false);
     assert.equal(page.url(), 'about:blank');
   }
+});
+test('a slow world after accepted login is retryable, but rejected credentials stay terminal', async () => {
+  const loading = pageFor([player], { afterClickPath: '/game', waitError: true });
+  assert.deepEqual(await loginBeamer(loading, config), { state: 'unavailable' });
+  assert.equal(loading.url(), 'about:blank');
+  const rejected = pageFor([player], { waitError: true });
+  assert.deepEqual(await loginBeamer(rejected, config), { state: 'login-failed' });
+  assert.equal(rejected.url(), 'about:blank');
 });
