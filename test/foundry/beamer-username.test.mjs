@@ -1,14 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loginBeamer } from '../../provisioning/graphics/beamer-login.mjs';
+import { beamerReviewAccepted, loginBeamer } from '../../provisioning/graphics/beamer-login.mjs';
 
-function pageFor(users, { afterClickPath, waitError } = {}) {
+function pageFor(users, { afterClickPath, waitError, reviewIssues = [], reviewStatus } = {}) {
   let location = 'about:blank', chosen, submitted = false;
   const game = { version: '14.367', world: { id: 'test-world' },
     users: { filter: fn => users.filter(fn), get: id => users.find(u => u.id === id) },
     canvas: { initialized: true }, modules: new Map([['mindflayer-token-controller',
       { active: true, instance: { modules: { BeamerUsers: { loaded: true,
-        selectedId: 'AbCdEf0123456789', status: () => ({ state: 'configured' }) } } } }]]) };
+        selectedId: 'AbCdEf0123456789', status: () => reviewStatus === undefined ? ({
+          state: reviewIssues.length ? 'review-required' : 'configured', issues: reviewIssues,
+        }) : reviewStatus } } } }]]) };
   return { submitted: () => submitted, chosen: () => chosen,
     route: async () => {}, unroute: async () => {},
     goto: async url => { location = url; }, url: () => location,
@@ -57,4 +59,22 @@ test('a slow world after accepted login is retryable, but rejected credentials s
   const rejected = pageFor([player], { waitError: true });
   assert.deepEqual(await loginBeamer(rejected, config), { state: 'login-failed' });
   assert.equal(rejected.url(), 'about:blank');
+});
+test('an assigned character and token ownership are allowed without ignoring other module warnings', async () => {
+  const character = 'Remove the assigned character before adoption';
+  const ownership = 'Document ownership requires manual review';
+  for (const issues of [[character], [ownership], [character, ownership]]) {
+    assert.equal((await loginBeamer(pageFor([player], { reviewIssues: issues }), config)).state, 'ready');
+  }
+  const unknown = pageFor([player], { reviewIssues: [character, 'Unrecognized safety concern'] });
+  assert.equal((await loginBeamer(unknown, config)).state, 'module-review-required');
+  assert.equal(unknown.url(), 'about:blank');
+  const malformed = pageFor([player], { reviewStatus: null });
+  assert.equal((await loginBeamer(malformed, config)).state, 'module-review-required');
+  assert.equal(malformed.url(), 'about:blank');
+});
+test('the shared review policy fails closed for malformed or unexpected status', () => {
+  for (const review of [null, {}, { state: 'configured', issues: ['Unknown'] },
+    { state: 'review-required', issues: [] }, { state: 'review-required', issues: 'Unknown' },
+    { state: 'unknown', issues: [] }]) assert.equal(beamerReviewAccepted(review), false);
 });

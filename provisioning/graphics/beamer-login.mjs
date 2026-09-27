@@ -2,6 +2,18 @@
  * The caller owns browser lifecycle, private credential loading and status persistence.
  * No diagnostics from the browser/automation library may be logged by the caller.
  */
+const allowedReviewIssues = new Set([
+  'Remove the assigned character before adoption',
+  'Document ownership requires manual review',
+]);
+
+export function beamerReviewAccepted(review) {
+  if (!review || !Array.isArray(review.issues)) return false;
+  if (review.state === 'configured') return review.issues.length === 0;
+  return review.state === 'review-required' && review.issues.length > 0
+    && review.issues.every(issue => allowedReviewIssues.has(issue));
+}
+
 export async function loginBeamer(page, { origin, worldId, userId, username, password }, timeout = 30000) {
   let target;
   try {
@@ -60,6 +72,7 @@ export async function loginBeamer(page, { origin, worldId, userId, username, pas
       } catch { state = 'unavailable'; }
       return { state };
     }
+    state = 'unavailable';
     const result = await page.evaluate(({ worldId, userId }) => {
       if (game.world?.id !== worldId || game.user?.id !== userId) return { state: 'pairing-required' };
       if (game.user.isGM || ![CONST.USER_ROLES.PLAYER, CONST.USER_ROLES.TRUSTED].includes(game.user.role)) {
@@ -71,11 +84,10 @@ export async function loginBeamer(page, { origin, worldId, userId, username, pas
       const service = module?.instance?.modules.BeamerUsers;
       if (!module?.active || !service?.loaded) return { state: 'module-unavailable' };
       if (service.selectedId !== userId) return { state: 'pairing-required' };
-      if (service.status().state !== 'configured') return { state: 'module-review-required' };
-      return { state: game.canvas?.initialized ? 'ready' : 'canvas-unavailable' };
+      return { state: game.canvas?.initialized ? 'ready' : 'canvas-unavailable', review: service.status() };
     }, { worldId, userId });
-    state = result.state;
-    return { ...result, userId };
+    state = 'review' in result && !beamerReviewAccepted(result.review) ? 'module-review-required' : result.state;
+    return { state, userId };
   } catch {
     return { state };
   } finally {

@@ -1,4 +1,4 @@
-import { loginBeamer } from './beamer-login.mjs';
+import { beamerReviewAccepted, loginBeamer } from './beamer-login.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
@@ -32,21 +32,20 @@ export async function runBeamer(chromium, config, publish, signal) {
       while (!signal.aborted) {
         await delay(5000, undefined, { signal }).catch(() => {});
         if (signal.aborted) break;
-        const state = await page.evaluate(({ worldId, userId }) => {
-          if (!globalThis.game?.ready || !game.socket?.connected || game.world?.id !== worldId) return 'world-not-running';
-          if (game.user?.id !== userId) return 'pairing-required';
+        const status = await page.evaluate(({ worldId, userId }) => {
+          if (!globalThis.game?.ready || !game.socket?.connected || game.world?.id !== worldId) return { state: 'world-not-running' };
+          if (game.user?.id !== userId) return { state: 'pairing-required' };
           if (game.user.isGM || ![CONST.USER_ROLES.PLAYER, CONST.USER_ROLES.TRUSTED].includes(game.user.role)) {
-            return 'role-review-required';
+            return { state: 'role-review-required' };
           }
           if (game.user.role === CONST.USER_ROLES.PLAYER
-            && Object.keys(CONST.USER_PERMISSIONS).some(key => game.user.can(key))) return 'permission-review-required';
+            && Object.keys(CONST.USER_PERMISSIONS).some(key => game.user.can(key))) return { state: 'permission-review-required' };
           const service = game.modules.get('mindflayer-token-controller')?.instance?.modules.BeamerUsers;
-          if (!service?.loaded) return 'module-unavailable';
-          if (service.selectedId !== userId) return 'pairing-required';
-          if (service.status().state !== 'configured') return 'module-review-required';
-          if (!game.canvas?.initialized) return 'canvas-unavailable';
-          return 'ready';
+          if (!service?.loaded) return { state: 'module-unavailable' };
+          if (service.selectedId !== userId) return { state: 'pairing-required' };
+          return { state: game.canvas?.initialized ? 'ready' : 'canvas-unavailable', review: service.status() };
         }, { worldId: config.credential.worldId, userId: result.userId });
+        const state = 'review' in status && !beamerReviewAccepted(status.review) ? 'module-review-required' : status.state;
         publish({ state });
         if (state !== 'ready') return { state };
       }
