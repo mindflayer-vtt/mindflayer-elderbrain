@@ -689,6 +689,12 @@ test("production API preserves health, metadata, errors and method boundaries", 
   expect((await status.json()).mindflayerServerImage).toBe("test-registry-image");
   expect((await request.put("/elderbrain/api/config", { headers, data: { domain: "bad" } })).status()).toBe(409);
   expect((await request.get("/elderbrain/api/foundry/credentials")).status()).toBe(404);
+  for (const prefix of ["http://127.0.0.1:18080/api/", "/elderbrain/api/"]) {
+    expect((await request.get(prefix + "system/update")).status()).toBe(404);
+    expect((await request.post(prefix + "status", { headers })).status()).toBe(404);
+    expect((await request.delete(prefix + "keypads", { headers })).status()).toBe(404);
+    expect((await request.get(prefix + "no-such-route")).status()).toBe(404);
+  }
   const administrator = await request.get("/elderbrain/api/foundry/admin-key");
   expect(administrator.headers()["cache-control"]).toBe("no-store");
   expect((await administrator.json()).accessKey).toMatch(/^[a-z]+(?:-[a-z]+){11}$/);
