@@ -33,16 +33,18 @@ def request(path, *, body=None, csrf=None):
         headers.update({'Content-Type': 'application/json', 'x-elderbrain-request': '1'})
     if csrf is not None:
         headers['x-csrf-token'] = csrf
-    with opener.open(urllib.request.Request(args.base_url + path, data=data, headers=headers), timeout=45) as response:
+    if not path.startswith('/elderbrain/api/'):
+        raise ValueError('Expected the prefixed appliance API path')
+    with opener.open(urllib.request.Request(args.base_url.removesuffix('/elderbrain') + path, data=data, headers=headers), timeout=45) as response:
         return response.status, response.headers, json.loads(response.read())
 
 
-status, _, login = request('/api/auth/login', body={'username': 'admin', 'password': password})
+status, _, login = request('/elderbrain/api/auth/login', body={'username': 'admin', 'password': password})
 assert status == 200 and login['authenticated'] is True and login['ready'] is True
-status, _, session = request('/api/auth/session')
+status, _, session = request('/elderbrain/api/auth/session')
 assert status == 200 and session['authenticated'] is True and session['ready'] is True
 if args.status:
-    status, _, jobs = request('/api/jobs')
+    status, _, jobs = request('/elderbrain/api/jobs')
     selected = next(job for job in jobs if job['id'] == args.status)
     assert status == 200 and selected['kind'] == 'power'
     assert selected['request'] == {'action': args.action, 'confirmPower': True}
@@ -50,10 +52,10 @@ if args.status:
                       'jobState': selected['state'], 'stage': selected.get('stage'),
                       'result': selected.get('result')}, sort_keys=True))
     raise SystemExit(0)
-status, _, power = request('/api/system/power')
+status, _, power = request('/elderbrain/api/system/power')
 assert status == 200 and power['pending'] is False
 selection = {'action': args.action, 'confirmPower': True}
-status, headers, job = request('/api/system/power', body=selection, csrf=session['csrf'])
+status, headers, job = request('/elderbrain/api/system/power', body=selection, csrf=session['csrf'])
 assert status == 202 and headers.get('Cache-Control') == 'no-store'
 assert job['kind'] == 'power' and job['state'] in ('queued', 'running') and job['request'] == selection
 print(json.dumps({'state': 'live-system-power-submitted', 'id': job['id'],

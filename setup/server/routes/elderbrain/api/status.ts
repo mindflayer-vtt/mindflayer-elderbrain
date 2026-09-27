@@ -1,1 +1,4 @@
-export { default } from "../../../api/status";
+import { apiRoute } from "../../../utils/api-route";
+import { miscApi } from "../../../utils/api/misc";
+
+export default apiRoute(event => miscApi(event, "status"));

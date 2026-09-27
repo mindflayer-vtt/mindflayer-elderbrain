@@ -52,9 +52,9 @@ with socket.create_connection(('127.0.0.1', 443), timeout=15) as plain:
         assert ('DNS', foundry_host) in alternatives, 'Foundry hostname is absent from the served certificate'
 for path in ("/health", "/elderbrain/health", "/elderbrain/"):
     assert request(path)[0] == 200, f"HTTPS route unavailable: {path}"
-for prefix in ("/api/", "/elderbrain/api/"):
-    for route in ("config", "jobs", "keypads", "logs/foundry", "borg/settings"):
-        assert request(prefix + route)[0] == 401, "Unauthorized API access"
+for route in ("config", "jobs", "keypads", "logs/foundry", "borg/settings"):
+    assert request("/api/" + route)[0] == 404, "Unprefixed API is still exposed"
+    assert request("/elderbrain/api/" + route)[0] == 401, "Unauthorized API access"
 credential = os.environ.get("ELDERBRAIN_TEST_ADMIN_PASSWORD")
 password_file = Path(credential) if credential else state / "elderbrain/secrets/initial-password"
 if credential:

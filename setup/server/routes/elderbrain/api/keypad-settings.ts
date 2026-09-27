@@ -1,1 +1,4 @@
-export { default } from "../../../api/keypad-settings";
+import { apiRoute } from "../../../utils/api-route";
+import { keypadsApi } from "../../../utils/api/keypads";
+
+export default apiRoute(event => keypadsApi(event, "keypad-settings"));

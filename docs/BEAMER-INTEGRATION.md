@@ -170,7 +170,7 @@ keyboard/accessibility checks remain to be completed.
 ### Appliance credential storage (not connected to kiosk yet)
 
 The local Foundry page now accepts one world ID, Beamer user ID and existing
-password. Authenticated `GET/PUT/DELETE /api/foundry/beamer` stores the record in
+password. Authenticated `GET/PUT/DELETE /elderbrain/api/foundry/beamer` stores the record in
 `STATE_DIR/secrets/beamer.json` with mode 0600, atomic replacement and a fresh
 revision on each save. Existing global HTTPS/session/CSRF middleware applies.
 The record is separate from downloadable Foundry account credentials and browser

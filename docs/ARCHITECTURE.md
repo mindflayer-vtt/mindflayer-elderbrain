@@ -10,6 +10,10 @@ network. Physical keypads are the documented exception: they use restricted-CBOR
 WebSocket over a separate self-signed TLS identity at `/device/v1` on 10443.
 Their firmware pins that identity, so host 10443 maps directly to the server.
 
+Setup has one API path, `/elderbrain/api/`. Traefik forwards that path unchanged
+to Nitro; the general `/elderbrain/` page and asset route still strips the prefix.
+Unprefixed `/api/` requests return 404.
+
 The administration CA certificate and signing key live in root-only persistent
 host state at `host/admin-ca`. Traefik receives only the read-only dynamic and
 leaf-certificate directories: its dynamic TLS/routing documents and the leaf

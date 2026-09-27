@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-const api = path.resolve(import.meta.dirname, "../server/api");
+const api = path.resolve(import.meta.dirname, "../server/routes/elderbrain/api");
+const legacy = path.resolve(import.meta.dirname, "../server/api");
 
 test("administration API uses explicit Nitro route files", () => {
   const routes = [
@@ -27,13 +28,12 @@ test("administration API uses explicit Nitro route files", () => {
     "actions/restart-browser-session.ts",
   ];
   const fallback = path.join(api, "[...path].ts");
-  const aliasFallback = path.resolve(api, "../routes/elderbrain/api/[...path].ts");
+  const legacyRoutes = fs.existsSync(legacy) ? fs.readdirSync(legacy, { recursive: true }).filter(value => String(value).endsWith(".ts")) : [];
+  assert.deepEqual(legacyRoutes, [], "API handlers must only be mounted under /elderbrain/api");
   assert.equal(fs.existsSync(fallback), true, "unknown API paths need a 404 route");
   assert.match(fs.readFileSync(fallback, "utf8"), /setResponseStatus\(event, 404\)/);
-  assert.equal(fs.existsSync(aliasFallback), true, "the appliance prefix needs the same fallback");
   for (const route of routes) {
     assert.equal(fs.existsSync(path.join(api, route)) && fs.statSync(path.join(api, route)).isFile(), true, route);
-    const alias = path.resolve(api, "../routes/elderbrain/api", route);
-    assert.equal(fs.existsSync(alias) && fs.statSync(alias).isFile(), true, `elderbrain alias: ${route}`);
+    assert.match(fs.readFileSync(path.join(api, route), "utf8"), /apiRoute\(event =>/);
   }
 });

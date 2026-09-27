@@ -33,6 +33,17 @@ def document(domain):
             routers['lan-elderbrain-tls']['rule'] = router['rule']
             routers['lan-elderbrain-tls']['middlewares'] = ['elderbrain-strip']
         routers['lan-' + name] = router
+    # API URLs retain their public prefix inside Nitro. Route them before the
+    # general kiosk path, which still strips /elderbrain for pages and assets.
+    routers['lan-elderbrain-api'] = {
+        'rule': 'PathPrefix(`/elderbrain/api/`)', 'entryPoints': ['web'],
+        'service': 'elderbrain', 'priority': 200,
+        'middlewares': ['elderbrain-https'],
+    }
+    routers['lan-elderbrain-api-tls'] = {
+        'rule': 'PathPrefix(`/elderbrain/api/`)', 'entryPoints': ['websecure'],
+        'service': 'elderbrain', 'priority': 200, 'tls': {}, 'middlewares': [],
+    }
     services = {
         'elderbrain': {'loadBalancer': {'servers': [{'url': 'http://elderbrain-setup:8080'}]}},
         'mindflayer': {'loadBalancer': {'servers': [{'url': 'http://mindflayer-server:8080'}]}},

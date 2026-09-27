@@ -22,6 +22,11 @@ class DomainRoutesTests(unittest.TestCase):
         self.assertEqual(routes['lan-elderbrain-tls']['tls'], {})
         self.assertEqual(routes['lan-elderbrain']['middlewares'], ['elderbrain-https'])
         self.assertIn('PathPrefix(`/elderbrain`)', routes['lan-elderbrain']['rule'])
+        self.assertEqual(routes['lan-elderbrain-api-tls']['rule'], 'PathPrefix(`/elderbrain/api/`)')
+        self.assertEqual(routes['lan-elderbrain-api-tls']['service'], 'elderbrain')
+        self.assertEqual(routes['lan-elderbrain-api-tls']['middlewares'], [])
+        self.assertGreater(routes['lan-elderbrain-api-tls']['priority'], routes['lan-elderbrain-tls']['priority'])
+        self.assertEqual(routes['lan-elderbrain-api']['middlewares'], ['elderbrain-https'])
         services = document('table.example')['http']['services']
         self.assertEqual(services['elderbrain']['loadBalancer']['servers'],
                          [{'url': 'http://elderbrain-setup:8080'}])

@@ -1,1 +1,4 @@
-export { default } from "../../../../api/foundry/admin-key";
+import { apiRoute } from "../../../../utils/api-route";
+import { foundryApi } from "../../../../utils/api/foundry";
+
+export default apiRoute(event => foundryApi(event, "foundry/admin-key"));

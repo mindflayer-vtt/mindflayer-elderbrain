@@ -331,11 +331,12 @@ const app = spawn(process.execPath, [".output/server/index.mjs"], {
     MINDFLAYER_SERVER_IMAGE: "test-registry-image", ELDERBRAIN_DEV_HTTP: "1" },
   stdio: "inherit",
 });
-// Match Traefik's PathPrefix + StripPrefix route; reject accidental root APIs/assets.
+// Match Traefik: API requests keep /elderbrain, while UI and assets use StripPrefix.
 const proxy = http.createServer((req, res) => {
   if (!req.url?.startsWith("/elderbrain/")) { res.writeHead(404).end(); return; }
   const upstream = http.request({
-    hostname: "127.0.0.1", port: 18080, path: req.url.slice("/elderbrain".length),
+    hostname: "127.0.0.1", port: 18080,
+    path: req.url.startsWith("/elderbrain/api/") ? req.url : req.url.slice("/elderbrain".length),
     method: req.method, headers: req.headers,
   }, (response) => {
     res.writeHead(response.statusCode || 502, response.headers);

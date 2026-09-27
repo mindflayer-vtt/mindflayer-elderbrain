@@ -9,7 +9,7 @@ test("all administration deep links remain behind login", async ({ page }) => {
 });
 
 test("local login keyboard selector searches and applies layouts without exposing its capability in the URL", async ({ page, request }) => {
-  for (const prefix of ["http://127.0.0.1:18080/api/", "/elderbrain/api/"]) {
+  for (const prefix of ["http://127.0.0.1:18080/elderbrain/api/", "/elderbrain/api/"]) {
     expect((await request.get(prefix + "keyboard", { headers: { "x-kiosk-keyboard": "b".repeat(64) } })).status()).toBe(403);
   }
   await page.goto("/elderbrain/#kiosk-keyboard=" + "a".repeat(64));
@@ -23,8 +23,8 @@ test("local login keyboard selector searches and applies layouts without exposin
   await expect(page.getByRole("heading", { name: "Sign in to Elderbrain" })).toBeVisible();
 });
 
-test("unauthenticated callers cannot read or change administration through either route", async ({ request, page }) => {
-  for (const prefix of ["http://127.0.0.1:18080/api/", "/elderbrain/api/"]) {
+test("unauthenticated callers cannot read or change administration through the prefixed API", async ({ request, page }) => {
+  for (const prefix of ["http://127.0.0.1:18080/elderbrain/api/", "/elderbrain/api/"]) {
     expect((await request.get(prefix + "keyboard")).status()).toBe(403);
     expect((await request.post(prefix + "keyboard", { headers: { "x-elderbrain-request": "1" }, data: { layout: "de:" } })).status()).toBe(403);
     expect((await request.get(prefix + "config")).status()).toBe(401);
@@ -63,6 +63,9 @@ test("unauthenticated callers cannot read or change administration through eithe
     expect((await request.post(prefix + "backups/" + "b".repeat(32) + "/restore", { headers: { "x-elderbrain-request": "1" }, data: { confirm: true } })).status()).toBe(401);
     expect((await request.post(prefix + "actions/restart-foundry", { headers: { "x-elderbrain-request": "1" } })).status()).toBe(401);
     expect((await request.delete(prefix + "foundry/credentials", { headers: { "x-elderbrain-request": "1" } })).status()).toBe(401);
+  }
+  for (const route of ["auth/session", "keyboard", "config", "status", "keypads", "no-such-route"]) {
+    expect((await request.get("http://127.0.0.1:18080/api/" + route)).status()).toBe(404);
   }
   await page.goto("/elderbrain/");
   await expect(page.getByRole("heading", { name: "Sign in to Elderbrain" })).toBeVisible();

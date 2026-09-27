@@ -35,23 +35,25 @@ def request(path, *, body=None, csrf=None):
         headers.update({'Content-Type': 'application/json', 'x-elderbrain-request': '1'})
     if csrf is not None:
         headers['x-csrf-token'] = csrf
-    with opener.open(urllib.request.Request(args.base_url + path, data=data, headers=headers), timeout=45) as response:
+    if not path.startswith('/elderbrain/api/'):
+        raise ValueError('Expected the prefixed appliance API path')
+    with opener.open(urllib.request.Request(args.base_url.removesuffix('/elderbrain') + path, data=data, headers=headers), timeout=45) as response:
         value = json.loads(response.read())
         return response.status, response.headers, value
 
 
-status, _, login = request('/api/auth/login', body={'username': 'admin', 'password': password})
+status, _, login = request('/elderbrain/api/auth/login', body={'username': 'admin', 'password': password})
 assert status == 200 and login['authenticated'] is True and login['ready'] is True
-status, _, session = request('/api/auth/session')
+status, _, session = request('/elderbrain/api/auth/session')
 assert status == 200 and session['authenticated'] is True and session['ready'] is True
 if args.status:
-    status, _, jobs = request('/api/jobs')
+    status, _, jobs = request('/elderbrain/api/jobs')
     selected = next(job for job in jobs if job['id'] == args.status)
     assert status == 200 and selected['kind'] == 'update'
     print(json.dumps({'state': 'live-system-update-visible', 'id': selected['id'],
                       'jobState': selected['state'], 'stage': selected.get('stage')}, sort_keys=True))
     raise SystemExit(0)
-status, _, checked = request('/api/system/check', body={}, csrf=session['csrf'])
+status, _, checked = request('/elderbrain/api/system/check', body={}, csrf=session['csrf'])
 assert status == 200 and checked['state'] == 'checked'
 release = checked['release']
 assert release['version'] == args.version and release['releaseSequence'] == args.sequence
@@ -65,7 +67,7 @@ if args.expect_incompatible:
 assert release['compatible'] is True
 selection = {'version': release['version'], 'manifestSha256': release['manifestSha256'],
              'confirmUpdate': True, 'confirmDowntime': True}
-status, headers, job = request('/api/system/update', body=selection, csrf=session['csrf'])
+status, headers, job = request('/elderbrain/api/system/update', body=selection, csrf=session['csrf'])
 assert status == 202 and headers.get('Cache-Control') == 'no-store'
 assert job['kind'] == 'update' and job['state'] in ('queued', 'running') and job['request'] == selection
 print(json.dumps({'state': 'live-system-update-submitted', 'id': job['id'],

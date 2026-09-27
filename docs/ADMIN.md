@@ -204,7 +204,7 @@ be selected within 90 seconds. Confirmation is available on every admin page,
 including after reopening Setup. **Revert display settings** cancels immediately.
 Until confirmation, committed configuration is unchanged. The independent host
 watchdog restores it on timeout even if the browser disconnects; reboot invalidates
-pending previews. Direct `PUT /api/config` writes are rejected. Concurrent changes
+pending previews. Direct `PUT /elderbrain/api/config` writes are rejected. Concurrent changes
 to committed configuration prevent confirmation rather than being overwritten.
 Physical appliance verification remains pending for this development build.
 
