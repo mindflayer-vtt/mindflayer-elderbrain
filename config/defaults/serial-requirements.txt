@@ -1,5 +1,5 @@
 # Match the keypad's tool-esptoolpy 2.40900.250804 transport interface.
-esptool==4.9.0
+esptool==5.4.0
 # Transitive runtime set qualified on the Ubuntu 26.04 / Python 3.14 VM.
 argcomplete==3.7.2
 bitarray==3.11.0
