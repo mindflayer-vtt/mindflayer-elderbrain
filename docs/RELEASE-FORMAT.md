@@ -278,6 +278,9 @@ The serial and borgmatic files pin their complete qualified runtime sets. Some
 Python pins, including esptool on Python 3.14, do not publish a compatible wheel;
 pip may therefore resolve upstream build-isolation inputs while constructing the
 offline wheel.
+Before writing the build receipt, the builder installs each Python requirement
+set into a fresh temporary environment using only its local wheels and runs
+`pip check`. Missing transitive pins therefore fail before production signing.
 
 This is not a hermetic or bit-reproducible release build. Python artifact hashes
 are recorded after retrieval rather than predeclared, so the release runner's TLS

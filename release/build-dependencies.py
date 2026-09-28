@@ -10,6 +10,7 @@ import platform
 import re
 import subprocess
 import sys
+import tempfile
 
 
 def requirements(file):
@@ -43,6 +44,22 @@ def browser_package(file):
     if len(expected) != 64:
         raise ValueError('Invalid browser package integrity')
     return version, expected
+
+
+def verify_offline_installs(locks, wheels, output):
+    """Catch missing transitive pins before an immutable release is signed."""
+    with tempfile.TemporaryDirectory(prefix='.verify-wheels-', dir=output) as temporary:
+        for name, lock in zip(('serial', 'borgmatic'), locks, strict=True):
+            prefix = Path(temporary) / name
+            subprocess.run([sys.executable, '-m', 'venv', str(prefix)], check=True,
+                           stdin=subprocess.DEVNULL, timeout=300)
+            python = prefix / 'bin/python'
+            subprocess.run([str(python), '-I', '-m', 'pip', '--isolated', 'install',
+                            '--no-index', '--no-deps', '--only-binary=:all:', '--no-cache-dir',
+                            '--find-links', str(wheels), '-r', str(lock)], check=True,
+                           stdin=subprocess.DEVNULL, timeout=300)
+            subprocess.run([str(python), '-I', '-m', 'pip', '--isolated', 'check'],
+                           check=True, stdin=subprocess.DEVNULL, timeout=300)
 
 
 def build(source, output):
@@ -90,6 +107,7 @@ def build(source, output):
             os.fsync(stream.fileno())
     if len(list(wheels.iterdir())) != len(combined):
         raise ValueError('Offline wheel count differs from reviewed runtime pins')
+    verify_offline_installs(locks, wheels, output)
     receipt = {'format': 1, 'platform': {'os': 'ubuntu', 'release': '26.04', 'architecture': 'amd64'},
                'python': platform.python_version(), 'requirements': combined, 'files': files,
                'inputs': {str(file.relative_to(source)): hashlib.sha256(file.read_bytes()).hexdigest()

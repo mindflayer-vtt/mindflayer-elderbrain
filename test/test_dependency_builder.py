@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('build_dependencies', ROOT / 'release/build-dependencies.py')
@@ -16,7 +17,8 @@ class DependencyBuilderTests(unittest.TestCase):
         serial = builder.requirements(ROOT / 'config/defaults/serial-requirements.txt')
         self.assertEqual(serial['esptool'], '4.9.0')
         self.assertEqual(len(serial), 14)
-        builder.requirements(ROOT / 'config/defaults/borgmatic-requirements.txt')
+        borgmatic = builder.requirements(ROOT / 'config/defaults/borgmatic-requirements.txt')
+        self.assertEqual(borgmatic['psutil'], '7.2.2')
         version, digest = builder.browser_package(ROOT / 'provisioning/graphics/package-lock.json')
         self.assertEqual(version, '1.63.0')
         self.assertEqual(len(digest), 64)
@@ -46,6 +48,30 @@ class DependencyBuilderTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     builder.build(ROOT, output)
             self.assertFalse(output.exists())
+
+    def test_release_build_checks_both_offline_environments(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(builder.subprocess, 'run') as run:
+            root = Path(temporary)
+            locks = [root / 'serial.txt', root / 'borgmatic.txt']
+            builder.verify_offline_installs(locks, root / 'wheels', root)
+            self.assertEqual(run.call_count, 6)
+            for index, name in enumerate(('serial', 'borgmatic')):
+                create, install, check = [entry.args[0] for entry in run.call_args_list[index * 3:index * 3 + 3]]
+                self.assertEqual(create[:3], [builder.sys.executable, '-m', 'venv'])
+                self.assertTrue(create[-1].endswith('/' + name))
+                self.assertIn('--no-index', install)
+                self.assertIn('--no-deps', install)
+                self.assertEqual(install[-2:], ['-r', str(locks[index])])
+                self.assertEqual(check[-4:], ['-m', 'pip', '--isolated', 'check'])
+                self.assertTrue(all(entry.kwargs['check'] for entry in run.call_args_list))
+
+    def test_failed_offline_check_stops_release_build(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(builder.subprocess, 'run') as run:
+            run.side_effect = [None, None, subprocess.CalledProcessError(1, ['pip', 'check'])]
+            with self.assertRaises(subprocess.CalledProcessError):
+                builder.verify_offline_installs([Path(temporary) / 'serial.txt', Path(temporary) / 'borgmatic.txt'],
+                                                Path(temporary) / 'wheels', Path(temporary))
+            self.assertEqual(run.call_count, 3)
 
 
 if __name__ == '__main__':
