@@ -117,10 +117,12 @@ class Handler(socketserver.StreamRequestHandler):
                 if not isinstance(value, dict) or set(value) != {'certificate', 'privateKey', 'trustRoot'}:
                     raise ValueError('Invalid authority upload')
                 from admin_tls import install_authority
+                from domain_routes import configured_domain
                 from release_interlocks import settings_admission
                 with settings_admission(JOBS.directory.parent):
                     result = {'ok': True, 'output': json.dumps(install_authority(
-                        value['certificate'], value['privateKey'], value['trustRoot']))}
+                        value['certificate'], value['privateKey'], value['trustRoot'],
+                        domain=configured_domain(JOBS.directory.parent)))}
             elif action == "keypad-usb-devices":
                 result = {"ok": True, "output": json.dumps(usb_serial_devices())}
             elif action == "keypad-release":

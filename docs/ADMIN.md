@@ -139,7 +139,10 @@ clients need to trust the appliance CA after verifying it through a trusted loca
 channel. On System → HTTPS certificate authority, an administrator can upload a
 PEM signing CA certificate, its matching unencrypted private key, and a PEM trust
 root. Elderbrain validates the chain and reissues its current hostname/IP leaf
-certificate under that CA. Upload is an explicit trust rotation: remote devices
+certificate under that CA. The leaf Common Name follows the configured domain
+(`elderbrain.<domain>`); the Setup, Foundry and Mindflayer hostnames remain in its
+Subject Alternative Names. Changing the domain also reissues the leaf under the
+existing CA. Upload is an explicit trust rotation: remote devices
 must trust the new root, and HTTPS may reconnect during replacement. Back up
 configuration first; the imported signing key is included in configuration backups.
 The CA signing key is retained

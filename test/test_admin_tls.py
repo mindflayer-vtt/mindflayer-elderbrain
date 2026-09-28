@@ -34,20 +34,29 @@ class AdminTLSTests(unittest.TestCase):
             old = (ca / 'ca.crt').read_bytes()
             with self.assertRaises(ValueError):
                 install_authority((root / 'signer.crt').read_text(), (root / 'root.key').read_text(),
-                                  (root / 'root.crt').read_text(), root, ca, publish_trust=False)
+                                  (root / 'root.crt').read_text(), root, ca,
+                                  domain='table.example', publish_trust=False)
             self.assertEqual((ca / 'ca.crt').read_bytes(), old)
             with self.assertRaises(ValueError):
                 install_authority((root / 'signer.crt').read_text(), (root / 'signer.key').read_text(),
-                                  old.decode(), root, ca, publish_trust=False)
+                                  old.decode(), root, ca, domain='table.example', publish_trust=False)
             self.assertEqual((ca / 'ca.crt').read_bytes(), old)
             self.assertEqual(install_authority((root / 'signer.crt').read_text(),
                              (root / 'signer.key').read_text(), (root / 'root.crt').read_text(),
-                             root, ca, publish_trust=False)['state'], 'installed')
+                             root, ca, domain='table.example', publish_trust=False)['state'], 'installed')
             self.assertEqual(validate_layout(root, ca), {'state': 'valid'})
-            self.assertEqual(names(tls / 'admin.crt'), ['DNS:elderbrain', 'IP:127.0.0.1'])
+            self.assertEqual(openssl(['x509', '-in', tls / 'admin.crt', '-noout', '-subject',
+                                      '-nameopt', 'RFC2253']).decode().strip(),
+                             'subject=CN=elderbrain.table.example')
+            self.assertEqual(names(tls / 'admin.crt'), ['DNS:elderbrain', 'IP:127.0.0.1',
+                             'DNS:elderbrain.table.example', 'DNS:foundry.table.example',
+                             'DNS:mindflayer.table.example'])
             openssl(['verify', '-CAfile', ca / 'trust-root.crt', '-untrusted', ca / 'ca.crt',
                      '-verify_hostname', 'elderbrain', tls / 'admin.crt'])
             self.assertTrue(ensure_address('10.0.2.20', root, ca))
+            self.assertEqual(openssl(['x509', '-in', tls / 'admin.crt', '-noout', '-subject',
+                                      '-nameopt', 'RFC2253']).decode().strip(),
+                             'subject=CN=elderbrain.table.example')
             openssl(['verify', '-CAfile', ca / 'trust-root.crt', '-untrusted', ca / 'ca.crt',
                      '-verify_ip', '10.0.2.20', tls / 'admin.crt'])
 
@@ -82,6 +91,9 @@ class AdminTLSTests(unittest.TestCase):
             self.assertFalse(ensure_address('10.0.2.20', root, ca))
             self.assertEqual((tls / 'admin.crt').read_bytes(), refreshed)
             self.assertTrue(ensure_domain('table.example', root, ca))
+            self.assertEqual(openssl(['x509', '-in', tls / 'admin.crt', '-noout', '-subject',
+                                      '-nameopt', 'RFC2253']).decode().strip(),
+                             'subject=CN=elderbrain.table.example')
             self.assertIn('DNS:elderbrain.table.example', names(tls / 'admin.crt'))
             self.assertIn('DNS:foundry.table.example', names(tls / 'admin.crt'))
             self.assertIn('DNS:mindflayer.table.example', names(tls / 'admin.crt'))
@@ -90,6 +102,22 @@ class AdminTLSTests(unittest.TestCase):
             openssl(['verify', '-CAfile', tls / 'ca.crt', '-verify_hostname',
                      'mindflayer.table.example', tls / 'admin.crt'])
             self.assertFalse(ensure_domain('table.example', root, ca))
+            # A legacy leaf may already have the correct SANs while retaining
+            # the installer-default CN. It still needs reissuing.
+            (root / 'stale-ext').write_text('subjectAltName=' + ','.join(names(tls / 'admin.crt')) + '\n')
+            openssl(['req', '-new', '-key', tls / 'admin.key', '-subj', '/CN=elderbrain.elderbrain.local',
+                     '-out', root / 'stale.csr'])
+            openssl(['x509', '-req', '-in', root / 'stale.csr', '-CA', ca / 'ca.crt', '-CAkey', ca / 'ca.key',
+                     '-set_serial', '3', '-days', '1', '-extfile', root / 'stale-ext', '-out', tls / 'admin.crt'])
+            self.assertTrue(ensure_domain('table.example', root, ca))
+            self.assertEqual(openssl(['x509', '-in', tls / 'admin.crt', '-noout', '-subject',
+                                      '-nameopt', 'RFC2253']).decode().strip(),
+                             'subject=CN=elderbrain.table.example')
+            self.assertTrue(ensure_domain('new.example', root, ca))
+            self.assertEqual(openssl(['x509', '-in', tls / 'admin.crt', '-noout', '-subject',
+                                      '-nameopt', 'RFC2253']).decode().strip(),
+                             'subject=CN=elderbrain.new.example')
+            self.assertIn('DNS:elderbrain.table.example', names(tls / 'admin.crt'))
             for path, original in preserved.items():
                 self.assertEqual(path.read_bytes(), original)
             self.assertFalse(list(tls.glob('.refresh-*')))

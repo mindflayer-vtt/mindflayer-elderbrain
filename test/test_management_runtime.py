@@ -1,5 +1,6 @@
 from pathlib import Path
 import ast
+from contextlib import nullcontext
 import io
 import json
 import socket
@@ -94,6 +95,20 @@ class ManagementRuntimeTests(unittest.TestCase):
         jobs.submit.assert_called_once_with('keypad-provision', selected)
 
         jobs.directory.parent = Path('/test/state')
+        authority = types.SimpleNamespace(install_authority=Mock(return_value={'state': 'installed'}))
+        domains = types.SimpleNamespace(configured_domain=Mock(return_value='home.viromania.com'))
+        interlocks = types.SimpleNamespace(settings_admission=Mock(return_value=nullcontext()))
+        upload = {'certificate': 'signer', 'privateKey': 'key', 'trustRoot': 'root'}
+        payload = json.dumps(upload).encode()
+        with patch.dict(sys.modules, {'admin_tls': authority, 'domain_routes': domains,
+                                      'release_interlocks': interlocks}):
+            response = send(f'tls-authority-install {len(payload)}\n'.encode() + payload)
+        self.assertTrue(response['ok'])
+        self.assertEqual(json.loads(response['output']), {'state': 'installed'})
+        domains.configured_domain.assert_called_once_with(Path('/test/state'))
+        authority.install_authority.assert_called_once_with('signer', 'key', 'root',
+                                                           domain='home.viromania.com')
+
         power = types.SimpleNamespace(pending=Mock(return_value=True))
         with patch.dict(sys.modules, {'power_service': power}):
             status = send(b'power-status\n')

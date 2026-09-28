@@ -16,6 +16,16 @@ def validate_domain(value):
     return value
 
 
+def configured_domain(state):
+    try:
+        config = json.loads((Path(state) / 'elderbrain/config.json').read_text())
+    except FileNotFoundError:
+        config = {}
+    if not isinstance(config, dict):
+        raise ValueError('Invalid appliance configuration')
+    return validate_domain(config.get('domain', 'elderbrain.local'))
+
+
 def document(domain):
     domain = validate_domain(domain)
     routers = {}
@@ -60,11 +70,7 @@ def document(domain):
 
 def reconcile(state):
     state = Path(state)
-    try:
-        config = json.loads((state / 'elderbrain/config.json').read_text())
-    except FileNotFoundError:
-        config = {}
-    content = json.dumps(document(config.get('domain', 'elderbrain.local')), indent=2) + '\n'
+    content = json.dumps(document(configured_domain(state)), indent=2) + '\n'
     target = state / 'traefik/dynamic/lan-routes.yaml'
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     parent_info = target.parent.lstat()
@@ -98,11 +104,7 @@ def reconcile(state):
 def publish(state):
     """Publish certificate support before making committed HTTPS routes live."""
     state = Path(state)
-    try:
-        config = json.loads((state / 'elderbrain/config.json').read_text())
-    except FileNotFoundError:
-        config = {}
-    domain = validate_domain(config.get('domain', 'elderbrain.local'))
+    domain = configured_domain(state)
     from admin_tls import ensure_domain
     ensure_domain(domain, state / 'traefik', state / 'host/admin-ca')
     reconcile(state)

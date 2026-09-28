@@ -137,8 +137,14 @@ def validate_layout(directory='/var/lib/mindflayer-elderbrain/traefik',
     return {'state': 'valid'}
 
 
+def domain_names(domain):
+    from domain_routes import validate_domain
+    domain = validate_domain(domain)
+    return 'elderbrain.' + domain, [f'DNS:{name}.{domain}' for name in ('elderbrain', 'foundry', 'mindflayer')]
+
+
 def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
-                 ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
+                 ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca', *, common_name=None):
     normalized = []
     for entry in required:
         if entry.startswith('DNS:'):
@@ -150,6 +156,9 @@ def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
             raise ValueError('Invalid certificate alternative name')
         normalized.append(entry)
     required = list(dict.fromkeys(normalized))
+    if common_name is not None and (not isinstance(common_name, str)
+                                    or not re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?', common_name)):
+        raise ValueError('Invalid certificate common name')
     root = Path(directory)
     ca = Path(ca_directory)
     tls = root / 'tls'
@@ -162,13 +171,19 @@ def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
         original_config = dynamic.read_bytes()
         original_certificate = certificate.read_bytes()
         existing = names(certificate)
-        changed = any(entry not in existing for entry in required)
+        subject = openssl(['x509', '-in', certificate, '-noout', '-subject', '-nameopt', 'RFC2253']).decode().strip()
+        changed = any(entry not in existing for entry in required) or (
+            common_name is not None and subject != 'subject=CN=' + common_name)
         if changed:
             trust = ca / 'trust-root.crt' if (ca / 'trust-root.crt').exists() else ca / 'ca.crt'
             openssl(['verify', '-CAfile', trust, '-untrusted', ca / 'ca.crt', certificate])
             with tempfile.TemporaryDirectory(prefix='.refresh-', dir=tls) as temporary:
                 stage = Path(temporary)
-                openssl(['x509', '-x509toreq', '-in', certificate, '-signkey', key, '-out', stage / 'request.pem'])
+                if common_name is None:
+                    openssl(['x509', '-x509toreq', '-in', certificate, '-signkey', key, '-out', stage / 'request.pem'])
+                else:
+                    openssl(['req', '-new', '-key', key, '-subj', '/CN=' + common_name,
+                             '-out', stage / 'request.pem'])
                 updated = existing + [entry for entry in required if entry not in existing]
                 (stage / 'extensions').write_text('subjectAltName=' + ','.join(updated)
                                                 + '\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\n')
@@ -195,18 +210,19 @@ def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
 
 def install_authority(certificate, private_key, trust_root,
                       directory='/var/lib/mindflayer-elderbrain/traefik',
-                      ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca', *, publish_trust=True):
+                      ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca', *, domain, publish_trust=True):
     """Explicitly rotate the signing CA and root after validating a replacement chain."""
     values = (certificate, private_key, trust_root)
     if any(not isinstance(value, str) or not value.startswith('-----BEGIN ') or len(value) > 16384 for value in values):
         raise ValueError('Expected PEM signing certificate, private key and trust root')
     root, ca = Path(directory), Path(ca_directory)
     tls, dynamic = root / 'tls', root / 'dynamic/admin-tls.yaml'
+    common_name, required_names = domain_names(domain)
     with open(tls / '.refresh.lock', 'a') as lock:
         os.fchmod(lock.fileno(), 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX)
         validate_layout(root, ca)
-        original_names = names(tls / 'admin.crt')
+        original_names = list(dict.fromkeys([*names(tls / 'admin.crt'), *required_names]))
         with tempfile.TemporaryDirectory(prefix='.authority-', dir=ca) as temporary:
             stage = Path(temporary)
             for name, value in (('ca.crt', certificate), ('ca.key', private_key), ('trust-root.crt', trust_root)):
@@ -218,7 +234,8 @@ def install_authority(certificate, private_key, trust_root,
             # The root must be a real trust anchor, not an arbitrary supplied leaf.
             openssl(['verify', '-CAfile', stage / 'trust-root.crt', stage / 'trust-root.crt'])
             openssl(['verify', '-CAfile', stage / 'trust-root.crt', '-untrusted', stage / 'ca.crt', stage / 'ca.crt'])
-            openssl(['x509', '-x509toreq', '-in', tls / 'admin.crt', '-signkey', tls / 'admin.key', '-out', stage / 'request.pem'])
+            openssl(['req', '-new', '-key', tls / 'admin.key', '-subj', '/CN=' + common_name,
+                     '-out', stage / 'request.pem'])
             (stage / 'extensions').write_text('subjectAltName=' + ','.join(original_names)
                                               + '\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\n')
             openssl(['x509', '-req', '-in', stage / 'request.pem', '-CA', stage / 'ca.crt', '-CAkey', stage / 'ca.key',
@@ -291,10 +308,8 @@ def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',
 
 def ensure_domain(domain, directory='/var/lib/mindflayer-elderbrain/traefik',
                   ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'):
-    from domain_routes import validate_domain
-    domain = validate_domain(domain)
-    return ensure_names([f'DNS:elderbrain.{domain}', f'DNS:foundry.{domain}',
-                         f'DNS:mindflayer.{domain}'], directory, ca_directory)
+    common_name, required = domain_names(domain)
+    return ensure_names(required, directory, ca_directory, common_name=common_name)
 
 
 if __name__ == '__main__':

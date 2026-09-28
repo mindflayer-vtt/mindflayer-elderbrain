@@ -6,11 +6,22 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'appliance/lib'))
-from domain_routes import document, publish, reconcile, validate_domain
+from domain_routes import configured_domain, document, publish, reconcile, validate_domain
 from display_preview import DisplayPreview
 
 
 class DomainRoutesTests(unittest.TestCase):
+    def test_configured_domain_is_used_for_certificate_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(configured_domain(root), 'elderbrain.local')
+            (root / 'elderbrain').mkdir()
+            (root / 'elderbrain/config.json').write_text(json.dumps({'domain': 'home.viromania.com'}))
+            self.assertEqual(configured_domain(root), 'home.viromania.com')
+            (root / 'elderbrain/config.json').write_text(json.dumps({'domain': 'invalid/domain'}))
+            with self.assertRaises(ValueError):
+                configured_domain(root)
+
     def test_routes_and_injection_rejection(self):
         routes = document('table.example')['http']['routers']
         self.assertEqual(routes['lan-foundry']['rule'], 'Host(`foundry.table.example`)')
