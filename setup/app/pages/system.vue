@@ -66,9 +66,12 @@ const powerNotice = ref('');
 const powerAction = ref<'' | 'reboot' | 'shutdown'>('');
 const confirmPower = ref(false);
 const jobs = ref<{ id: string; kind: string; state: string; stage?: string; error?: string;
+  request?: { version?: string; manifestSha256?: string };
   result?: { remoteBackup?: { state: string; failurePolicy?: string }; backup?: { state: string; checkpoint?: string } } }[]>([]);
 const active = computed(() => powerPending.value || jobs.value.some(job => ['queued', 'running'].includes(job.state)));
-const latestUpdate = computed(() => jobs.value.find(job => job.kind === 'update'));
+const latestUpdate = computed(() => jobs.value.find(job => job.kind === 'update' &&
+  job.request?.version === result.value?.release?.version &&
+  job.request?.manifestSha256 === result.value?.release?.manifestSha256));
 let timer: ReturnType<typeof setInterval> | undefined;
 let refreshing = false;
 let disposed = false;
@@ -143,6 +146,7 @@ async function check() {
   if (checking.value) return;
   checking.value = true;
   error.value = '';
+  updateNotice.value = '';
   confirmUpdate.value = false;
   confirmDowntime.value = false;
   try {

@@ -91,12 +91,26 @@ test('System update requires both confirmations and remains visible after reload
 test('System surfaces a failed update beside the update controls', async ({ page }) => {
   await page.route('**/api/jobs', route => route.fulfill({ json: [{
     id: 'f'.repeat(32), kind: 'update', state: 'failed', stage: 'preparing-runtime',
+    request: { version: '1.2.3', manifestSha256: 'a'.repeat(64) },
     error: 'Host operation failed. Inspect diagnostics before retrying.',
   }] }));
   await page.goto('/elderbrain/system');
   await page.getByRole('button', { name: 'Check for updates' }).click();
   await expect(page.getByText('Update failed', { exact: true })).toBeVisible();
   await expect(page.getByText('Host operation failed. Inspect diagnostics before retrying.', { exact: true }).first()).toBeVisible();
+});
+
+test('System does not attribute a historical update failure to a newly checked release', async ({ page }) => {
+  await page.route('**/api/jobs', route => route.fulfill({ json: [{
+    id: 'f'.repeat(32), kind: 'update', state: 'failed', stage: 'preparing-runtime',
+    request: { version: '0.1.3', manifestSha256: 'b'.repeat(64) },
+    error: 'Historical host operation failed.',
+  }] }));
+  await page.goto('/elderbrain/system');
+  await page.getByRole('button', { name: 'Check for updates' }).click();
+  await expect(page.getByRole('heading', { name: 'Release 1.2.3' })).toBeVisible();
+  await expect(page.getByText('Update failed', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Historical host operation failed.', { exact: true })).toBeVisible();
 });
 
 test('power API requires authentication, CSRF and exact confirmation', async ({ request, playwright, baseURL }) => {
