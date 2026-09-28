@@ -35,9 +35,11 @@ else
     -days 3650 -subj '/CN=Elderbrain local administration CA' \
     -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign'
 fi
-if ! cmp -s "$ca/ca.crt" "$tls/ca.crt"; then
+trust="$ca/ca.crt"
+[[ -f "$ca/trust-root.crt" ]] && trust="$ca/trust-root.crt"
+if ! cmp -s "$trust" "$tls/ca.crt"; then
   ca_copy=$(mktemp "$tls/.ca-crt.XXXXXX")
-  install -m 0644 "$ca/ca.crt" "$ca_copy"
+  install -m 0644 "$trust" "$ca_copy"
   mv "$ca_copy" "$tls/ca.crt"
 fi
 if ! openssl x509 -in "$tls/admin.crt" -noout >/dev/null 2>&1; then
@@ -51,11 +53,14 @@ if ! openssl x509 -in "$tls/admin.crt" -noout >/dev/null 2>&1; then
     -addext 'extendedKeyUsage=serverAuth'
   openssl x509 -req -in "$ca/admin.csr" -CA "$ca/ca.crt" -CAkey "$ca/ca.key" \
     -set_serial "0x$(openssl rand -hex 16)" -out "$tls/admin.crt" -days 825 -copy_extensions copy
+  if [[ "$trust" != "$ca/ca.crt" ]]; then
+    cat "$ca/ca.crt" >> "$tls/admin.crt"
+  fi
   rm -f "$ca/admin.csr"
 fi
 python3 "$runtime/admin_tls.py" validate --directory "$state/traefik" --ca-directory "$ca"
 python3 "$runtime/domain_routes.py" "$state"
-install -m 0644 "$ca/ca.crt" /usr/local/share/ca-certificates/elderbrain-admin.crt
+install -m 0644 "$trust" /usr/local/share/ca-certificates/elderbrain-admin.crt
 update-ca-certificates >/dev/null
 # Chrome uses NSS on Linux. Trust this appliance's CA in its dedicated kiosk account.
 kiosk_home=$(getent passwd elderbrain-kiosk | cut -d: -f6)

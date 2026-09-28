@@ -3,6 +3,7 @@ import fcntl
 import ipaddress
 import os
 from pathlib import Path
+import pwd
 import re
 import secrets
 import ssl
@@ -119,9 +120,15 @@ def validate_layout(directory='/var/lib/mindflayer-elderbrain/traefik',
         if (path.resolve() != path or not stat.S_ISREG(info.st_mode)
                 or info.st_uid != os.geteuid() or info.st_mode & (0o077 if private else 0o022)):
             raise ValueError('Unsafe administration TLS material')
-    if (ca / 'ca.crt').read_bytes() != (tls / 'ca.crt').read_bytes():
+    trust = ca / 'trust-root.crt' if (ca / 'trust-root.crt').exists() else ca / 'ca.crt'
+    if trust != ca / 'ca.crt':
+        info = trust.lstat()
+        if (trust.resolve() != trust or not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid() or info.st_mode & 0o022):
+            raise ValueError('Unsafe administration trust root')
+    if trust.read_bytes() != (tls / 'ca.crt').read_bytes():
         raise ValueError('Served CA certificate differs from signing authority')
-    openssl(['verify', '-CAfile', ca / 'ca.crt', tls / 'admin.crt'])
+    openssl(['verify', '-CAfile', trust, '-untrusted', ca / 'ca.crt', tls / 'admin.crt'])
     ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(tls / 'admin.crt', tls / 'admin.key')
     certificate_key = openssl(['x509', '-in', ca / 'ca.crt', '-pubkey', '-noout'])
     signing_key = openssl(['pkey', '-in', ca / 'ca.key', '-pubout'])
@@ -157,7 +164,8 @@ def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
         existing = names(certificate)
         changed = any(entry not in existing for entry in required)
         if changed:
-            openssl(['verify', '-CAfile', ca / 'ca.crt', certificate])
+            trust = ca / 'trust-root.crt' if (ca / 'trust-root.crt').exists() else ca / 'ca.crt'
+            openssl(['verify', '-CAfile', trust, '-untrusted', ca / 'ca.crt', certificate])
             with tempfile.TemporaryDirectory(prefix='.refresh-', dir=tls) as temporary:
                 stage = Path(temporary)
                 openssl(['x509', '-x509toreq', '-in', certificate, '-signkey', key, '-out', stage / 'request.pem'])
@@ -169,7 +177,10 @@ def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
                          '-out', stage / 'certificate.pem'])
                 for entry in required:
                     verification = ['-verify_ip', entry[3:]] if entry.startswith('IP:') else ['-verify_hostname', entry[4:]]
-                    openssl(['verify', '-CAfile', ca / 'ca.crt', *verification, stage / 'certificate.pem'])
+                    openssl(['verify', '-CAfile', trust, '-untrusted', ca / 'ca.crt', *verification, stage / 'certificate.pem'])
+                if trust != ca / 'ca.crt':
+                    with open(stage / 'certificate.pem', 'ab') as chain:
+                        chain.write((ca / 'ca.crt').read_bytes())
                 ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(stage / 'certificate.pem', key)
                 if certificate.read_bytes() != original_certificate or dynamic.read_bytes() != original_config:
                     raise ValueError('TLS configuration changed during refresh')
@@ -180,6 +191,97 @@ def ensure_names(required, directory='/var/lib/mindflayer-elderbrain/traefik',
             raise ValueError('TLS configuration changed during refresh')
         replace(dynamic, original_config)
         return changed
+
+
+def install_authority(certificate, private_key, trust_root,
+                      directory='/var/lib/mindflayer-elderbrain/traefik',
+                      ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca', *, publish_trust=True):
+    """Explicitly rotate the signing CA and root after validating a replacement chain."""
+    values = (certificate, private_key, trust_root)
+    if any(not isinstance(value, str) or not value.startswith('-----BEGIN ') or len(value) > 16384 for value in values):
+        raise ValueError('Expected PEM signing certificate, private key and trust root')
+    root, ca = Path(directory), Path(ca_directory)
+    tls, dynamic = root / 'tls', root / 'dynamic/admin-tls.yaml'
+    with open(tls / '.refresh.lock', 'a') as lock:
+        os.fchmod(lock.fileno(), 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        validate_layout(root, ca)
+        original_names = names(tls / 'admin.crt')
+        with tempfile.TemporaryDirectory(prefix='.authority-', dir=ca) as temporary:
+            stage = Path(temporary)
+            for name, value in (('ca.crt', certificate), ('ca.key', private_key), ('trust-root.crt', trust_root)):
+                path = stage / name
+                path.write_text(value)
+                path.chmod(0o600)
+            if openssl(['x509', '-in', stage / 'ca.crt', '-pubkey', '-noout']) != openssl(['pkey', '-in', stage / 'ca.key', '-pubout']):
+                raise ValueError('Signing certificate and key do not match')
+            # The root must be a real trust anchor, not an arbitrary supplied leaf.
+            openssl(['verify', '-CAfile', stage / 'trust-root.crt', stage / 'trust-root.crt'])
+            openssl(['verify', '-CAfile', stage / 'trust-root.crt', '-untrusted', stage / 'ca.crt', stage / 'ca.crt'])
+            openssl(['x509', '-x509toreq', '-in', tls / 'admin.crt', '-signkey', tls / 'admin.key', '-out', stage / 'request.pem'])
+            (stage / 'extensions').write_text('subjectAltName=' + ','.join(original_names)
+                                              + '\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\n')
+            openssl(['x509', '-req', '-in', stage / 'request.pem', '-CA', stage / 'ca.crt', '-CAkey', stage / 'ca.key',
+                     '-set_serial', '0x' + secrets.token_hex(16), '-days', '825', '-extfile', stage / 'extensions',
+                     '-out', stage / 'admin.crt'])
+            for entry in original_names:
+                verification = ['-verify_ip', entry[3:]] if entry.startswith('IP:') else ['-verify_hostname', entry[4:]]
+                openssl(['verify', '-CAfile', stage / 'trust-root.crt', '-untrusted', stage / 'ca.crt',
+                         *verification, stage / 'admin.crt'])
+            if (stage / 'ca.crt').read_bytes() != (stage / 'trust-root.crt').read_bytes():
+                with open(stage / 'admin.crt', 'ab') as chain:
+                    chain.write((stage / 'ca.crt').read_bytes())
+            ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(stage / 'admin.crt', tls / 'admin.key')
+            targets = {ca / 'ca.crt': stage / 'ca.crt', ca / 'ca.key': stage / 'ca.key',
+                       ca / 'trust-root.crt': stage / 'trust-root.crt', tls / 'ca.crt': stage / 'trust-root.crt',
+                       tls / 'admin.crt': stage / 'admin.crt'}
+            old = {path: path.read_bytes() if path.exists() else None for path in targets}
+            trust_file = Path('/usr/local/share/ca-certificates/elderbrain-admin.crt')
+            previous_trust = trust_file.read_bytes() if publish_trust and trust_file.exists() else None
+            try:
+                for path, source in targets.items():
+                    if old[path] is None:
+                        path.touch(mode=0o600 if path.name.endswith('.key') else 0o644)
+                    replace(path, source.read_bytes())
+                validate_layout(root, ca)
+                if publish_trust:
+                    if not trust_file.exists():
+                        trust_file.touch(mode=0o644)
+                    replace(trust_file, (stage / 'trust-root.crt').read_bytes())
+                    subprocess.run(['update-ca-certificates'], check=True, timeout=60, capture_output=True)
+                    kiosk = pwd.getpwnam('elderbrain-kiosk')
+                    database = f'sql:{kiosk.pw_dir}/.pki/nssdb'
+                    subprocess.run(['runuser', '-u', 'elderbrain-kiosk', '--', 'certutil', '-D',
+                                    '-n', 'elderbrain-admin', '-d', database], timeout=15, capture_output=True)
+                    subprocess.run(['runuser', '-u', 'elderbrain-kiosk', '--', 'certutil', '-A',
+                                    '-n', 'elderbrain-admin', '-t', 'C,,', '-i', str(trust_file), '-d', database],
+                                   check=True, timeout=15, capture_output=True)
+                replace(dynamic, dynamic.read_bytes())
+            except Exception:
+                for path, data in old.items():
+                    if data is None:
+                        path.unlink(missing_ok=True)
+                    else:
+                        replace(path, data)
+                if publish_trust:
+                    if previous_trust is None:
+                        trust_file.unlink(missing_ok=True)
+                    else:
+                        replace(trust_file, previous_trust)
+                    subprocess.run(['update-ca-certificates'], timeout=60, capture_output=True)
+                    if previous_trust is not None:
+                        try:
+                            kiosk = pwd.getpwnam('elderbrain-kiosk')
+                            database = f'sql:{kiosk.pw_dir}/.pki/nssdb'
+                            subprocess.run(['runuser', '-u', 'elderbrain-kiosk', '--', 'certutil', '-D',
+                                            '-n', 'elderbrain-admin', '-d', database], timeout=15, capture_output=True)
+                            subprocess.run(['runuser', '-u', 'elderbrain-kiosk', '--', 'certutil', '-A',
+                                            '-n', 'elderbrain-admin', '-t', 'C,,', '-i', str(trust_file), '-d', database],
+                                           check=True, timeout=15, capture_output=True)
+                        except (OSError, subprocess.SubprocessError, KeyError):
+                            pass
+                raise
+    return {'state': 'installed', 'subject': openssl(['x509', '-in', ca / 'ca.crt', '-noout', '-subject']).decode().strip()}
 
 
 def ensure_address(address, directory='/var/lib/mindflayer-elderbrain/traefik',

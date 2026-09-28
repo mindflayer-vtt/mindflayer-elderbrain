@@ -1,6 +1,58 @@
 <script setup lang="ts">
 definePageMeta({ alias: ['/elderbrain/system'] });
 const { session } = useAdmin();
+const keyboardLayouts = ref<{ value: string; label: string }[]>([]);
+const keyboardSelected = ref("");
+const keyboardBusy = ref(false);
+const keyboardMessage = ref("");
+const caCertificate = ref<File>();
+const caPrivateKey = ref<File>();
+const caTrustRoot = ref<File>();
+const caInputVersion = ref(0);
+const confirmCA = ref(false);
+const caBusy = ref(false);
+const caMessage = ref("");
+function chooseCA(event: Event, field: 'certificate' | 'key' | 'root') {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (field === 'certificate') caCertificate.value = file;
+  if (field === 'key') caPrivateKey.value = file;
+  if (field === 'root') caTrustRoot.value = file;
+}
+async function saveCA() {
+  if (!caCertificate.value || !caPrivateKey.value || !caTrustRoot.value || !confirmCA.value) return;
+  caBusy.value = true;
+  caMessage.value = "";
+  try {
+    await $fetch("/elderbrain/api/system/tls-authority", { method: "POST", retry: 0, timeout: 125000,
+      headers: { "x-elderbrain-request": "1", "x-csrf-token": session.value.csrf },
+      body: { certificate: await caCertificate.value.text(), privateKey: await caPrivateKey.value.text(),
+        trustRoot: await caTrustRoot.value.text() } });
+    caMessage.value = "Certificate authority installed. Trust the new root on remote devices before reconnecting.";
+    caPrivateKey.value = undefined;
+    caCertificate.value = undefined;
+    caTrustRoot.value = undefined;
+    caInputVersion.value += 1;
+    confirmCA.value = false;
+  } catch { caMessage.value = "Certificate authority installation failed. Check that the CA key matches, the root signs the CA, and the uploaded certificates permit signing."; }
+  finally { caBusy.value = false; }
+}
+async function loadKeyboard() {
+  try {
+    const value = await $fetch<{ layouts: { value: string; label: string }[]; configured: string }>("/elderbrain/api/system/keyboard");
+    keyboardLayouts.value = value.layouts;
+    keyboardSelected.value = value.configured;
+  } catch { keyboardMessage.value = "Keyboard settings are unavailable."; }
+}
+async function saveKeyboard() {
+  keyboardBusy.value = true;
+  keyboardMessage.value = "";
+  try {
+    await $fetch("/elderbrain/api/system/keyboard", { method: "PUT", body: { layout: keyboardSelected.value },
+      headers: { "x-elderbrain-request": "1", "x-csrf-token": session.value.csrf } });
+    keyboardMessage.value = "Keyboard layout saved for future boots and applied to the current display when available.";
+  } catch { keyboardMessage.value = "Could not save the keyboard layout."; }
+  finally { keyboardBusy.value = false; }
+}
 const checking = ref(false);
 const error = ref('');
 const statusError = ref('');
@@ -85,7 +137,7 @@ async function update() {
     updateNotice.value = 'Request status uncertain or rejected. Wait for the job list to reconnect and inspect it before retrying.';
   } finally { submitting.value = false; confirmUpdate.value = false; confirmDowntime.value = false; }
 }
-onMounted(() => { void refreshReleaseStatus(); void refreshJobs(); timer = setInterval(() => void refreshJobs(), 5000); });
+onMounted(() => { void refreshReleaseStatus(); void refreshJobs(); void loadKeyboard(); timer = setInterval(() => void refreshJobs(), 5000); });
 onBeforeUnmount(() => { disposed = true; clearInterval(timer); });
 async function check() {
   if (checking.value) return;
@@ -103,6 +155,28 @@ async function check() {
 <template>
   <div class="space-y-6">
     <h1 class="text-3xl font-bold">System</h1>
+    <UCard>
+      <template #header><h2 class="text-xl font-semibold">Appliance keyboard</h2></template>
+      <div class="space-y-3">
+        <p>Choose the physical keyboard layout used on the appliance. This setting survives display restarts and reboots.</p>
+        <USelectMenu v-model="keyboardSelected" aria-label="Permanent keyboard layout" :items="keyboardLayouts" value-key="value" :search-input="{ placeholder: 'Search keyboard layouts…' }" class="w-full" />
+        <UButton :disabled="!keyboardSelected || keyboardBusy" :loading="keyboardBusy" @click="saveKeyboard">Save keyboard layout</UButton>
+        <UAlert v-if="keyboardMessage" :title="keyboardMessage" />
+      </div>
+    </UCard>
+    <UCard>
+      <template #header><h2 class="text-xl font-semibold">HTTPS certificate authority</h2></template>
+      <div class="space-y-3">
+        <p>Replace the appliance-generated signing CA with your PEM CA certificate, matching private key and trusted root certificate. Elderbrain will issue new certificates for its current hostnames and IP addresses. The private key stays in root-only host storage and is included in configuration backups; protect those backups accordingly.</p>
+        <p class="text-sm text-warning">This rotates browser trust. Remote browsers may disconnect until they trust the uploaded root. Export a backup first.</p>
+        <label class="block">CA certificate (PEM) <input :key="`cert-${caInputVersion}`" class="block" type="file" accept=".pem,.crt" @change="chooseCA($event, 'certificate')" /></label>
+        <label class="block">CA private key (PEM) <input :key="`key-${caInputVersion}`" class="block" type="file" accept=".pem,.key" @change="chooseCA($event, 'key')" /></label>
+        <label class="block">Trust root certificate (PEM) <input :key="`root-${caInputVersion}`" class="block" type="file" accept=".pem,.crt" @change="chooseCA($event, 'root')" /></label>
+        <UCheckbox v-model="confirmCA" label="I understand this changes HTTPS trust and may disconnect remote browsers." />
+        <UButton :disabled="!caCertificate || !caPrivateKey || !caTrustRoot || !confirmCA || caBusy" :loading="caBusy" @click="saveCA">Install certificate authority</UButton>
+        <UAlert v-if="caMessage" :title="caMessage" />
+      </div>
+    </UCard>
     <UCard>
       <template #header><h2 class="text-xl font-semibold">Elderbrain updates</h2></template>
       <div class="space-y-4">

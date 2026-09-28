@@ -46,7 +46,8 @@ def health(saved, state, *, management_socket=Path('/run/elderbrain/management.s
             if not isinstance(metrics, dict) or not isinstance(metrics.get('history'), list):
                 raise ValueError('Management metrics API is unavailable')
     if 'elderbrain-setup' in saved['compose']:
-        context = ssl.create_default_context(cafile=str(Path(state) / 'host/admin-ca/ca.crt'))
+        ca = Path(state) / 'host/admin-ca'
+        context = ssl.create_default_context(cafile=str(ca / ('trust-root.crt' if (ca / 'trust-root.crt').exists() else 'ca.crt')))
         last_error = None
         for attempt in range(proxy_attempts):
             connection = http.client.HTTPSConnection('127.0.0.1', timeout=10, context=context)

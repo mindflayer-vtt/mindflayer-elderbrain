@@ -16,6 +16,22 @@ spec.loader.exec_module(keyboard)
 
 
 class KioskKeyboardTests(unittest.TestCase):
+    def test_admin_setting_persists_without_mutating_unrelated_sway_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'sway.conf'
+            config.write_text('output * bg #090b13 solid_color\ninput * xkb_layout us\nbar { mode invisible }\n')
+            with patch.object(keyboard, 'layouts', return_value=[{'value': 'de:nodeadkeys', 'label': 'German'},
+                                                                 {'value': 'us:', 'label': 'English'}]), \
+                    patch.object(keyboard.pwd, 'getpwnam', return_value=SimpleNamespace(pw_uid=os.getuid())), \
+                    patch.object(keyboard, 'RUNTIME', Path(directory)):
+                self.assertEqual(keyboard.persistent(config=config)['configured'], 'us:')
+                self.assertEqual(keyboard.persistent('de:nodeadkeys', config)['configured'], 'de:nodeadkeys')
+                self.assertIn('bar { mode invisible }', config.read_text())
+                self.assertEqual(keyboard.persistent('us:', config)['configured'], 'us:')
+                self.assertNotIn('xkb_variant', config.read_text())
+                with self.assertRaises(ValueError):
+                    keyboard.persistent('us:;exec', config)
+
     def test_catalog_includes_variants_and_excludes_command_syntax(self):
         with tempfile.TemporaryDirectory() as directory:
             rules = Path(directory) / "rules.xml"

@@ -25,6 +25,9 @@ def context(address, ca_directory='/var/lib/mindflayer-elderbrain/host/admin-ca'
         run(['x509', '-req', '-in', str(root / 'request.pem'), '-CA', str(ca / 'ca.crt'),
              '-CAkey', str(ca / 'ca.key'), '-set_serial', '0x' + secrets.token_hex(16),
              '-out', str(root / 'certificate.pem'), '-days', '1', '-copy_extensions', 'copy'])
+        if (ca / 'trust-root.crt').exists() and (ca / 'trust-root.crt').read_bytes() != (ca / 'ca.crt').read_bytes():
+            with open(root / 'certificate.pem', 'ab') as chain:
+                chain.write((ca / 'ca.crt').read_bytes())
         result = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         result.minimum_version = ssl.TLSVersion.TLSv1_2
         result.load_cert_chain(root / 'certificate.pem', root / 'key.pem')

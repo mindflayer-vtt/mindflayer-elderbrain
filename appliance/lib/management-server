@@ -94,6 +94,33 @@ class Handler(socketserver.StreamRequestHandler):
                 if len(parts) not in (2, 3):
                     raise ValueError("Invalid keyboard request")
                 result = {"ok": True, "output": json.dumps(operate(parts[1], parts[2] if len(parts) == 3 else None))}
+            elif action == "keyboard-settings" or action.startswith("keyboard-settings "):
+                from kiosk_keyboard import persistent
+                parts = action.split(" ")
+                if len(parts) not in (1, 2):
+                    raise ValueError("Invalid keyboard request")
+                if len(parts) == 2:
+                    from release_interlocks import settings_admission
+                    with settings_admission(JOBS.directory.parent):
+                        value = persistent(parts[1])
+                else:
+                    value = persistent()
+                result = {"ok": True, "output": json.dumps(value)}
+            elif action.startswith("tls-authority-install "):
+                size = int(action.split(' ', 1)[1])
+                if not 0 < size <= 65536:
+                    raise ValueError('Invalid authority upload size')
+                payload = self.rfile.read(size)
+                if len(payload) != size:
+                    raise ValueError('Incomplete authority upload')
+                value = json.loads(payload)
+                if not isinstance(value, dict) or set(value) != {'certificate', 'privateKey', 'trustRoot'}:
+                    raise ValueError('Invalid authority upload')
+                from admin_tls import install_authority
+                from release_interlocks import settings_admission
+                with settings_admission(JOBS.directory.parent):
+                    result = {'ok': True, 'output': json.dumps(install_authority(
+                        value['certificate'], value['privateKey'], value['trustRoot']))}
             elif action == "keypad-usb-devices":
                 result = {"ok": True, "output": json.dumps(usb_serial_devices())}
             elif action == "keypad-release":

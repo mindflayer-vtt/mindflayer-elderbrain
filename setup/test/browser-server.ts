@@ -26,6 +26,7 @@ let displayPreview = { phase: 'idle', id: '', deadline: 0 };
 let displayCandidate: unknown;
 let checkpointRetention = { enabled: false, keep: 10 };
 let powerPending = false;
+let savedKeyboard = "us:";
 let foundryAdministrator = { managed: true, accessKey: "acorn-amber-apple-apron-arrow-atlas-badge-bagel-baker-bamboo-banana-basket", resetRequired: false };
 const management = net.createServer({ allowHalfOpen: true }, (socket) => {
   socket.once("data", (data) => {
@@ -156,6 +157,27 @@ const management = net.createServer({ allowHalfOpen: true }, (socket) => {
         layouts: [{ value: "us:", label: "English (US)" }, { value: "de:", label: "German" }, { value: "de:nodeadkeys", label: "German (no dead keys)" }],
         active: [layout?.startsWith("de:") ? "German" : "English (US)"],
       }) } : { ok: false }) + "\n");
+      return;
+    }
+    if (action === "keyboard-settings" || action.startsWith("keyboard-settings ")) {
+      if (action.includes(" ")) savedKeyboard = action.split(" ")[1]!;
+      socket.end(JSON.stringify({ ok: true, output: JSON.stringify({
+        configured: savedKeyboard,
+        layouts: [{ value: "us:", label: "English (US)" }, { value: "de:", label: "German" }],
+      }) }) + "\n");
+      return;
+    }
+    if (action.startsWith("tls-authority-install ")) {
+      const end = data.indexOf(10);
+      const size = Number(data.subarray(0, end).toString().split(" ")[1]);
+      let payload = data.subarray(end + 1);
+      const finish = () => {
+        const value = JSON.parse(payload.subarray(0, size).toString());
+        socket.end(JSON.stringify({ ok: Object.keys(value).sort().join(",") === "certificate,privateKey,trustRoot",
+          output: JSON.stringify({ state: "installed" }) }) + "\n");
+      };
+      if (payload.length >= size) finish();
+      else socket.on("data", chunk => { payload = Buffer.concat([payload, chunk]); if (payload.length >= size) finish(); });
       return;
     }
     if (action === "keypad-release") {

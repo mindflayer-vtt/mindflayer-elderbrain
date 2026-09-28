@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("all administration deep links remain behind login", async ({ page }) => {
-  for (const section of ["displays", "foundry", "keypads", "network", "backups", "logs", "account"]) {
+  for (const section of ["displays", "foundry", "keypads", "network", "backups", "system", "logs", "account"]) {
     await page.goto("/elderbrain/" + section);
     await expect(page.getByRole("heading", { name: "Sign in to Elderbrain" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Administration" })).toHaveCount(0);
@@ -36,6 +36,9 @@ test("unauthenticated callers cannot read or change administration through the p
     expect((await request.put(prefix + "foundry/beamer", { headers: { "x-elderbrain-request": "1" }, data: {} })).status()).toBe(401);
     expect((await request.delete(prefix + "foundry/beamer", { headers: { "x-elderbrain-request": "1" } })).status()).toBe(401);
     expect((await request.get(prefix + "network")).status()).toBe(401);
+    expect((await request.get(prefix + "system/keyboard")).status()).toBe(401);
+    expect((await request.put(prefix + "system/keyboard", { headers: { "x-elderbrain-request": "1" }, data: { layout: "de:" } })).status()).toBe(401);
+    expect((await request.post(prefix + "system/tls-authority", { headers: { "x-elderbrain-request": "1" }, data: {} })).status()).toBe(401);
     expect((await request.get(prefix + "network/change")).status()).toBe(401);
     expect((await request.post(prefix + "network/change", { headers: { "x-elderbrain-request": "1" }, data: { interface: "ens3", mode: "dhcp" } })).status()).toBe(401);
     expect((await request.post(prefix + "network/change/cancel", { headers: { "x-elderbrain-request": "1" }, data: { id: "a".repeat(32) } })).status()).toBe(401);
@@ -125,6 +128,15 @@ test("CSRF, origin checking and logout revocation protect authenticated requests
     headers: { "x-elderbrain-request": "1", "x-csrf-token": session.csrf, origin: "https://attacker.invalid" },
   })).status()).toBe(403);
   const headers = { "x-elderbrain-request": "1", "x-csrf-token": session.csrf };
+  expect((await request.put("/elderbrain/api/system/keyboard", { headers: { ...headers, "x-csrf-token": "bad" }, data: { layout: "de:" } })).status()).toBe(403);
+  expect((await request.post("/elderbrain/api/system/tls-authority", { headers: { ...headers, "x-csrf-token": "bad" }, data: {} })).status()).toBe(403);
+  expect((await request.get("/elderbrain/api/system/keyboard")).ok()).toBe(true);
+  expect((await request.put("/elderbrain/api/system/keyboard", { headers, data: { layout: "de:" } })).ok()).toBe(true);
+  expect(await (await request.get("/elderbrain/api/system/keyboard")).json()).toMatchObject({ configured: "de:" });
+  expect((await request.post("/elderbrain/api/system/tls-authority", { headers, data: {
+    certificate: "-----BEGIN CERTIFICATE-----\nfixture", privateKey: "-----BEGIN PRIVATE KEY-----\nfixture",
+    trustRoot: "-----BEGIN CERTIFICATE-----\nfixture",
+  } })).ok()).toBe(true);
   expect((await request.post("/elderbrain/api/auth/logout", { headers, data: {} })).ok()).toBe(true);
   expect((await request.get("/elderbrain/api/config")).status()).toBe(401);
 });

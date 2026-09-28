@@ -68,10 +68,11 @@ export async function backupDownload(socketPath: string, id: string, operation: 
   } catch (error) { socket.destroy(); throw error; }
 }
 
-export async function backupUpload(socketPath: string, input: Readable, size: number, operation: "backup-upload" | "backup-upload-encrypted" | "restore-preview-encrypted-start" | "borg-configure" | "backup-encrypted-start" | "keypad-install-start" | "keypad-provision-start" | "display-preview-start" | "network-start" | "update-start" | "power-start" = "backup-upload"): Promise<ManagementResult> {
+export async function backupUpload(socketPath: string, input: Readable, size: number, operation: "backup-upload" | "backup-upload-encrypted" | "restore-preview-encrypted-start" | "borg-configure" | "backup-encrypted-start" | "keypad-install-start" | "keypad-provision-start" | "display-preview-start" | "network-start" | "update-start" | "power-start" | "tls-authority-install" = "backup-upload"): Promise<ManagementResult> {
   if (!Number.isSafeInteger(size) || size <= 0 || size > 1024 ** 4) throw new Error("Invalid backup upload size");
   const socket = net.createConnection(socketPath);
-  socket.setTimeout(30000, () => socket.destroy(new Error("Backup upload timed out")));
+  socket.setTimeout(operation === "tls-authority-install" ? 120000 : 30000,
+    () => socket.destroy(new Error("Host upload timed out")));
   let received = 0;
   const counter = new Transform({
     transform(chunk, _encoding, callback) {

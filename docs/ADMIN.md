@@ -136,7 +136,13 @@ download credentials retains the managed administrator key.
 Administration now requires HTTPS and redirects HTTP requests. First boot prepares
 a local CA and appliance certificate and installs local browser trust. Remote
 clients need to trust the appliance CA after verifying it through a trusted local
-channel, or use an externally managed certificate. The CA signing key is retained
+channel. On System → HTTPS certificate authority, an administrator can upload a
+PEM signing CA certificate, its matching unencrypted private key, and a PEM trust
+root. Elderbrain validates the chain and reissues its current hostname/IP leaf
+certificate under that CA. Upload is an explicit trust rotation: remote devices
+must trust the new root, and HTTPS may reconnect during replacement. Back up
+configuration first; the imported signing key is included in configuration backups.
+The CA signing key is retained
 under root-only host state and is not mounted into Traefik; only the separate
 leaf-certificate directory is mounted read-only. Foundry retains its separate
 login and routing. Installed-appliance TLS verification passed in a clean VM. Neither
@@ -256,7 +262,8 @@ focuses invalid required fields on submission.
 On the appliance screen, the searchable
 keyboard-layout selector changes the physical keyboard layout (including XKB
 variants) for the current kiosk session, before login. It resets to the configured
-Sway default when the kiosk restarts. Remote browsers must use their own operating
+Sway default when the kiosk restarts. After login, System → Appliance keyboard
+can change that default permanently, including for future boots. Remote browsers must use their own operating
 system's keyboard settings. A private, per-kiosk capability permits only this
 narrow operation; it does not grant administrative access.
 
