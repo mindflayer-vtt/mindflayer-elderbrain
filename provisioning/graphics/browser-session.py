@@ -507,6 +507,17 @@ def install_picture_in_picture_rule():
         return False
 
 
+def install_borderless_browser_rule():
+    """Keep managed browsers borderless even with an older private Sway config."""
+    criteria = '[app_id="^elderbrain-view-[01]$"]'
+    try:
+        response = subprocess.run(['swaymsg', '-r', f'for_window {criteria} border none'],
+                                  capture_output=True, text=True, check=True, timeout=5)
+        return all(item.get('success') for item in json.loads(response.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return False
+
+
 def wait_window_event(stream, timeout):
     readable, _, _ = select.select([stream], [], [], timeout)
     return bool(readable and os.read(stream.fileno(), 65536))
@@ -590,6 +601,8 @@ def main():
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    if not install_borderless_browser_rule():
+        print('Unable to install borderless browser rule', flush=True)
     if not install_picture_in_picture_rule():
         print('Unable to install PiP first-frame floating rule', flush=True)
     window_events = start_window_events()

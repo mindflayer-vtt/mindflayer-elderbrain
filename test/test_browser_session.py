@@ -277,6 +277,13 @@ class BrowserSessionTests(unittest.TestCase):
             'for_window [app_id="^$" title="^Picture in picture$"] '
             'move position 84 ppt 2 ppt'])
 
+    def test_managed_browsers_are_borderless_with_legacy_sway_config(self):
+        response = SimpleNamespace(stdout='[{"success":true}]')
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.install_borderless_browser_rule())
+        self.assertEqual(run.call_args.args[0], ['swaymsg', '-r',
+            'for_window [app_id="^elderbrain-view-[01]$"] border none'])
+
     def test_auxiliary_window_detection_requires_a_managed_main_and_valid_geometry(self):
         small = {'type': 'con', 'id': 9, 'app_id': 'elderbrain-view-0',
                  'floating': 'auto_off', 'geometry': {'width': 300, 'height': 300}}
