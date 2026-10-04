@@ -204,6 +204,42 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertIn('for_window [app_id="elderbrain-view-0"]', run.call_args.args[0][2])
         self.assertIn('fullscreen enable', run.call_args.args[0][2])
 
+    def test_small_chrome_auxiliary_window_floats_without_resizing_main_view(self):
+        main = {'type': 'con', 'id': 5, 'app_id': 'elderbrain-view-0',
+                'name': 'Foundry - Google Chrome', 'floating': 'auto_off',
+                'geometry': {'width': 1904, 'height': 1031}}
+        pip = {'type': 'con', 'id': 6, 'app_id': 'elderbrain-view-0',
+               'name': 'An arbitrary Spotify track title', 'floating': 'auto_off',
+               'geometry': {'width': 300, 'height': 334}}
+        tree = {'nodes': [{'type': 'output', 'name': 'DP-1', 'nodes': [
+            {'type': 'workspace', 'nodes': [main, pip]}]}]}
+        desired = {0: {'mode': 'admin', 'output': 'DP-1'}}
+        self.assertEqual(module.auxiliary_window_ids(tree, desired), [6])
+        response = SimpleNamespace(stdout='[{"success":true},{"success":true}]')
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.float_auxiliary_windows(tree, desired))
+        self.assertEqual(run.call_args.args[0], ['swaymsg', '-r',
+            '[con_id=6] fullscreen disable; [con_id=6] floating enable'])
+
+        pip['floating'] = 'user_on'
+        self.assertEqual(module.auxiliary_window_ids(tree, desired), [])
+        pip['floating'] = 'auto_off'
+        pip['geometry'] = {'width': 1800, 'height': 900}
+        self.assertEqual(module.auxiliary_window_ids(tree, desired), [])
+
+    def test_auxiliary_window_detection_requires_a_managed_main_and_valid_geometry(self):
+        small = {'type': 'con', 'id': 9, 'app_id': 'elderbrain-view-0',
+                 'floating': 'auto_off', 'geometry': {'width': 300, 'height': 300}}
+        main = {'type': 'con', 'id': 8, 'app_id': 'elderbrain-view-0',
+                'floating': 'auto_off', 'geometry': {'width': 1600, 'height': 900}}
+        self.assertEqual(module.auxiliary_window_ids({'nodes': [small]}, {0: {}}), [])
+        self.assertEqual(module.auxiliary_window_ids({'nodes': [main, small]}, {1: {}}), [])
+        small['geometry'] = {'width': -1, 'height': 300}
+        self.assertEqual(module.auxiliary_window_ids({'nodes': [main, small]}, {0: {}}), [])
+        small['geometry'] = {'width': 300, 'height': 300}
+        small['app_id'] = 'unmanaged-window'
+        self.assertEqual(module.auxiliary_window_ids({'nodes': [main, small]}, {0: {}}), [])
+
     def test_one_renumbered_screen_recovers_without_moving_connected_admin(self):
         views = [
             {'output': 'DP-3', 'mode': 'admin', 'url': 'https://setup.example'},

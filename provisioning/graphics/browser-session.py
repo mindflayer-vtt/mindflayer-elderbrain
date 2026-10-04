@@ -383,6 +383,67 @@ def window_outputs():
         return {}
 
 
+def auxiliary_window_ids(tree, desired):
+    """Find small Chrome toplevels without relying on site-controlled titles."""
+    groups = {index: [] for index in desired}
+    stack = [tree]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        app_id = node.get('app_id')
+        match = re.fullmatch(r'elderbrain-view-([01])', app_id) if isinstance(app_id, str) else None
+        geometry = node.get('geometry')
+        if (node.get('type') == 'con' and match and int(match.group(1)) in groups
+                and isinstance(node.get('id'), int) and node['id'] > 0
+                and isinstance(geometry, dict)
+                and all(isinstance(geometry.get(key), int) and geometry[key] > 0
+                        for key in ('width', 'height'))):
+            groups[int(match.group(1))].append(node)
+        for key in ('nodes', 'floating_nodes'):
+            if isinstance(node.get(key), list):
+                stack.extend(node[key])
+
+    result = []
+    for windows in groups.values():
+        if len(windows) < 2:
+            continue
+        main = max(windows, key=lambda node: node['geometry']['width'] * node['geometry']['height'])
+        width, height = main['geometry']['width'], main['geometry']['height']
+        if width < 800 or height < 600:
+            continue
+        for node in windows:
+            if node is main or node.get('floating') not in ('auto_off', 'user_off'):
+                continue
+            small = node['geometry']
+            if (small['width'] <= width * 0.65 and small['height'] <= height * 0.8
+                    and small['width'] * small['height'] <= width * height * 0.5):
+                result.append(node['id'])
+    return result
+
+
+def float_auxiliary_windows(tree, desired):
+    for container_id in auxiliary_window_ids(tree, desired):
+        try:
+            response = subprocess.run(['swaymsg', '-r',
+                f'[con_id={container_id}] fullscreen disable; [con_id={container_id}] floating enable'],
+                capture_output=True, text=True, check=True, timeout=5)
+            if not all(item.get('success') for item in json.loads(response.stdout)):
+                return False
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+            return False
+    return True
+
+
+def reconcile_auxiliary_windows(desired):
+    try:
+        response = subprocess.run(['swaymsg', '-r', '-t', 'get_tree'], capture_output=True,
+                                  text=True, check=True, timeout=5)
+        return float_auxiliary_windows(json.loads(response.stdout), desired)
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return False
+
+
 def place_view(view, future=False):
     """Assign a future or existing managed window to its configured output."""
     criteria = f'[app_id="elderbrain-view-{view["index"]}"]'
@@ -538,6 +599,7 @@ def main():
             for index, view in desired.items():
                 if index in children and index in placements and placements[index] != view['output']:
                     place_view(view)
+            reconcile_auxiliary_windows(desired)
             target = admin_cursor_target(desired, outputs)
             topology = tuple(sorted(
                 (item.get('name'), json.dumps(item.get('rect'), sort_keys=True))
