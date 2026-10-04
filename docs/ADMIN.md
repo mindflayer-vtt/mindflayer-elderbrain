@@ -277,6 +277,16 @@ the current form contents and tabs intact.
 Sway window decorations are disabled, avoiding a redundant title bar above
 Chrome's own administration tabs and maximizing usable display height.
 
+The installer includes ALSA mixer tools. On first graphical startup, an analog
+card whose mixer state has never been saved gets its muted or zero-volume Master
+control raised to 70% and unmuted; the state is then saved for Ubuntu's normal
+boot/shutdown restore. Later volume or mute choices are not reset by graphics
+restarts. Audio failure does not block the administration browser. To diagnose a
+silent 3.5 mm output, check `aplay -l`, `amixer -c <card> sget Master`, and
+`speaker-test -D default:CARD=<card> -c 2 -t wav -l 1` on the host. A direct
+left/right test that reaches only one speaker also warrants checking the cable,
+amplifier input, and speaker channel.
+
 Chrome's managed `PasswordManagerEnabled: false` policy disables saving new
 passwords and save-password prompts in the appliance browser. This does not erase
 previously saved credentials; Chrome may still use those if a pre-existing profile

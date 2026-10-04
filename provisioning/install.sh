@@ -57,6 +57,7 @@ gpg --batch --yes --dearmor -o /etc/apt/keyrings/google-chrome.gpg /tmp/google-l
 echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list
 apt-get update
 apt-get install -y sway google-chrome-stable plymouth plymouth-theme-spinner
+apt-get install -y alsa-utils
 apt-get install -y nodejs npm
 node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)'
 install -d -m 0755 "$RUNTIME/beamer"

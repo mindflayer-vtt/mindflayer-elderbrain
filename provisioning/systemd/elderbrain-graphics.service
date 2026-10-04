@@ -1,6 +1,6 @@
 [Unit]
 Description=Elderbrain native Wayland kiosk
-After=elderbrain-stack.service systemd-user-sessions.service getty@tty1.service
+After=elderbrain-stack.service systemd-user-sessions.service getty@tty1.service sound.target
 Conflicts=getty@tty1.service
 Requires=elderbrain-stack.service elderbrain-baseline.service
 After=elderbrain-baseline.service

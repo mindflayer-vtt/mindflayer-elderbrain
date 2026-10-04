@@ -3,11 +3,45 @@ import json
 import os
 from pathlib import Path
 import pwd
+import re
 import stat
 import tempfile
 import subprocess
 from display_preview import DisplayPreview
 from beamer_runtime import refresh as refresh_beamer
+
+
+def initialize_audio(*, cards_file=Path('/proc/asound/cards'),
+                     state_file=Path('/var/lib/alsa/asound.state'), run=subprocess.run):
+    """Unmute unsaved analog Master controls once; preserve later user choices."""
+    cards = re.findall(r'^\s*\d+\s+\[([^\]]+)\]', cards_file.read_text(), re.MULTILINE)
+    if not cards:
+        return []
+    saved = set()
+    if state_file.exists():
+        saved = set(re.findall(r'^state\.([^\s{]+)\s*\{', state_file.read_text(), re.MULTILINE))
+    initialized = []
+    for raw_card in cards:
+        card = raw_card.strip()
+        if card in saved:
+            continue
+        command = ['amixer', '-c', card, 'sget', 'Master']
+        result = run(command, capture_output=True, text=True, timeout=5)
+        if result.returncode:
+            continue  # HDMI and some other devices have no analog Master control.
+        channels = re.findall(r'Playback\s+\d+\s+\[(\d+)%\].*?\[(on|off)\]', result.stdout)
+        if not channels:
+            continue
+        if any(int(volume) == 0 or switch == 'off' for volume, switch in channels):
+            command = ['amixer', '-c', card, 'sset', 'Master', '70%', 'unmute']
+            result = run(command, capture_output=True, text=True, timeout=5)
+            if result.returncode:
+                raise RuntimeError(f'Could not initialize audio card {card}')
+        result = run(['alsactl', 'store', card], capture_output=True, text=True, timeout=10)
+        if result.returncode:
+            raise RuntimeError(f'Could not save audio card {card}')
+        initialized.append(card)
+    return initialized
 
 
 def project(value):
@@ -35,6 +69,11 @@ def project_sway(source, directory, group):
 def main():
     kiosk = pwd.getpwnam('elderbrain-kiosk')
     subprocess.run(['systemctl', 'start', f'user@{kiosk.pw_uid}.service'], check=True, timeout=30)
+    try:
+        initialize_audio()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        # Audio problems must not prevent administration or the visual display.
+        print(f'Audio initialization unavailable: {error}', flush=True)
     try:
         refresh_beamer()
     except (ValueError, OSError):
