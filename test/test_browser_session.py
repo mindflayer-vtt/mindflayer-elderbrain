@@ -1,9 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import unittest
 import sys
-import os
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -214,31 +214,51 @@ class BrowserSessionTests(unittest.TestCase):
         tree = {'nodes': [{'type': 'output', 'name': 'DP-1', 'nodes': [
             {'type': 'workspace', 'nodes': [main, pip]}]}]}
         desired = {0: {'mode': 'admin', 'output': 'DP-1'}}
-        self.assertEqual(module.auxiliary_window_ids(tree, desired), [6])
-        response = SimpleNamespace(stdout='[{"success":true},{"success":true}]')
+        outputs = [{'name': 'DP-1', 'active': True,
+                    'rect': {'x': 1920, 'y': 0, 'width': 1920, 'height': 1080}}]
+        self.assertEqual([(index, node['id']) for index, node in
+                          module.auxiliary_windows(tree, desired)], [(0, 6)])
+        response = SimpleNamespace(stdout='[{"success":true},{"success":true},'
+                                          '{"success":true},{"success":true}]')
         with patch.object(module.subprocess, 'run', return_value=response) as run:
-            self.assertTrue(module.float_auxiliary_windows(tree, desired))
+            self.assertTrue(module.float_auxiliary_windows(tree, desired, outputs))
         self.assertEqual(run.call_args.args[0], ['swaymsg', '-r',
-            '[con_id=6] fullscreen disable; [con_id=6] floating enable'])
+            '[con_id=6] fullscreen disable; [con_id=6] floating enable; '
+            '[con_id=6] move container to output "DP-1"; '
+            '[con_id=6] move absolute position 3524 px 16 px'])
 
         pip['floating'] = 'user_on'
-        self.assertEqual(module.auxiliary_window_ids(tree, desired), [])
+        self.assertEqual(module.auxiliary_windows(tree, desired), [])
         pip['floating'] = 'auto_off'
         pip['geometry'] = {'width': 1800, 'height': 900}
-        self.assertEqual(module.auxiliary_window_ids(tree, desired), [])
+        self.assertEqual(module.auxiliary_windows(tree, desired), [])
 
     def test_auxiliary_window_detection_requires_a_managed_main_and_valid_geometry(self):
         small = {'type': 'con', 'id': 9, 'app_id': 'elderbrain-view-0',
                  'floating': 'auto_off', 'geometry': {'width': 300, 'height': 300}}
         main = {'type': 'con', 'id': 8, 'app_id': 'elderbrain-view-0',
                 'floating': 'auto_off', 'geometry': {'width': 1600, 'height': 900}}
-        self.assertEqual(module.auxiliary_window_ids({'nodes': [small]}, {0: {}}), [])
-        self.assertEqual(module.auxiliary_window_ids({'nodes': [main, small]}, {1: {}}), [])
+        self.assertEqual(module.auxiliary_windows({'nodes': [small]}, {0: {}}), [])
+        self.assertEqual(module.auxiliary_windows({'nodes': [main, small]}, {1: {}}), [])
         small['geometry'] = {'width': -1, 'height': 300}
-        self.assertEqual(module.auxiliary_window_ids({'nodes': [main, small]}, {0: {}}), [])
+        self.assertEqual(module.auxiliary_windows({'nodes': [main, small]}, {0: {}}), [])
         small['geometry'] = {'width': 300, 'height': 300}
         small['app_id'] = 'unmanaged-window'
-        self.assertEqual(module.auxiliary_window_ids({'nodes': [main, small]}, {0: {}}), [])
+        self.assertEqual(module.auxiliary_windows({'nodes': [main, small]}, {0: {}}), [])
+
+    def test_sway_window_event_wakes_reconciliation_without_polling_delay(self):
+        with patch.object(module.subprocess, 'Popen') as launch:
+            module.start_window_events()
+        self.assertEqual(launch.call_args.args[0],
+                         ['swaymsg', '-m', '-r', '-t', 'subscribe', '["window"]'])
+        read_fd, write_fd = os.pipe()
+        try:
+            with os.fdopen(read_fd, 'rb') as stream:
+                os.write(write_fd, b'{"change":"new"}\n')
+                self.assertTrue(module.wait_window_event(stream, 2))
+                self.assertFalse(module.wait_window_event(stream, 0.01))
+        finally:
+            os.close(write_fd)
 
     def test_one_renumbered_screen_recovers_without_moving_connected_admin(self):
         views = [

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import select
 import shutil
 import signal
 import subprocess
@@ -383,7 +384,7 @@ def window_outputs():
         return {}
 
 
-def auxiliary_window_ids(tree, desired):
+def auxiliary_windows(tree, desired):
     """Find small Chrome toplevels without relying on site-controlled titles."""
     groups = {index: [] for index in desired}
     stack = [tree]
@@ -405,7 +406,7 @@ def auxiliary_window_ids(tree, desired):
                 stack.extend(node[key])
 
     result = []
-    for windows in groups.values():
+    for index, windows in groups.items():
         if len(windows) < 2:
             continue
         main = max(windows, key=lambda node: node['geometry']['width'] * node['geometry']['height'])
@@ -418,15 +419,30 @@ def auxiliary_window_ids(tree, desired):
             small = node['geometry']
             if (small['width'] <= width * 0.65 and small['height'] <= height * 0.8
                     and small['width'] * small['height'] <= width * height * 0.5):
-                result.append(node['id'])
+                result.append((index, node))
     return result
 
 
-def float_auxiliary_windows(tree, desired):
-    for container_id in auxiliary_window_ids(tree, desired):
+def float_auxiliary_windows(tree, desired, outputs):
+    active = {item.get('name'): item.get('rect') for item in outputs
+              if isinstance(item, dict) and item.get('active') is True}
+    for index, node in auxiliary_windows(tree, desired):
+        container_id = node['id']
+        criteria = f'[con_id={container_id}]'
+        commands = [f'{criteria} fullscreen disable', f'{criteria} floating enable']
+        output = desired[index].get('output')
+        rect = active.get(output)
+        if (isinstance(output, str) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', output)
+                and isinstance(rect, dict)
+                and all(isinstance(rect.get(key), int) for key in ('x', 'y', 'width', 'height'))
+                and rect['width'] > 0 and rect['height'] > 0):
+            width = node['geometry']['width']
+            x = max(rect['x'] + 16, rect['x'] + rect['width'] - width - 16)
+            y = rect['y'] + 16
+            commands.extend((f'{criteria} move container to output "{output}"',
+                             f'{criteria} move absolute position {x} px {y} px'))
         try:
-            response = subprocess.run(['swaymsg', '-r',
-                f'[con_id={container_id}] fullscreen disable; [con_id={container_id}] floating enable'],
+            response = subprocess.run(['swaymsg', '-r', '; '.join(commands)],
                 capture_output=True, text=True, check=True, timeout=5)
             if not all(item.get('success') for item in json.loads(response.stdout)):
                 return False
@@ -435,13 +451,26 @@ def float_auxiliary_windows(tree, desired):
     return True
 
 
-def reconcile_auxiliary_windows(desired):
+def reconcile_auxiliary_windows(desired, outputs):
     try:
         response = subprocess.run(['swaymsg', '-r', '-t', 'get_tree'], capture_output=True,
                                   text=True, check=True, timeout=5)
-        return float_auxiliary_windows(json.loads(response.stdout), desired)
+        return float_auxiliary_windows(json.loads(response.stdout), desired, outputs)
     except (OSError, subprocess.SubprocessError, ValueError, TypeError):
         return False
+
+
+def start_window_events():
+    try:
+        return subprocess.Popen(['swaymsg', '-m', '-r', '-t', 'subscribe', '["window"]'],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        return None
+
+
+def wait_window_event(stream, timeout):
+    readable, _, _ = select.select([stream], [], [], timeout)
+    return bool(readable and os.read(stream.fileno(), 65536))
 
 
 def place_view(view, future=False):
@@ -522,6 +551,7 @@ def main():
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    window_events = start_window_events()
     try:
         while running:
             response = subprocess.run(['swaymsg', '-r', '-t', 'get_outputs'], capture_output=True, text=True, check=True, timeout=5)
@@ -599,7 +629,7 @@ def main():
             for index, view in desired.items():
                 if index in children and index in placements and placements[index] != view['output']:
                     place_view(view)
-            reconcile_auxiliary_windows(desired)
+            reconcile_auxiliary_windows(desired, outputs)
             target = admin_cursor_target(desired, outputs)
             topology = tuple(sorted(
                 (item.get('name'), json.dumps(item.get('rect'), sort_keys=True))
@@ -619,8 +649,30 @@ def main():
                                  'revision': credential['revision'] if credential else None, 'observedAt': time.time()}
                     report.append({'index': index, **entry})
             write_status(status_file, report)
-            time.sleep(2)
+            if window_events is not None and window_events.poll() is None:
+                try:
+                    if wait_window_event(window_events.stdout, 2):
+                        reconcile_auxiliary_windows(desired, outputs)
+                except OSError:
+                    time.sleep(2)
+            else:
+                if window_events is not None:
+                    window_events.stdout.close()
+                window_events = start_window_events()
+                time.sleep(2)
     finally:
+        if window_events is not None:
+            if window_events.poll() is None:
+                try:
+                    window_events.terminate()
+                except ProcessLookupError:
+                    pass
+            try:
+                window_events.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                window_events.kill()
+                window_events.wait(timeout=5)
+            window_events.stdout.close()
         for _view, child in children.values():
             terminate(child)
         status_file.unlink(missing_ok=True)
