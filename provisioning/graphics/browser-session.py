@@ -406,7 +406,7 @@ def auxiliary_windows(tree, desired):
                 and node.get('shell') == 'xdg_shell'):
             index = indexes_by_output.get(output)
         geometry = node.get('geometry')
-        if (node.get('type') == 'con' and index in groups
+        if (node.get('type') in ('con', 'floating_con') and index in groups
                 and isinstance(node.get('id'), int) and node['id'] > 0
                 and isinstance(geometry, dict)
                 and all(isinstance(geometry.get(key), int) and geometry[key] > 0
@@ -425,12 +425,21 @@ def auxiliary_windows(tree, desired):
         if width < 800 or height < 600:
             continue
         for node in windows:
-            if node is main or node.get('floating') not in ('auto_off', 'user_off'):
+            if node is main:
                 continue
             small = node['geometry']
-            if (small['width'] <= width * 0.65 and small['height'] <= height * 0.8
+            if not (small['width'] <= width * 0.65 and small['height'] <= height * 0.8
                     and small['width'] * small['height'] <= width * height * 0.5):
+                continue
+            if node.get('type') == 'con' and node.get('floating') in ('auto_off', 'user_off'):
                 result.append((index, node))
+            elif node.get('type') == 'floating_con' and node.get('floating') in ('auto_on', 'user_on'):
+                rect = node.get('rect')
+                if (isinstance(rect, dict) and isinstance(rect.get('width'), int)
+                        and isinstance(rect.get('height'), int)
+                        and (rect['width'] > small['width'] * 1.15
+                             or rect['height'] > small['height'] * 1.15)):
+                    result.append((index, node))
     return result
 
 
@@ -440,18 +449,24 @@ def float_auxiliary_windows(tree, desired, outputs):
     for index, node in auxiliary_windows(tree, desired):
         container_id = node['id']
         criteria = f'[con_id={container_id}]'
-        commands = [f'{criteria} fullscreen disable', f'{criteria} floating enable']
+        commands = ([f'{criteria} fullscreen disable', f'{criteria} floating enable']
+                    if node['type'] == 'con' else [])
+        width = node['geometry']['width']
+        height = node['geometry']['height']
         output = desired[index].get('output')
         rect = active.get(output)
+        position = None
         if (isinstance(output, str) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', output)
                 and isinstance(rect, dict)
                 and all(isinstance(rect.get(key), int) for key in ('x', 'y', 'width', 'height'))
                 and rect['width'] > 0 and rect['height'] > 0):
-            width = node['geometry']['width']
             x = max(rect['x'] + 16, rect['x'] + rect['width'] - width - 16)
             y = rect['y'] + 16
-            commands.extend((f'{criteria} move container to output "{output}"',
-                             f'{criteria} move absolute position {x} px {y} px'))
+            position = (x, y)
+            commands.append(f'{criteria} move container to output "{output}"')
+        commands.append(f'{criteria} resize set width {width} px height {height} px')
+        if position is not None:
+            commands.append(f'{criteria} move absolute position {x} px {y} px')
         try:
             response = subprocess.run(['swaymsg', '-r', '; '.join(commands)],
                 capture_output=True, text=True, check=True, timeout=5)

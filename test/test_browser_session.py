@@ -219,16 +219,34 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual([(index, node['id']) for index, node in
                           module.auxiliary_windows(tree, desired)], [(0, 6)])
         response = SimpleNamespace(stdout='[{"success":true},{"success":true},'
-                                          '{"success":true},{"success":true}]')
+                                          '{"success":true},{"success":true},'
+                                          '{"success":true}]')
         with patch.object(module.subprocess, 'run', return_value=response) as run:
             self.assertTrue(module.float_auxiliary_windows(tree, desired, outputs))
         self.assertEqual(run.call_args.args[0], ['swaymsg', '-r',
             '[con_id=6] fullscreen disable; [con_id=6] floating enable; '
             '[con_id=6] move container to output "DP-1"; '
+            '[con_id=6] resize set width 300 px height 334 px; '
             '[con_id=6] move absolute position 3524 px 16 px'])
 
         pip['floating'] = 'user_on'
         self.assertEqual(module.auxiliary_windows(tree, desired), [])
+        pip['type'] = 'floating_con'
+        pip['rect'] = {'x': 3524, 'y': 16, 'width': 950, 'height': 1050}
+        self.assertEqual([(index, node['id']) for index, node in
+                          module.auxiliary_windows(tree, desired)], [(0, 6)])
+        response = SimpleNamespace(stdout='[{"success":true},{"success":true},'
+                                          '{"success":true}]')
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.float_auxiliary_windows(tree, desired, outputs))
+        self.assertEqual(run.call_args.args[0][2],
+            '[con_id=6] move container to output "DP-1"; '
+            '[con_id=6] resize set width 300 px height 334 px; '
+            '[con_id=6] move absolute position 3524 px 16 px')
+        pip['rect']['width'] = 300
+        pip['rect']['height'] = 334
+        self.assertEqual(module.auxiliary_windows(tree, desired), [])
+        pip['type'] = 'con'
         pip['floating'] = 'auto_off'
         pip['geometry'] = {'width': 1800, 'height': 900}
         self.assertEqual(module.auxiliary_windows(tree, desired), [])
