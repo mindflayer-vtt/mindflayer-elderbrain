@@ -387,23 +387,34 @@ def window_outputs():
 def auxiliary_windows(tree, desired):
     """Find small Chrome toplevels without relying on site-controlled titles."""
     groups = {index: [] for index in desired}
-    stack = [tree]
+    indexes_by_output = {view.get('output'): index for index, view in desired.items()
+                         if isinstance(view.get('output'), str)}
+    stack = [(tree, None)]
     while stack:
-        node = stack.pop()
+        node, output = stack.pop()
         if not isinstance(node, dict):
             continue
+        if node.get('type') == 'output' and node.get('name') != '__i3':
+            output = node.get('name')
         app_id = node.get('app_id')
         match = re.fullmatch(r'elderbrain-view-([01])', app_id) if isinstance(app_id, str) else None
+        index = int(match.group(1)) if match else None
+        # Chrome's native Wayland PiP sometimes has an empty app_id instead of
+        # inheriting the parent browser class. Its standard title is then the
+        # only reliable identifier; associate it with the browser on that output.
+        if (index is None and app_id == '' and node.get('name') == 'Picture in picture'
+                and node.get('shell') == 'xdg_shell'):
+            index = indexes_by_output.get(output)
         geometry = node.get('geometry')
-        if (node.get('type') == 'con' and match and int(match.group(1)) in groups
+        if (node.get('type') == 'con' and index in groups
                 and isinstance(node.get('id'), int) and node['id'] > 0
                 and isinstance(geometry, dict)
                 and all(isinstance(geometry.get(key), int) and geometry[key] > 0
                         for key in ('width', 'height'))):
-            groups[int(match.group(1))].append(node)
+            groups[index].append(node)
         for key in ('nodes', 'floating_nodes'):
             if isinstance(node.get(key), list):
-                stack.extend(node[key])
+                stack.extend((child, output) for child in node[key])
 
     result = []
     for index, windows in groups.items():
@@ -466,6 +477,19 @@ def start_window_events():
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     except OSError:
         return None
+
+
+def install_picture_in_picture_rule():
+    """Float classless Chrome PiP before its first tiled frame is drawn."""
+    criteria = '[app_id="^$" title="^Picture in picture$"]'
+    commands = (f'for_window {criteria} floating enable; '
+                f'for_window {criteria} move position 84 ppt 2 ppt')
+    try:
+        response = subprocess.run(['swaymsg', '-r', commands], capture_output=True,
+                                  text=True, check=True, timeout=5)
+        return all(item.get('success') for item in json.loads(response.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return False
 
 
 def wait_window_event(stream, timeout):
@@ -551,6 +575,8 @@ def main():
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    if not install_picture_in_picture_rule():
+        print('Unable to install PiP first-frame floating rule', flush=True)
     window_events = start_window_events()
     try:
         while running:

@@ -233,6 +233,32 @@ class BrowserSessionTests(unittest.TestCase):
         pip['geometry'] = {'width': 1800, 'height': 900}
         self.assertEqual(module.auxiliary_windows(tree, desired), [])
 
+    def test_classless_wayland_picture_in_picture_uses_browser_on_its_output(self):
+        main = {'type': 'con', 'id': 5, 'app_id': 'elderbrain-view-0',
+                'floating': 'auto_off', 'geometry': {'width': 1904, 'height': 1031}}
+        pip = {'type': 'con', 'id': 6, 'app_id': '', 'name': 'Picture in picture',
+               'shell': 'xdg_shell', 'floating': 'auto_off',
+               'geometry': {'width': 288, 'height': 216}}
+        tree = {'nodes': [{'type': 'output', 'name': 'DP-1', 'nodes': [
+            {'type': 'workspace', 'nodes': [main, pip]}]}]}
+        desired = {0: {'mode': 'admin', 'output': 'DP-1'}}
+        self.assertEqual([(index, node['id']) for index, node in
+                          module.auxiliary_windows(tree, desired)], [(0, 6)])
+        pip['name'] = 'An unrelated window'
+        self.assertEqual(module.auxiliary_windows(tree, desired), [])
+        pip['name'] = 'Picture in picture'
+        desired[0]['output'] = 'DP-2'
+        self.assertEqual(module.auxiliary_windows(tree, desired), [])
+
+    def test_native_picture_in_picture_is_floated_before_mapping(self):
+        response = SimpleNamespace(stdout='[{"success":true},{"success":true}]')
+        with patch.object(module.subprocess, 'run', return_value=response) as run:
+            self.assertTrue(module.install_picture_in_picture_rule())
+        self.assertEqual(run.call_args.args[0], ['swaymsg', '-r',
+            'for_window [app_id="^$" title="^Picture in picture$"] floating enable; '
+            'for_window [app_id="^$" title="^Picture in picture$"] '
+            'move position 84 ppt 2 ppt'])
+
     def test_auxiliary_window_detection_requires_a_managed_main_and_valid_geometry(self):
         small = {'type': 'con', 'id': 9, 'app_id': 'elderbrain-view-0',
                  'floating': 'auto_off', 'geometry': {'width': 300, 'height': 300}}
