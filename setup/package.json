@@ -27,7 +27,7 @@
   "devDependencies": {
     "@iconify-json/lucide": "1.2.136",
     "@playwright/test": "1.63.0",
-    "@types/node": "22.20.2",
+    "@types/node": "26.6.4",
     "@types/nodemailer": "8.0.2",
     "@types/ws": "8.18.1",
     "tsx": "4.23.15",
