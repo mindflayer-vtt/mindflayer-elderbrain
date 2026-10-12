@@ -13,25 +13,25 @@
     "lint": "nuxt typecheck"
   },
   "dependencies": {
-    "@nuxt/ui": "4.11.2",
-    "nodemailer": "10.0.10",
-    "nuxt": "4.5.2",
+    "@nuxt/ui": "4.11.3",
+    "nodemailer": "10.0.16",
+    "nuxt": "4.6.0",
     "tailwindcss": "4.3.3",
     "vue": "3.5.43",
-    "vue-router": "5.3.1",
-    "ws": "8.21.3"
+    "vue-router": "5.4.0",
+    "ws": "8.22.0"
   },
   "engines": {
     "node": "^24.11.0 || >=26.0.0"
   },
   "devDependencies": {
-    "@iconify-json/lucide": "1.2.136",
-    "@playwright/test": "1.63.0",
+    "@iconify-json/lucide": "1.2.142",
+    "@playwright/test": "1.64.0",
     "@types/node": "22.20.2",
     "@types/nodemailer": "8.0.2",
-    "@types/ws": "8.18.1",
+    "@types/ws": "8.18.2",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
-    "vue-tsc": "3.3.11"
+    "vue-tsc": "3.3.12"
   }
 }
