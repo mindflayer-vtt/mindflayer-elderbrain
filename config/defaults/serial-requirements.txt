@@ -2,13 +2,13 @@
 esptool==4.9.0
 # Transitive runtime set qualified on the Ubuntu 26.04 / Python 3.14 VM.
 argcomplete==3.7.2
-bitarray==3.11.0
+bitarray==3.12.3
 bitstring==4.4.0
 cffi==2.1.1
-cryptography==50.0.1
+cryptography==50.0.2
 ecdsa==0.19.2
 intelhex==2.3.0
-pycparser==3.0
+pycparser==3.12
 pyserial==3.5
 PyYAML==6.0.3
 reedsolo==1.7.0
